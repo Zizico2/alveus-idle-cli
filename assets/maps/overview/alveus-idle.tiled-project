@@ -1,0 +1,41 @@
+{
+  "automappingRulesFile": "",
+  "commands": [],
+  "compatibilityVersion": 1100,
+  "extensionsPath": "extensions",
+  "folders": [
+    "."
+  ],
+  "properties": [],
+  "propertyTypes": [
+    {
+      "color": "#000000",
+      "drawFill": true,
+      "id": 2,
+      "members": [
+        {
+          "name": ":variant",
+          "propertyType": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+          "type": "class",
+          "value": "NoEntrance"
+        }
+      ],
+      "name": "alveus_idle_cli::components::BuildingEntrance",
+      "type": "class",
+      "useAs": [
+        "property"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+      "storageType": "string",
+      "type": "enum",
+      "values": [
+        "NoEntrance",
+        "NutritionHouse"
+      ],
+      "valuesAsFlags": false
+    }
+  ]
+}

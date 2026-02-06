@@ -4,6 +4,7 @@
 #![cfg_attr(not(feature = "dev"), windows_subsystem = "windows")]
 
 mod asset_tracking;
+mod components;
 mod audio;
 mod demo;
 #[cfg(feature = "dev")]

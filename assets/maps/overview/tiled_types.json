@@ -1,0 +1,31 @@
+[
+  {
+    "id": 2,
+    "name": "alveus_idle_cli::components::BuildingEntrance",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+        "type": "class",
+        "value": "NoEntrance"
+      }
+    ]
+  },
+  {
+    "id": 1,
+    "name": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "NoEntrance",
+      "NutritionHouse"
+    ],
+    "valuesAsFlags": false
+  }
+]

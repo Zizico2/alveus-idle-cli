@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 bevy = { version = "0.18" }
+bevy_ecs_tiled = {version = "0.11.2", features = ["user_properties"]}
 rand = "0.9"
 # Compile out low-severity logs to improve performance.
 # Remove these features if you want to profile your game with tracy.
