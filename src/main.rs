@@ -44,6 +44,11 @@ impl Plugin for AppPlugin {
                 }),
         );
 
+        app.register_type::<components::BuildingEntrance>()
+            .register_type::<components::TileGroup>()
+            .register_type::<components::RectangleTileGroup>()
+            .register_type::<components::TilePosition>();
+
         app.add_plugins((
             asset_tracking::plugin,
             audio::plugin,
@@ -53,6 +58,7 @@ impl Plugin for AppPlugin {
             menus::plugin,
             screens::plugin,
             theme::plugin,
+            bevy_tweening::TweeningPlugin,
         ));
 
         // Order new `AppSystems` variants by adding them here:

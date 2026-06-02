@@ -137,6 +137,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_ecs_tiled",
+ "bevy_tweening",
  "getrandom 0.3.3",
  "rand 0.9.2",
  "tracing",
@@ -1507,6 +1508,16 @@ dependencies = [
  "bevy_utils",
  "derive_more",
  "serde",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "bevy_tweening"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af8511c4208a4eb3fdec028088a2ff63f2a4ae4a7079eeb56a0cffae19fe064f"
+dependencies = [
+ "bevy",
  "thiserror 2.0.17",
 ]
 

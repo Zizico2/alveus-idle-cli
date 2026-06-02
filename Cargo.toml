@@ -7,6 +7,7 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.18", features = ["pan_camera"] }
 bevy_ecs_tiled = {version = "0.11.2", features = ["user_properties"]}
+bevy_tweening = "0.15"
 rand = "0.9"
 # Compile out low-severity logs to improve performance.
 # Remove these features if you want to profile your game with tracy.

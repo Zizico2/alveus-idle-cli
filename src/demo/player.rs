@@ -5,6 +5,8 @@ use bevy::{
     prelude::*,
 };
 
+use crate::components::{CurrentTilePosition, DesiredTilePosition};
+
 use crate::{
     AppSystems, PausableSystems,
     asset_tracking::LoadResource,
@@ -39,7 +41,7 @@ pub fn player(
     player_assets: &PlayerAssets,
     texture_atlas_layouts: &mut Assets<TextureAtlasLayout>,
     meshes: &mut Assets<Mesh>,
-    mut materials: &mut Assets<ColorMaterial>,
+    materials: &mut Assets<ColorMaterial>,
 ) -> impl Bundle {
     // A texture atlas is a way to split a single image into a grid of related images.
     // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
@@ -80,17 +82,7 @@ pub fn player(
 )]
 pub struct Player;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TilePosition {
-    pub x: u32,
-    pub y: u32,
-}
 
-#[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq)]
-pub struct CurrentTilePosition(pub TilePosition);
-
-#[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq)]
-pub struct DesiredTilePosition(pub TilePosition);
 
 impl PartialEq<CurrentTilePosition> for DesiredTilePosition {
     fn eq(&self, other: &CurrentTilePosition) -> bool {

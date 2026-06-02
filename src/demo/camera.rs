@@ -14,6 +14,8 @@ impl Plugin for CameraControllerPlugin {
     }
 }
 
+pub const CAMERA_FOLLOW_SPEED: f32 = 4.0;
+
 fn camera_follow(
     time: Res<Time>,
     player_transform: Single<&Transform, With<Player>>,
@@ -23,8 +25,7 @@ fn camera_follow(
         let target = player_transform.translation.xy();
         let current = camera_transform.translation.xy();
         
-        let speed = 4.0;
-        let decay = 1.0 - f32::exp(-speed * time.delta_secs());
+        let decay = 1.0 - f32::exp(-CAMERA_FOLLOW_SPEED * time.delta_secs());
         let new_pos = current.lerp(target, decay);
         
         camera_transform.translation.x = new_pos.x;

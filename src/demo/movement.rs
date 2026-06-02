@@ -17,10 +17,8 @@ use bevy::prelude::*;
 
 use crate::{
     AppSystems, PausableSystems,
-    demo::{
-        level::TILE_SIZE,
-        player::{CurrentTilePosition, DesiredTilePosition},
-    },
+    components::{CurrentTilePosition, DesiredTilePosition},
+    demo::level::TILE_SIZE,
 };
 
 pub(super) fn plugin(app: &mut App) {
