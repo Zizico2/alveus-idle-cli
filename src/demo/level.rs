@@ -79,9 +79,14 @@ pub fn spawn_level(
             //     music(level_assets.music.clone())
             // )
             (
-                Name::new("Overview Map"), 
+                Name::new("Overview Map"),
                 TiledMap(level_assets.map.clone()),
                 TilemapAnchor::BottomLeft,
+                Transform::from_xyz(
+                    -(TILE_SIZE as f32 / 2.0),
+                    -(TILE_SIZE as f32 / 2.0),
+                    0.0,
+                ),
             )
         ],
     ));

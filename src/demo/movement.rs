@@ -13,11 +13,14 @@
 //! purposes. If you want to move the player in a smoother way,
 //! consider using a [fixed timestep](https://github.com/bevyengine/bevy/blob/main/examples/movement/physics_in_fixed_timestep.rs).
 
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::prelude::*;
 
 use crate::{
     AppSystems, PausableSystems,
-    demo::player::{CurrentTilePosition, DesiredTilePosition},
+    demo::{
+        level::TILE_SIZE,
+        player::{CurrentTilePosition, DesiredTilePosition},
+    },
 };
 
 pub(super) fn plugin(app: &mut App) {
@@ -87,8 +90,8 @@ fn update_desired_position(
         }
         if let Some(intent) = &controller.intent {
             match intent {
-                MovementIntent::Up => desired.0.y = desired.0.y.saturating_sub(1),
-                MovementIntent::Down => desired.0.y = desired.0.y.saturating_add(1),
+                MovementIntent::Up => desired.0.y = desired.0.y.saturating_add(1),
+                MovementIntent::Down => desired.0.y = desired.0.y.saturating_sub(1),
                 MovementIntent::Left => desired.0.x = desired.0.x.saturating_sub(1),
                 MovementIntent::Right => desired.0.x = desired.0.x.saturating_add(1),
             }
@@ -147,8 +150,8 @@ fn apply_movement(
         // For demonstration purposes, we simply snap the player to the desired position.
         // In a real game, you would want to move the player smoothly towards the desired position
         // based on the controller's max speed and the time delta.
-        transform.translation.x = desired.0.x as f32 * 32.0; // Assuming 32 pixels per tile
-        transform.translation.y = desired.0.y as f32 * 32.0;
+        transform.translation.x = desired.0.x as f32 * TILE_SIZE as f32;
+        transform.translation.y = desired.0.y as f32 * TILE_SIZE as f32;
 
         current.0 = desired.0;
     }
