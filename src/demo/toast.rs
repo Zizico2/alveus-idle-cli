@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
 use bevy::prelude::*;
-use bevy_ecs_tiled::prelude::*;
-use crate::components::{CurrentTilePosition, TileGroup, RectangleTileGroup, TilePosition, BuildingEntrance};
-use crate::demo::player::Player;
+use crate::components::BuildingEntrance;
 use bevy_tweening::{lens::UiPositionLens, *};
 
 // Layout coordinates
@@ -24,25 +22,15 @@ pub const TOAST_FONT_SIZE: f32 = 16.0;
 pub const TOAST_BORDER_COLOR: Color = Color::srgb(0.2, 0.6, 1.0);
 pub const TOAST_BACKGROUND_COLOR: Color = Color::srgba(0.08, 0.08, 0.08, 0.9);
 
-// Grid Snapping bounds
-pub const TILE_SIZE: f32 = 32.0;
-pub const GRID_SNAP_EPSILON: f32 = 0.05;
-
 pub struct ToastPlugin;
 
 impl Plugin for ToastPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<TileGroup>()
-            .add_observer(toast_trigger_observer)
+        app.add_observer(toast_trigger_observer)
             .add_observer(toast_dismiss_observer)
-            .add_systems(
-                Update,
-                (
-                    validate_and_snap_entrances,
-                    check_player_tile_triggers,
-                ),
-            )
-            .add_systems(PostUpdate, despawn_completed_toasts);
+            .add_observer(player_entered_building_observer)
+            .add_observer(player_exited_building_observer)
+            .add_observer(on_anim_completed);
     }
 }
 
@@ -277,121 +265,33 @@ fn toast_dismiss_observer(
     }
 }
 
-fn despawn_completed_toasts(
-    mut events: MessageReader<AnimCompletedEvent>,
+fn on_anim_completed(
+    trigger: On<AnimCompletedEvent>,
     mut commands: Commands,
     query: Query<(), With<ToastDismissalMarker>>,
 ) {
-    for event in events.read() {
-        if query.contains(event.anim_entity) {
-            info!("Despawning toast notification on completion");
-            commands.entity(event.anim_entity).despawn();
-        }
+    let anim_entity = trigger.anim_entity;
+    if query.contains(anim_entity) {
+        info!("Despawning toast notification on completion (Observer)");
+        commands.entity(anim_entity).despawn();
     }
 }
 
-fn validate_and_snap_entrances(
+fn player_entered_building_observer(
+    trigger: On<crate::demo::entrance::PlayerEnteredBuildingEvent>,
     mut commands: Commands,
-    query: Query<
-        (Entity, &Transform, &BuildingEntrance, &TiledObject),
-        (Added<BuildingEntrance>, Without<TileGroup>),
-    >,
 ) {
-    for (entity, transform, entrance, tiled_object) in query.iter() {
-        let x = transform.translation.x;
-        let y = transform.translation.y;
-
-        let rem_x = x.rem_euclid(TILE_SIZE);
-        let rem_y = y.rem_euclid(TILE_SIZE);
-
-        let dist_x = rem_x.min(TILE_SIZE - rem_x);
-        let dist_y = rem_y.min(TILE_SIZE - rem_y);
-
-        if dist_x >= GRID_SNAP_EPSILON || dist_y >= GRID_SNAP_EPSILON {
-            panic!(
-                "\n❌ MAP INTEGRITY ERROR ❌\nObject: '{:?}'\nPosition: [x:{:.2}, y:{:.2}]\nIssue: Not aligned to {}-pixel grid.\n",
-                entrance, x, y, TILE_SIZE
-            );
-        }
-
-        let TiledObject::Rectangle { width, height } = tiled_object else {
-            panic!(
-                "\n❌ MAP INTEGRITY ERROR ❌\nObject: '{:?}'\nIssue: Unsupported TiledObject type for size validation.\n",
-                entrance
-            );
-        };
-
-        if width % TILE_SIZE != 0.0 || height % TILE_SIZE != 0.0 {
-            panic!(
-                "\n❌ MAP INTEGRITY ERROR ❌\nObject: '{:?}'\nSize: [w:{}, h:{}]\nIssue: Dimensions are not multiples of tile size ({}).\n",
-                entrance, width, height, TILE_SIZE
-            );
-        }
-
-        let adjusted_y = y - height;
-
-        let start_grid_x = (x / TILE_SIZE).round() as u32;
-        let start_grid_y = (adjusted_y / TILE_SIZE).round() as u32;
-
-        let width_in_tiles = (width / TILE_SIZE).round() as u32;
-        let height_in_tiles = (height / TILE_SIZE).round() as u32;
-
-        let tile_group = TileGroup::Rectangle(RectangleTileGroup {
-            bottom_left: TilePosition {
-                x: start_grid_x,
-                y: start_grid_y,
-            },
-            top_right: TilePosition {
-                x: start_grid_x + width_in_tiles - 1,
-                y: start_grid_y + height_in_tiles - 1,
-            },
-        });
-        info!("Inserting snapped TileGroup: {:?}", tile_group);
-
-        commands.entity(entity).insert(tile_group);
-    }
-}
-
-fn check_player_tile_triggers(
-    mut commands: Commands,
-    player_query: Query<(Entity, &CurrentTilePosition, Option<&BuildingEntrance>), With<Player>>,
-    entrance_query: Query<(&TileGroup, &BuildingEntrance)>,
-) {
-    let Some((player_entity, player_pos, current_entrance)) = player_query.iter().next() else {
-        return;
+    let entrance = trigger.event().entrance;
+    let name = match entrance {
+        BuildingEntrance::NutritionHouse => "Nutrition House",
+        _ => "Unknown Area",
     };
+    commands.trigger(TriggerToastEvent::presence(format!("Entered {}", name)));
+}
 
-    let player_grid = player_pos.0;
-    let mut overlapping_entrance = None;
-
-    for (tile_group, entrance) in &entrance_query {
-        match tile_group {
-            TileGroup::Rectangle(rect) => {
-                if player_grid.x >= rect.bottom_left.x
-                    && player_grid.x <= rect.top_right.x
-                    && player_grid.y >= rect.bottom_left.y
-                    && player_grid.y <= rect.top_right.y
-                {
-                    overlapping_entrance = Some(*entrance);
-                    break;
-                }
-            }
-        }
-    }
-
-    if let Some(entrance) = overlapping_entrance {
-        if current_entrance != Some(&entrance) {
-            let name = match entrance {
-                BuildingEntrance::NutritionHouse => "Nutrition House",
-                _ => "Unknown Area",
-            };
-            commands.trigger(TriggerToastEvent::presence(format!("Entered {}", name)));
-            commands.entity(player_entity).insert(entrance);
-        }
-    } else {
-        if current_entrance.is_some() {
-            commands.trigger(DismissToastEvent);
-            commands.entity(player_entity).remove::<BuildingEntrance>();
-        }
-    }
+fn player_exited_building_observer(
+    _trigger: On<crate::demo::entrance::PlayerExitedBuildingEvent>,
+    mut commands: Commands,
+) {
+    commands.trigger(DismissToastEvent);
 }
