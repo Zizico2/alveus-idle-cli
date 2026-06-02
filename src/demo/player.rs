@@ -10,7 +10,12 @@ use crate::{
     asset_tracking::LoadResource,
     demo::{
         animation::PlayerAnimation,
-        movement::{MovementController, ScreenWrap},
+        movement::{
+            MovementController,
+            MovementDuration,
+            MovementIntent, // DISABLED
+                            //  ScreenWrap
+        },
     },
 };
 
@@ -26,11 +31,15 @@ pub(super) fn plugin(app: &mut App) {
     );
 }
 
+pub const PLAYER_Z_INDEX: f32 = 2.0;
+
 /// The player character.
 pub fn player(
     max_speed: f32,
     player_assets: &PlayerAssets,
     texture_atlas_layouts: &mut Assets<TextureAtlasLayout>,
+    meshes: &mut Assets<Mesh>,
+    mut materials: &mut Assets<ColorMaterial>,
 ) -> impl Bundle {
     // A texture atlas is a way to split a single image into a grid of related images.
     // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
@@ -41,54 +50,82 @@ pub fn player(
     (
         Name::new("Player"),
         Player,
-        Sprite::from_atlas_image(
-            player_assets.ducky.clone(),
-            TextureAtlas {
-                layout: texture_atlas_layout,
-                index: player_animation.get_atlas_index(),
-            },
-        ),
-        Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
+        // Sprite::from_atlas_image(
+        //     player_assets.ducky.clone(),
+        //     TextureAtlas {
+        //         layout: texture_atlas_layout,
+        //         index: player_animation.get_atlas_index(),
+        //     },
+        // ),
+        // Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
+        Mesh2d(meshes.add(Circle::new(16.))),
+        MeshMaterial2d(materials.add(Color::srgb(0.3, 0.1, 0.9))),
+        Transform::from_xyz(0., 0., PLAYER_Z_INDEX),
         MovementController {
-            max_speed,
+            // max_speed,
             ..default()
         },
-        ScreenWrap,
+        // DISABLED
+        // ScreenWrap,
         player_animation,
     )
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 #[reflect(Component)]
+#[require(
+    CurrentTilePosition,
+    DesiredTilePosition,
+    MovementDuration(Timer::from_seconds(0.25, TimerMode::Once))
+)]
 struct Player;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TilePosition {
+    pub x: u32,
+    pub y: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq)]
+pub struct CurrentTilePosition(pub TilePosition);
+
+#[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq)]
+pub struct DesiredTilePosition(pub TilePosition);
+
+impl PartialEq<CurrentTilePosition> for DesiredTilePosition {
+    fn eq(&self, other: &CurrentTilePosition) -> bool {
+        self.0 == other.0
+    }
+}
+impl PartialEq<DesiredTilePosition> for CurrentTilePosition {
+    fn eq(&self, other: &DesiredTilePosition) -> bool {
+        self.0 == other.0
+    }
+}
+
+// #[derive(Clone, Copy, Debug, Default, Component)]
+// pub struct MovementLock;
 
 fn record_player_directional_input(
     input: Res<ButtonInput<KeyCode>>,
-    mut controller_query: Query<&mut MovementController, With<Player>>,
+    mut controller_query: Single<&mut MovementController, With<Player>>,
 ) {
     // Collect directional input.
-    let mut intent = Vec2::ZERO;
-    if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
-        intent.y += 1.0;
-    }
-    if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {
-        intent.y -= 1.0;
-    }
-    if input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft) {
-        intent.x -= 1.0;
-    }
-    if input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight) {
-        intent.x += 1.0;
-    }
 
-    // Normalize intent so that diagonal movement is the same speed as horizontal / vertical.
-    // This should be omitted if the input comes from an analog stick instead.
-    let intent = intent.normalize_or_zero();
+    let intent = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
+        Some(MovementIntent::Up)
+    } else if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {
+        Some(MovementIntent::Down)
+    } else if input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft) {
+        Some(MovementIntent::Left)
+    } else if input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight) {
+        Some(MovementIntent::Right)
+    } else {
+        None
+    };
 
-    // Apply movement intent to controllers.
-    for mut controller in &mut controller_query {
-        controller.intent = intent;
-    }
+    // Apply movement intent to controller.
+    controller_query.intent = intent;
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]

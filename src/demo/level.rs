@@ -12,6 +12,8 @@ use crate::{
     screens::Screen,
 };
 
+pub const TILE_SIZE: u32 = 32;
+
 pub(super) fn plugin(app: &mut App) {
     let tiled_types_path = env::current_dir()
         .unwrap()
@@ -62,6 +64,8 @@ pub fn spawn_level(
     level_assets: Res<LevelAssets>,
     player_assets: Res<PlayerAssets>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.spawn((
         Name::new("Level"),
@@ -69,12 +73,13 @@ pub fn spawn_level(
         Visibility::default(),
         DespawnOnExit(Screen::Gameplay),
         children![
-            player(400.0, &player_assets, &mut texture_atlas_layouts),
+            player(400.0, &player_assets, &mut texture_atlas_layouts, &mut meshes, &mut materials),
             // (
             //     Name::new("Gameplay Music"),
             //     music(level_assets.music.clone())
             // )
             (
+                Name::new("Overview Map"), 
                 TiledMap(level_assets.map.clone()),
                 TilemapAnchor::BottomLeft,
             )

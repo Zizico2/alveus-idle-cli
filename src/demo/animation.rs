@@ -43,19 +43,20 @@ fn update_animation_timer(time: Res<Time>, mut query: Query<&mut PlayerAnimation
 fn update_animation_movement(
     mut player_query: Query<(&MovementController, &mut Sprite, &mut PlayerAnimation)>,
 ) {
-    for (controller, mut sprite, mut animation) in &mut player_query {
-        let dx = controller.intent.x;
-        if dx != 0.0 {
-            sprite.flip_x = dx < 0.0;
-        }
+    // DISABLED
+    // for (controller, mut sprite, mut animation) in &mut player_query {
+    //     let dx = controller.intent.x;
+    //     if dx != 0.0 {
+    //         sprite.flip_x = dx < 0.0;
+    //     }
 
-        let animation_state = if controller.intent == Vec2::ZERO {
-            PlayerAnimationState::Idling
-        } else {
-            PlayerAnimationState::Walking
-        };
-        animation.update_state(animation_state);
-    }
+    //     let animation_state = if controller.intent == Vec2::ZERO {
+    //         PlayerAnimationState::Idling
+    //     } else {
+    //         PlayerAnimationState::Walking
+    //     };
+    //     animation.update_state(animation_state);
+    // }
 }
 
 /// Update the texture atlas to reflect changes in the animation.
