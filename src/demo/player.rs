@@ -78,7 +78,7 @@ pub fn player(
     DesiredTilePosition,
     MovementDuration(Timer::from_seconds(0.25, TimerMode::Once))
 )]
-struct Player;
+pub struct Player;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TilePosition {

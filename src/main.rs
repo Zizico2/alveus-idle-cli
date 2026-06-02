@@ -44,7 +44,6 @@ impl Plugin for AppPlugin {
                 }),
         );
 
-        // Add other plugins.
         app.add_plugins((
             asset_tracking::plugin,
             audio::plugin,
@@ -98,5 +97,15 @@ struct Pause(pub bool);
 struct PausableSystems;
 
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn((Name::new("Camera"), Camera2d));
+    commands.spawn((
+        Name::new("Camera"),
+        Camera2d,
+        bevy::camera_controller::pan_camera::PanCamera {
+            key_up: None,
+            key_down: None,
+            key_left: None,
+            key_right: None,
+            ..default()
+        },
+    ));
 }
