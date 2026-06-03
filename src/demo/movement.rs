@@ -128,18 +128,18 @@ fn apply_movement(
             &DesiredTilePosition,
             &mut CurrentTilePosition,
         ),
-        // Changed<DesiredTilePosition>,
     >,
 ) {
     for (mut transform, mut duration, desired, mut current) in &mut movement_query {
+        if *desired == *current {
+            continue;
+        }
+
         info!(
             "Applying movement from {:?} to {:?} with timer {:?} ",
             current.0, desired.0, duration.0
         );
         duration.0.tick(time.delta());
-        if *desired == *current {
-            continue;
-        }
 
         // the translation should be tweened. When the tween exists, check if it's finished and remove this timer. This is just for demonstration purposes.
         if !duration.0.is_finished() {
