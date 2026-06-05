@@ -18,6 +18,11 @@ pub(super) fn plugin(app: &mut App) {
     ));
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub enum InRoom {
+    NutritionHouse,
+}
+
 /// The game's main screen states.
 #[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub enum Screen {
@@ -26,4 +31,5 @@ pub enum Screen {
     Title,
     Loading,
     Gameplay,
+    InRoom(InRoom),
 }

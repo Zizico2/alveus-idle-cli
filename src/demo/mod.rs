@@ -12,6 +12,7 @@ mod movement;
 pub mod player;
 mod toast;
 mod entrance;
+pub mod room;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -22,5 +23,6 @@ pub(super) fn plugin(app: &mut App) {
         player::plugin,
         toast::ToastPlugin,
         entrance::EntrancePlugin,
+        room::NutritionHousePlugin,
     ));
 }

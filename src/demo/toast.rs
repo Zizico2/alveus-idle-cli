@@ -286,7 +286,7 @@ fn player_entered_building_observer(
         BuildingEntrance::NutritionHouse => "Nutrition House",
         _ => "Unknown Area",
     };
-    commands.trigger(TriggerToastEvent::presence(format!("Entered {}", name)));
+    commands.trigger(TriggerToastEvent::presence(format!("Press [Enter] to enter {}", name)));
 }
 
 fn player_exited_building_observer(

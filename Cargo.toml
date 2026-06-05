@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.18", features = ["pan_camera"] }
+bevy = { version = "0.18", features = ["pan_camera", "debug"] }
 bevy_ecs_tiled = {version = "0.11.2", features = ["user_properties"]}
 bevy_tweening = "0.15"
 rand = "0.9"

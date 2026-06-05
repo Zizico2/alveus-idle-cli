@@ -27,5 +27,38 @@
       "NutritionHouse"
     ],
     "valuesAsFlags": false
+  },
+  {
+    "id": 3,
+    "name": "alveus_idle_cli::components::Obstacle",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 4,
+    "name": "alveus_idle_cli::components::TilePosition",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "x",
+        "type": "int",
+        "value": 0
+      },
+      {
+        "name": "y",
+        "type": "int",
+        "value": 0
+      }
+    ]
   }
 ]

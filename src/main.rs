@@ -47,7 +47,8 @@ impl Plugin for AppPlugin {
         app.register_type::<components::BuildingEntrance>()
             .register_type::<components::TileGroup>()
             .register_type::<components::RectangleTileGroup>()
-            .register_type::<components::TilePosition>();
+            .register_type::<components::TilePosition>()
+            .register_type::<components::Obstacle>();
 
         app.add_plugins((
             asset_tracking::plugin,

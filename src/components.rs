@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component, Default)]
 pub struct TilePosition {
     pub x: u32,
     pub y: u32,
@@ -30,3 +31,7 @@ pub enum BuildingEntrance {
     NoEntrance,
     NutritionHouse,
 }
+
+#[derive(Component, Debug, Reflect, Default, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component, Default)]
+pub struct Obstacle;

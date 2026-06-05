@@ -8,7 +8,9 @@ use bevy_ecs_tiled::prelude::{regex::RegexSet, *};
 use crate::{
     asset_tracking::LoadResource,
     audio::music,
+    components::{CurrentTilePosition, DesiredTilePosition},
     demo::player::{PlayerAssets, player},
+    demo::room::PlayerSpawnPoint,
     screens::Screen,
 };
 
@@ -66,14 +68,20 @@ pub fn spawn_level(
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    spawn_point: Res<PlayerSpawnPoint>,
 ) {
+    let spawn_pos = spawn_point.position;
     commands.spawn((
         Name::new("Level"),
         Transform::default(),
         Visibility::default(),
         DespawnOnExit(Screen::Gameplay),
         children![
-            player(400.0, &player_assets, &mut texture_atlas_layouts, &mut meshes, &mut materials),
+            (
+                player(400.0, &player_assets, &mut texture_atlas_layouts, &mut meshes, &mut materials, spawn_pos),
+                CurrentTilePosition(spawn_pos),
+                DesiredTilePosition(spawn_pos),
+            ),
             // (
             //     Name::new("Gameplay Music"),
             //     music(level_assets.music.clone())

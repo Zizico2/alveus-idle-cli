@@ -5,7 +5,8 @@ use bevy::{
     prelude::*,
 };
 
-use crate::components::{CurrentTilePosition, DesiredTilePosition};
+use crate::components::{CurrentTilePosition, DesiredTilePosition, TilePosition};
+use crate::demo::level::TILE_SIZE;
 
 use crate::{
     AppSystems, PausableSystems,
@@ -42,6 +43,7 @@ pub fn player(
     texture_atlas_layouts: &mut Assets<TextureAtlasLayout>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    spawn_pos: TilePosition,
 ) -> impl Bundle {
     // A texture atlas is a way to split a single image into a grid of related images.
     // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
@@ -62,7 +64,11 @@ pub fn player(
         // Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
         Mesh2d(meshes.add(Circle::new(16.))),
         MeshMaterial2d(materials.add(Color::srgb(0.3, 0.1, 0.9))),
-        Transform::from_xyz(0., 0., PLAYER_Z_INDEX),
+        Transform::from_xyz(
+            spawn_pos.x as f32 * TILE_SIZE as f32,
+            spawn_pos.y as f32 * TILE_SIZE as f32,
+            PLAYER_Z_INDEX,
+        ),
         MovementController {
             // max_speed,
             ..default()

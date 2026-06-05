@@ -17,7 +17,7 @@ use bevy::prelude::*;
 
 use crate::{
     AppSystems, PausableSystems,
-    components::{CurrentTilePosition, DesiredTilePosition},
+    components::{CurrentTilePosition, DesiredTilePosition, Obstacle, TilePosition},
     demo::level::TILE_SIZE,
 };
 
@@ -40,8 +40,8 @@ pub(super) fn plugin(app: &mut App) {
 /// These are the movement parameters for our character controller.
 /// For now, this is only used for a single player, but it could power NPCs or
 /// other players as well.
-#[derive(Component, Reflect)]
-#[reflect(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct MovementController {
     /// The direction the character wants to move in.
     pub intent: Option<MovementIntent>,
@@ -62,22 +62,15 @@ pub enum MovementIntent {
 #[derive(Component)]
 pub struct MovementDuration(pub Timer);
 
-impl Default for MovementController {
-    fn default() -> Self {
-        Self {
-            intent: None,
-            // max_speed: 400.0,
-        }
-    }
-}
+
 
 fn update_desired_position(
-    time: Res<Time>,
     mut movement_query: Query<(
         &mut MovementController,
         &mut DesiredTilePosition,
         &CurrentTilePosition,
     )>,
+    obstacle_query: Query<&TilePosition, With<Obstacle>>,
 ) {
     for (mut controller, mut desired, current) in &mut movement_query {
         if *desired != *current {
@@ -87,12 +80,20 @@ fn update_desired_position(
             continue;
         }
         if let Some(intent) = &controller.intent {
+            let mut next_pos = current.0;
             match intent {
-                MovementIntent::Up => desired.0.y = desired.0.y.saturating_add(1),
-                MovementIntent::Down => desired.0.y = desired.0.y.saturating_sub(1),
-                MovementIntent::Left => desired.0.x = desired.0.x.saturating_sub(1),
-                MovementIntent::Right => desired.0.x = desired.0.x.saturating_add(1),
+                MovementIntent::Up => next_pos.y = next_pos.y.saturating_add(1),
+                MovementIntent::Down => next_pos.y = next_pos.y.saturating_sub(1),
+                MovementIntent::Left => next_pos.x = next_pos.x.saturating_sub(1),
+                MovementIntent::Right => next_pos.x = next_pos.x.saturating_add(1),
             }
+
+            // Check if next_pos collides with any obstacle
+            let is_blocked = obstacle_query.iter().any(|pos| *pos == next_pos);
+            if !is_blocked {
+                desired.0 = next_pos;
+            }
+
             // reset the intent since we've processed it
             controller.intent = None;
         }
