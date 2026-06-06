@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alveus-idle-cli/schemas/overview_map.schema.json",
+  "title": "OverviewMapConfig",
+  "description": "Defines the sanctuary overview map — building placements, pathways, and entrance zones that connect to interior rooms.",
+  "type": "object",
+  "required": ["grid", "tile_size_px", "terrain_tileset", "buildings"],
+  "additionalProperties": false,
+  "properties": {
+    "grid": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "tile_size_px": {
+      "type": "integer",
+      "enum": [16, 32, 64]
+    },
+    "terrain_tileset": {
+      "type": "object",
+      "required": ["tiles"],
+      "additionalProperties": false,
+      "properties": {
+        "tiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerrainTile"
+          }
+        }
+      }
+    },
+    "buildings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BuildingPlacement"
+      }
+    },
+    "player_initial_spawn": {
+      "$ref": "#/$defs/TileCoord",
+      "description": "Tile coordinate where the player spawns on first game launch."
+    }
+  },
+  "$defs": {
+    "TileCoord": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "TerrainTile": {
+      "type": "object",
+      "required": ["tile_id", "display_name", "asset_path", "walkable"],
+      "additionalProperties": false,
+      "properties": {
+        "tile_id": { "type": "integer", "minimum": 0 },
+        "display_name": { "type": "string" },
+        "asset_path": { "type": "string" },
+        "walkable": { "type": "boolean" }
+      }
+    },
+    "BuildingPlacement": {
+      "type": "object",
+      "required": ["building_id", "display_name", "position", "entrance_zone", "target_room_id"],
+      "additionalProperties": false,
+      "properties": {
+        "building_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/TileCoord",
+          "description": "Bottom-left tile of the building sprite on the overview map."
+        },
+        "sprite_asset": {
+          "type": "string",
+          "description": "Path to building exterior sprite (relative to assets/)."
+        },
+        "sprite_size_px": {
+          "type": "object",
+          "properties": {
+            "w": { "type": "integer" },
+            "h": { "type": "integer" }
+          }
+        },
+        "entrance_zone": {
+          "type": "object",
+          "required": ["bottom_left", "top_right"],
+          "additionalProperties": false,
+          "properties": {
+            "bottom_left": { "$ref": "#/$defs/TileCoord" },
+            "top_right": { "$ref": "#/$defs/TileCoord" }
+          },
+          "description": "Rectangular tile area that triggers the entrance toast when the player walks into it."
+        },
+        "target_room_id": {
+          "type": "string",
+          "description": "The room_id of the interior room this building connects to."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "$schema": "../schemas/room.schema.json",
+  "room_id": "studio",
+  "display_name": "The Studio",
+  "grid": {
+    "width": 15,
+    "height": 15,
+    "tile_size_px": 32
+  },
+  "walls": {
+    "style": "perimeter",
+    "color": { "r": 0.18, "g": 0.15, "b": 0.22 },
+    "excluded_tiles": [
+      { "x": 7, "y": 0 }
+    ]
+  },
+  "floor": {
+    "style": "fill_interior",
+    "color": { "r": 0.14, "g": 0.12, "b": 0.18 }
+  },
+  "door": {
+    "position": { "x": 7, "y": 0 },
+    "wall_side": "south",
+    "width_tiles": 1,
+    "color": { "r": 0.35, "g": 0.20, "b": 0.45 }
+  },
+  "spawn_point": { "x": 7, "y": 2 },
+  "exit_target": { "x": 15, "y": 14 },
+  "objects": [
+    {
+      "object_id": "georgie_tank",
+      "display_name": "Georgie's Glass Tank",
+      "position": { "x": 3, "y": 12 },
+      "size": { "w": 3, "h": 2 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "feed_animal",
+        "target_animal_id": "georgie",
+        "required_item_id": "cricket_box",
+        "stat_affected": "hunger",
+        "stat_delta": 1.0,
+        "prompt_text": "Feed crickets to Georgie"
+      },
+      "color": { "r": 0.30, "g": 0.60, "b": 0.35 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "siren_enclosure",
+      "display_name": "Siren's Warm Enclosure",
+      "position": { "x": 11, "y": 12 },
+      "size": { "w": 3, "h": 2 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "mini_chore",
+        "chore_id": "mist_enclosure",
+        "stat_affected": "cleanliness",
+        "stat_delta": 1.0,
+        "prompt_text": "Mist Siren's enclosure glass"
+      },
+      "color": { "r": 0.55, "g": 0.40, "b": 0.25 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "livestream_soundboard",
+      "display_name": "Livestream Soundboard & Cameras",
+      "position": { "x": 7, "y": 7 },
+      "size": { "w": 2, "h": 1 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "toggle_fixture",
+        "stat_affected": "happiness",
+        "stat_delta": 0.5,
+        "prompt_text": "Play nature sounds on the soundboard"
+      },
+      "color": { "r": 0.20, "g": 0.20, "b": 0.30 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "bug_jar_rack",
+      "display_name": "Bug Jar Rack",
+      "position": { "x": 13, "y": 2 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "give_item",
+        "item_id": "cricket_box",
+        "prompt_text": "Grab a cricket box from the rack"
+      },
+      "color": { "r": 0.45, "g": 0.55, "b": 0.35 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "studio_desk",
+      "display_name": "Studio Desk",
+      "position": { "x": 3, "y": 7 },
+      "size": { "w": 2, "h": 1 },
+      "is_obstacle": true,
+      "is_interactable": false,
+      "color": { "r": 0.35, "g": 0.30, "b": 0.25 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "georgie_tank_clean",
+      "display_name": "Georgie's Tank Water",
+      "position": { "x": 3, "y": 10 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "clean_tile",
+        "target_animal_id": "georgie",
+        "stat_affected": "cleanliness",
+        "stat_delta": 1.0,
+        "prompt_text": "Clean Georgie's tank water"
+      },
+      "color": { "r": 0.20, "g": 0.50, "b": 0.60 },
+      "z_layer": 0.2
+    },
+    {
+      "object_id": "siren_enrichment_branch",
+      "display_name": "Siren's Climbing Branches",
+      "position": { "x": 11, "y": 10 },
+      "is_obstacle": true,
+      "is_interactable": true,
+      "interaction": {
+        "type": "enrich_animal",
+        "target_animal_id": "siren",
+        "stat_affected": "happiness",
+        "stat_delta": 1.0,
+        "prompt_text": "Mist Siren's climbing branches for enrichment"
+      },
+      "color": { "r": 0.40, "g": 0.30, "b": 0.20 },
+      "z_layer": 0.2
+    }
+  ],
+  "animals": [
+    {
+      "animal_id": "georgie",
+      "home_position": { "x": 4, "y": 12 },
+      "wander_zone": {
+        "bottom_left": { "x": 3, "y": 11 },
+        "top_right": { "x": 5, "y": 13 }
+      }
+    },
+    {
+      "animal_id": "siren",
+      "home_position": { "x": 12, "y": 12 },
+      "wander_zone": {
+        "bottom_left": { "x": 11, "y": 11 },
+        "top_right": { "x": 13, "y": 13 }
+      }
+    }
+  ],
+  "zones": [],
+  "dynamic_spawns": [],
+  "ambient": {
+    "floor_color": { "r": 0.14, "g": 0.12, "b": 0.18 },
+    "wall_color": { "r": 0.18, "g": 0.15, "b": 0.22 },
+    "background_color": { "r": 0.05, "g": 0.03, "b": 0.08 },
+    "music_track": "audio/music/studio_ambient.ogg"
+  }
+}

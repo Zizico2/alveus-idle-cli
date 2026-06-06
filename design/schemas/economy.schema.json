@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alveus-idle-cli/schemas/economy.schema.json",
+  "title": "EconomyConfig",
+  "description": "Defines the sanctuary's passive economy, coin generation tiers, caretaker team, and collectible shop catalog.",
+  "type": "object",
+  "required": ["coin_generation", "upkeep_formula", "caretakers", "stamps", "hq_customizations"],
+  "additionalProperties": false,
+  "properties": {
+    "coin_generation": {
+      "type": "object",
+      "required": ["tiers"],
+      "additionalProperties": false,
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoinTier"
+          },
+          "description": "Ordered list of coin generation tiers. First matching tier (by min_upkeep descending) applies."
+        }
+      }
+    },
+    "upkeep_formula": {
+      "type": "object",
+      "required": ["description", "formula"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "formula": {
+          "type": "string",
+          "description": "Human-readable formula. E.g., '(avg_hunger + avg_cleanliness + avg_happiness) / 3'."
+        }
+      }
+    },
+    "neglect_freeze": {
+      "type": "object",
+      "required": ["threshold", "effects"],
+      "additionalProperties": false,
+      "properties": {
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Upkeep score below which the Neglect Freeze activates."
+        },
+        "effects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of visual/audio effects triggered during Neglect Freeze."
+        }
+      }
+    },
+    "daily_bonus": {
+      "type": "object",
+      "required": ["coin_reward", "condition"],
+      "additionalProperties": false,
+      "properties": {
+        "coin_reward": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "condition": {
+          "type": "string",
+          "description": "Condition that must be met to earn the daily bonus."
+        }
+      }
+    },
+    "satchel": {
+      "type": "object",
+      "required": ["max_slots"],
+      "additionalProperties": false,
+      "properties": {
+        "max_slots": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of items the player can carry at once."
+        }
+      }
+    },
+    "caretakers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Caretaker"
+      }
+    },
+    "stamps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ShopItem"
+      }
+    },
+    "hq_customizations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ShopItem"
+      }
+    }
+  },
+  "$defs": {
+    "CoinTier": {
+      "type": "object",
+      "required": ["name", "min_upkeep", "coins_per_hour"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "min_upkeep": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coins_per_hour": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Caretaker": {
+      "type": "object",
+      "required": ["caretaker_id", "display_name", "unlock_cost", "perk"],
+      "additionalProperties": false,
+      "properties": {
+        "caretaker_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "circle_color": {
+          "type": "object",
+          "properties": {
+            "r": { "type": "number" },
+            "g": { "type": "number" },
+            "b": { "type": "number" }
+          }
+        },
+        "unlock_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cost in Alveus Coins. 0 means default/free."
+        },
+        "perk": {
+          "type": "object",
+          "required": ["name", "description"],
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "effect_type": {
+              "type": "string",
+              "enum": ["speed_multiplier", "stat_multiplier", "chore_speed_multiplier"]
+            },
+            "effect_value": { "type": "number" },
+            "affected_rooms": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "affected_actions": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "lore": {
+          "type": "string"
+        }
+      }
+    },
+    "ShopItem": {
+      "type": "object",
+      "required": ["item_id", "display_name", "cost_coins"],
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "cost_coins": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "icon_asset": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

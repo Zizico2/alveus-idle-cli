@@ -1,0 +1,465 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alveus-idle-cli/schemas/room.schema.json",
+  "title": "RoomLayout",
+  "description": "Defines the complete layout, objects, and behavior of a single interior room in Alveus Sanctuary Keeping.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "display_name",
+    "grid",
+    "walls",
+    "floor",
+    "door",
+    "objects",
+    "animals",
+    "spawn_point"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique machine-readable identifier for this room. Used as the enum variant in Rust (PascalCase derived from snake_case). Must match the BuildingEntrance variant name."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable name shown in the room title UI overlay."
+    },
+    "grid": {
+      "$ref": "#/$defs/GridDimensions"
+    },
+    "walls": {
+      "$ref": "#/$defs/WallDefinition"
+    },
+    "floor": {
+      "$ref": "#/$defs/FloorDefinition"
+    },
+    "door": {
+      "$ref": "#/$defs/DoorDefinition"
+    },
+    "spawn_point": {
+      "$ref": "#/$defs/TileCoord",
+      "description": "The tile coordinate where the player spawns when entering this room. Must be a walkable floor tile adjacent to (but not on) the door."
+    },
+    "exit_target": {
+      "$ref": "#/$defs/TileCoord",
+      "description": "The tile coordinate on the overview map where the player spawns when exiting this room."
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RoomObject"
+      },
+      "description": "All fixed interactable and non-interactable objects placed in the room."
+    },
+    "animals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AnimalPlacement"
+      },
+      "description": "Animals that reside in this room. May be zero (e.g., HQ Office has no animals)."
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Zone"
+      },
+      "description": "Named rectangular zones within the room (e.g., Polly's Playpen). Zones define sub-areas with special rules."
+    },
+    "dynamic_spawns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DynamicSpawn"
+      },
+      "description": "Objects that spawn procedurally each day (e.g., manure piles)."
+    },
+    "ambient": {
+      "$ref": "#/$defs/AmbientConfig",
+      "description": "Room-specific ambient settings (floor color, wall color, lighting mood)."
+    }
+  },
+  "$defs": {
+    "TileCoord": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "X coordinate in tile units (0-indexed from left)."
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Y coordinate in tile units (0-indexed from bottom in Bevy's coordinate system)."
+        }
+      }
+    },
+    "GridDimensions": {
+      "type": "object",
+      "required": ["width", "height", "tile_size_px"],
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 64,
+          "description": "Total grid width in tiles (including walls). The interior walkable area is width-2."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 64,
+          "description": "Total grid height in tiles (including walls). The interior walkable area is height-2."
+        },
+        "tile_size_px": {
+          "type": "integer",
+          "enum": [16, 32, 64],
+          "default": 32,
+          "description": "Pixel size of each tile. Must match the global TILE_SIZE constant (currently 32)."
+        }
+      }
+    },
+    "WallDefinition": {
+      "type": "object",
+      "required": ["style"],
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["perimeter", "custom"],
+          "description": "'perimeter' generates walls on all four edges automatically. 'custom' requires explicit wall_tiles."
+        },
+        "color": {
+          "$ref": "#/$defs/SrgbColor"
+        },
+        "excluded_tiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TileCoord"
+          },
+          "description": "Tiles on the perimeter that should NOT have walls (i.e., the door). Only used when style='perimeter'."
+        },
+        "custom_tiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TileCoord"
+          },
+          "description": "Explicit list of wall tile coordinates. Only used when style='custom'."
+        }
+      }
+    },
+    "FloorDefinition": {
+      "type": "object",
+      "required": ["style"],
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["fill_interior", "custom"],
+          "description": "'fill_interior' fills all tiles inside the walls. 'custom' requires explicit tile list."
+        },
+        "color": {
+          "$ref": "#/$defs/SrgbColor"
+        },
+        "custom_tiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TileCoord"
+          },
+          "description": "Explicit list of floor tiles. Only used when style='custom'."
+        },
+        "texture": {
+          "type": "string",
+          "description": "Optional asset path to a floor texture (relative to assets/)."
+        }
+      }
+    },
+    "DoorDefinition": {
+      "type": "object",
+      "required": ["position", "wall_side"],
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/TileCoord",
+          "description": "Tile coordinate of the door. This tile is walkable and triggers room exit when stepped on."
+        },
+        "wall_side": {
+          "type": "string",
+          "enum": ["north", "south", "east", "west"],
+          "description": "Which wall the door is on. 'south' means y=0, 'north' means y=height-1, etc."
+        },
+        "width_tiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "default": 1,
+          "description": "Width of the door opening in tiles."
+        },
+        "color": {
+          "$ref": "#/$defs/SrgbColor"
+        }
+      }
+    },
+    "RoomObject": {
+      "type": "object",
+      "required": ["object_id", "display_name", "position", "is_obstacle", "is_interactable"],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Unique identifier for this object within its room."
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-readable name shown in interaction prompts."
+        },
+        "position": {
+          "$ref": "#/$defs/TileCoord",
+          "description": "Tile coordinate where this object is placed."
+        },
+        "size": {
+          "$ref": "#/$defs/TileSize",
+          "description": "Size of the object in tiles. Defaults to 1x1."
+        },
+        "is_obstacle": {
+          "type": "boolean",
+          "description": "If true, this object blocks player movement (gets the Obstacle component)."
+        },
+        "is_interactable": {
+          "type": "boolean",
+          "description": "If true, pressing Space adjacent to this object triggers its interaction."
+        },
+        "interaction": {
+          "$ref": "#/$defs/Interaction",
+          "description": "Defines what happens when the player interacts with this object. Required if is_interactable=true."
+        },
+        "color": {
+          "$ref": "#/$defs/SrgbColor",
+          "description": "Placeholder color for the object mesh (used until sprite assets are available)."
+        },
+        "sprite": {
+          "type": "string",
+          "description": "Optional asset path to the object's sprite (relative to assets/)."
+        },
+        "z_layer": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Z-index for render ordering. Floor=0.0, door=0.01, walls=0.1, objects=0.2, player=1.0."
+        }
+      }
+    },
+    "TileSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "w": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Width in tiles."
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Height in tiles."
+        }
+      }
+    },
+    "Interaction": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "open_menu",
+            "mini_chore",
+            "give_item",
+            "place_item",
+            "toggle_fixture",
+            "inspect",
+            "feed_animal",
+            "enrich_animal",
+            "clean_tile",
+            "open_shop",
+            "external_link"
+          ],
+          "description": "The category of interaction this object performs."
+        },
+        "menu_id": {
+          "type": "string",
+          "description": "For 'open_menu' type: identifier of the menu/UI to display."
+        },
+        "chore_id": {
+          "type": "string",
+          "description": "For 'mini_chore' type: identifier of the mini-chore to trigger."
+        },
+        "item_id": {
+          "type": "string",
+          "description": "For 'give_item' type: identifier of the item added to the satchel."
+        },
+        "target_animal_id": {
+          "type": "string",
+          "description": "For 'feed_animal'/'enrich_animal': the animal this interaction targets."
+        },
+        "required_item_id": {
+          "type": "string",
+          "description": "Item that must be in the satchel to perform this interaction. Null means no requirement."
+        },
+        "stat_affected": {
+          "type": "string",
+          "enum": ["hunger", "cleanliness", "happiness"],
+          "description": "Which animal stat this interaction modifies."
+        },
+        "stat_delta": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How much the stat increases (0.0 to 1.0 scale). 1.0 means fill to max."
+        },
+        "prompt_text": {
+          "type": "string",
+          "description": "Text shown to the player when the interaction prompt appears."
+        }
+      }
+    },
+    "AnimalPlacement": {
+      "type": "object",
+      "required": ["animal_id", "home_position"],
+      "additionalProperties": false,
+      "properties": {
+        "animal_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "References an animal defined in animals.json."
+        },
+        "home_position": {
+          "$ref": "#/$defs/TileCoord",
+          "description": "The tile where this animal idles by default."
+        },
+        "wander_zone": {
+          "$ref": "#/$defs/TileRect",
+          "description": "Rectangular area the animal can wander within."
+        }
+      }
+    },
+    "Zone": {
+      "type": "object",
+      "required": ["zone_id", "bounds"],
+      "additionalProperties": false,
+      "properties": {
+        "zone_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "bounds": {
+          "$ref": "#/$defs/TileRect",
+          "description": "The rectangular bounds of this zone."
+        },
+        "fence_sides": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["north", "south", "east", "west"]
+          },
+          "description": "Which sides of the zone have fence obstacles. A gate opening is defined by gate_position."
+        },
+        "gate_position": {
+          "$ref": "#/$defs/TileCoord",
+          "description": "Tile coordinate of the gate opening in the fence (walkable gap)."
+        }
+      }
+    },
+    "DynamicSpawn": {
+      "type": "object",
+      "required": ["spawn_id", "object_template", "count", "spawn_area"],
+      "additionalProperties": false,
+      "properties": {
+        "spawn_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "object_template": {
+          "type": "string",
+          "description": "The object_id template for spawned instances (e.g., 'manure_pile')."
+        },
+        "count": {
+          "type": "object",
+          "required": ["min", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "integer", "minimum": 0 },
+            "max": { "type": "integer", "minimum": 1 }
+          },
+          "description": "Random count range [min, max] spawned per daily reset."
+        },
+        "spawn_area": {
+          "$ref": "#/$defs/TileRect",
+          "description": "Rectangular area where objects can spawn on free (non-obstacle, non-object) tiles."
+        },
+        "interaction": {
+          "$ref": "#/$defs/Interaction",
+          "description": "The interaction triggered when the player cleans/interacts with a spawned instance."
+        },
+        "color": {
+          "$ref": "#/$defs/SrgbColor"
+        }
+      }
+    },
+    "TileRect": {
+      "type": "object",
+      "required": ["bottom_left", "top_right"],
+      "additionalProperties": false,
+      "properties": {
+        "bottom_left": {
+          "$ref": "#/$defs/TileCoord"
+        },
+        "top_right": {
+          "$ref": "#/$defs/TileCoord"
+        }
+      },
+      "description": "An axis-aligned rectangle defined by two tile coordinates (inclusive on both ends)."
+    },
+    "SrgbColor": {
+      "type": "object",
+      "required": ["r", "g", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "r": { "type": "number", "minimum": 0, "maximum": 1 },
+        "g": { "type": "number", "minimum": 0, "maximum": 1 },
+        "b": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "description": "Linear sRGB color with components in [0.0, 1.0]. Maps directly to Bevy's Color::srgb(r, g, b)."
+    },
+    "AmbientConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "floor_color": {
+          "$ref": "#/$defs/SrgbColor"
+        },
+        "wall_color": {
+          "$ref": "#/$defs/SrgbColor"
+        },
+        "background_color": {
+          "$ref": "#/$defs/SrgbColor",
+          "description": "Color shown outside the room bounds (Bevy ClearColor equivalent)."
+        },
+        "music_track": {
+          "type": "string",
+          "description": "Asset path to the room's ambient music track."
+        }
+      }
+    }
+  }
+}

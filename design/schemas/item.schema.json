@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alveus-idle-cli/schemas/item.schema.json",
+  "title": "ItemDefinition",
+  "description": "Defines an item that can exist in the player's Caretaker Satchel (inventory).",
+  "type": "object",
+  "required": ["item_id", "display_name", "category"],
+  "additionalProperties": false,
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique machine-readable identifier."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable name shown in the UI."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["raw_diet", "prepared_diet", "enrichment_toy", "cleaning_tool", "collectible", "quest_item"],
+      "description": "Functional category of this item."
+    },
+    "description": {
+      "type": "string",
+      "description": "Flavor text shown in the satchel UI."
+    },
+    "icon_asset": {
+      "type": "string",
+      "description": "Path to the item's icon sprite (relative to assets/)."
+    },
+    "carry_sprite_asset": {
+      "type": "string",
+      "description": "Path to the sprite shown floating above the player's head when carrying this item."
+    },
+    "stackable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether multiple of this item can occupy a single satchel slot."
+    },
+    "max_stack": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Maximum stack size per slot (only relevant if stackable=true)."
+    },
+    "preparation": {
+      "$ref": "#/$defs/PreparationRecipe",
+      "description": "If this item is a raw_diet, defines how it becomes a prepared_diet."
+    },
+    "consumable_by": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of animal_ids that can consume this item."
+    }
+  },
+  "$defs": {
+    "PreparationRecipe": {
+      "type": "object",
+      "required": ["station_object_id", "chore_type", "output_item_id"],
+      "additionalProperties": false,
+      "properties": {
+        "station_object_id": {
+          "type": "string",
+          "description": "The room object where preparation happens (e.g., 'prep_table')."
+        },
+        "chore_type": {
+          "type": "string",
+          "enum": ["tapping", "rhythm", "instant"],
+          "description": "Type of mini-chore triggered during preparation."
+        },
+        "chore_params": {
+          "type": "object",
+          "properties": {
+            "tap_count": { "type": "integer", "minimum": 1 },
+            "time_limit_seconds": { "type": "number", "minimum": 0 }
+          }
+        },
+        "output_item_id": {
+          "type": "string",
+          "description": "The item_id of the prepared version."
+        }
+      }
+    }
+  }
+}

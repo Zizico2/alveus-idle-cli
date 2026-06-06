@@ -1,0 +1,81 @@
+{
+  "$schema": "../schemas/overview_map.schema.json",
+  "grid": {
+    "width": 50,
+    "height": 50
+  },
+  "tile_size_px": 32,
+  "terrain_tileset": {
+    "tiles": [
+      {
+        "tile_id": 0,
+        "display_name": "Sand Path",
+        "asset_path": "maps/overview/sand_tile.png",
+        "walkable": true
+      },
+      {
+        "tile_id": 1,
+        "display_name": "Sand-Grass Transition",
+        "asset_path": "maps/overview/sand_grass_tile.png",
+        "walkable": true
+      },
+      {
+        "tile_id": 2,
+        "display_name": "Grass",
+        "asset_path": "maps/overview/grass_tile.png",
+        "walkable": true
+      }
+    ]
+  },
+  "buildings": [
+    {
+      "building_id": "nutrition_house",
+      "display_name": "Nutrition House",
+      "position": { "x": 31, "y": 14 },
+      "sprite_asset": "maps/overview/nutrition_house.png",
+      "sprite_size_px": { "w": 200, "h": 284 },
+      "entrance_zone": {
+        "bottom_left": { "x": 32, "y": 13 },
+        "top_right": { "x": 35, "y": 14 }
+      },
+      "target_room_id": "nutrition_house"
+    },
+    {
+      "building_id": "studio",
+      "display_name": "The Studio",
+      "position": { "x": 12, "y": 12 },
+      "sprite_asset": "maps/overview/studio.png",
+      "sprite_size_px": { "w": 224, "h": 288 },
+      "entrance_zone": {
+        "bottom_left": { "x": 14, "y": 13 },
+        "top_right": { "x": 17, "y": 14 }
+      },
+      "target_room_id": "studio"
+    },
+    {
+      "building_id": "pasture",
+      "display_name": "The Pasture",
+      "position": { "x": 16, "y": 22 },
+      "sprite_asset": "maps/overview/pasture_gate.png",
+      "sprite_size_px": { "w": 128, "h": 96 },
+      "entrance_zone": {
+        "bottom_left": { "x": 19, "y": 23 },
+        "top_right": { "x": 22, "y": 24 }
+      },
+      "target_room_id": "pasture"
+    },
+    {
+      "building_id": "hq_office",
+      "display_name": "Alveus HQ Office",
+      "position": { "x": 22, "y": 6 },
+      "sprite_asset": "maps/overview/hq_office.png",
+      "sprite_size_px": { "w": 200, "h": 256 },
+      "entrance_zone": {
+        "bottom_left": { "x": 24, "y": 8 },
+        "top_right": { "x": 27, "y": 9 }
+      },
+      "target_room_id": "hq_office"
+    }
+  ],
+  "player_initial_spawn": { "x": 25, "y": 10 }
+}

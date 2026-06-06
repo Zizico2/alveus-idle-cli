@@ -1,0 +1,110 @@
+{
+  "$schema": "../schemas/event.schema.json",
+  "events": [
+    {
+      "event_id": "rainy_day",
+      "display_name": "The Rainy Day",
+      "description": "Rain falls across the sanctuary. Stompy's trough is covered and sprinkler enrichment is disabled. Player must towel Stompy off inside his shelter instead.",
+      "weight": 0.20,
+      "affected_rooms": ["pasture"],
+      "modifications": [
+        {
+          "type": "disable_object",
+          "target_object_id": "water_spigot"
+        },
+        {
+          "type": "replace_interaction",
+          "target_object_id": "stompy_shelter",
+          "replacement_interaction": {
+            "type": "enrich_animal",
+            "target_animal_id": "stompy",
+            "stat_affected": "happiness",
+            "stat_delta": 1.0,
+            "prompt_text": "Towel off Stompy inside the shelter"
+          }
+        }
+      ],
+      "visual_effects": ["rain_overlay", "muddy_patches"],
+      "rewards": []
+    },
+    {
+      "event_id": "siren_shed_day",
+      "display_name": "Siren's Shed Day",
+      "description": "Siren is shedding. Her eyes have a milky overlay and skin is dulled. Extra misting required (3 interactions instead of 1).",
+      "weight": 0.15,
+      "affected_rooms": ["studio"],
+      "modifications": [
+        {
+          "type": "modify_chore_count",
+          "target_object_id": "siren_enclosure",
+          "extra_count": 3
+        }
+      ],
+      "visual_effects": ["milky_eye_overlay", "dulled_skin"],
+      "rewards": [
+        {
+          "type": "item",
+          "item_id": "shed_snake_skin",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "event_id": "escaped_crickets",
+      "display_name": "Escaped Feeder Crickets",
+      "description": "Crickets have escaped the Bug Jar Rack! Player must chase and catch 3 jumping crickets on the Studio floor before feeding Georgie.",
+      "weight": 0.15,
+      "affected_rooms": ["studio"],
+      "modifications": [
+        {
+          "type": "disable_object",
+          "target_object_id": "bug_jar_rack"
+        },
+        {
+          "type": "replace_interaction",
+          "target_object_id": "georgie_tank",
+          "replacement_interaction": {
+            "type": "mini_chore",
+            "chore_id": "catch_crickets",
+            "stat_affected": "hunger",
+            "stat_delta": 1.0,
+            "prompt_text": "Catch escaped crickets to feed Georgie"
+          }
+        }
+      ],
+      "visual_effects": ["jumping_cricket_sprites"],
+      "rewards": []
+    },
+    {
+      "event_id": "volunteer_day",
+      "display_name": "Volunteer Day",
+      "description": "Friendly volunteer NPCs visit the sanctuary and help with one random cleaning chore.",
+      "weight": 0.20,
+      "affected_rooms": ["pasture", "studio", "nutrition_house"],
+      "modifications": [
+        {
+          "type": "spawn_npcs",
+          "npc_count": 1,
+          "npc_chore_type": "clean_tile"
+        }
+      ],
+      "visual_effects": [],
+      "rewards": [
+        {
+          "type": "coins",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "event_id": "no_event",
+      "display_name": "Normal Day",
+      "description": "A regular day at the sanctuary. No special events.",
+      "weight": 0.30,
+      "affected_rooms": [],
+      "modifications": [],
+      "visual_effects": [],
+      "rewards": []
+    }
+  ]
+}

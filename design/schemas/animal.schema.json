@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alveus-idle-cli/schemas/animal.schema.json",
+  "title": "AnimalDefinition",
+  "description": "Defines an animal ambassador's identity, species data, stat decay rates, and care requirements.",
+  "type": "object",
+  "required": [
+    "animal_id",
+    "display_name",
+    "species",
+    "stats",
+    "care_requirements",
+    "sprite"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "animal_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique machine-readable identifier (e.g., 'polly', 'stompy', 'georgie')."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable display name (e.g., 'Polly', 'Stompy')."
+    },
+    "species": {
+      "$ref": "#/$defs/SpeciesInfo"
+    },
+    "stats": {
+      "$ref": "#/$defs/StatBlock"
+    },
+    "care_requirements": {
+      "$ref": "#/$defs/CareRequirements"
+    },
+    "sprite": {
+      "$ref": "#/$defs/SpriteConfig"
+    },
+    "fact_cards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FactCard"
+      },
+      "description": "Educational fact cards viewable by interacting directly with the animal."
+    },
+    "enrichment_minigame": {
+      "$ref": "#/$defs/MinigameRef",
+      "description": "Reference to this animal's unique enrichment minigame (future feature)."
+    }
+  },
+  "$defs": {
+    "SpeciesInfo": {
+      "type": "object",
+      "required": ["common_name", "scientific_name"],
+      "additionalProperties": false,
+      "properties": {
+        "common_name": {
+          "type": "string",
+          "description": "Common species name (e.g., 'Emu', 'African Bullfrog')."
+        },
+        "scientific_name": {
+          "type": "string",
+          "description": "Binomial nomenclature (e.g., 'Dromaius novaehollandiae')."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["bird", "reptile", "amphibian", "mammal"],
+          "description": "Broad taxonomic category for grouping."
+        }
+      }
+    },
+    "StatBlock": {
+      "type": "object",
+      "required": ["hunger", "cleanliness", "happiness"],
+      "additionalProperties": false,
+      "properties": {
+        "hunger": {
+          "$ref": "#/$defs/DecayStat"
+        },
+        "cleanliness": {
+          "$ref": "#/$defs/DecayStat"
+        },
+        "happiness": {
+          "$ref": "#/$defs/DecayStat"
+        }
+      }
+    },
+    "DecayStat": {
+      "type": "object",
+      "required": ["decay_rate_per_hour", "initial_value"],
+      "additionalProperties": false,
+      "properties": {
+        "decay_rate_per_hour": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Amount the stat decreases per real-world hour. E.g., 0.04 means ~25 hours to reach 0 from 1.0."
+        },
+        "initial_value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "Starting value when the game is first launched (new save)."
+        },
+        "time_to_empty_hours": {
+          "type": "number",
+          "description": "Derived: 1.0 / decay_rate_per_hour. Included for documentation clarity."
+        }
+      }
+    },
+    "CareRequirements": {
+      "type": "object",
+      "required": ["feeding", "cleaning", "enrichment"],
+      "additionalProperties": false,
+      "properties": {
+        "feeding": {
+          "$ref": "#/$defs/CareAction"
+        },
+        "cleaning": {
+          "$ref": "#/$defs/CareAction"
+        },
+        "enrichment": {
+          "$ref": "#/$defs/CareAction"
+        }
+      }
+    },
+    "CareAction": {
+      "type": "object",
+      "required": ["description", "stat_restored"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Narrative description of the care action for documentation."
+        },
+        "stat_restored": {
+          "type": "string",
+          "enum": ["hunger", "cleanliness", "happiness"],
+          "description": "Which stat this care action replenishes."
+        },
+        "restore_amount": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "How much the stat is restored (1.0 = fully restored to max)."
+        },
+        "required_item_id": {
+          "type": "string",
+          "description": "Item that must be in the satchel to perform this action. Null means no item needed."
+        },
+        "interaction_object_id": {
+          "type": "string",
+          "description": "The room object the player interacts with to perform this action."
+        },
+        "chore_type": {
+          "type": "string",
+          "enum": ["instant", "tapping", "rhythm", "pathfinder", "target"],
+          "default": "instant",
+          "description": "The type of micro-interaction required. 'instant' means press Space once."
+        },
+        "chore_params": {
+          "type": "object",
+          "description": "Parameters specific to the chore_type. E.g., for 'tapping': { tap_count: 5 }.",
+          "properties": {
+            "tap_count": { "type": "integer", "minimum": 1 },
+            "time_limit_seconds": { "type": "number", "minimum": 0 },
+            "checkpoints": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "SpriteConfig": {
+      "type": "object",
+      "required": ["asset_path"],
+      "additionalProperties": false,
+      "properties": {
+        "asset_path": {
+          "type": "string",
+          "description": "Path to the sprite sheet (relative to assets/). E.g., 'images/animals/polly.png'."
+        },
+        "frame_size": {
+          "type": "object",
+          "properties": {
+            "w": { "type": "integer" },
+            "h": { "type": "integer" }
+          },
+          "description": "Size of each animation frame in pixels."
+        },
+        "animations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/AnimationDef"
+          },
+          "description": "Named animation sequences (e.g., 'idle', 'eat', 'sad', 'happy')."
+        }
+      }
+    },
+    "AnimationDef": {
+      "type": "object",
+      "required": ["frames", "frame_duration_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "frames": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 },
+          "description": "Frame indices into the sprite sheet."
+        },
+        "frame_duration_ms": {
+          "type": "integer",
+          "minimum": 16,
+          "description": "Duration of each frame in milliseconds."
+        },
+        "looping": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this animation loops."
+        }
+      }
+    },
+    "FactCard": {
+      "type": "object",
+      "required": ["title", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the fact card."
+        },
+        "body": {
+          "type": "string",
+          "description": "Educational text content."
+        },
+        "source": {
+          "type": "string",
+          "description": "Attribution or source for the fact."
+        }
+      }
+    },
+    "MinigameRef": {
+      "type": "object",
+      "required": ["minigame_id", "trigger_object_id"],
+      "additionalProperties": false,
+      "properties": {
+        "minigame_id": {
+          "type": "string",
+          "description": "Identifier for the minigame implementation."
+        },
+        "trigger_object_id": {
+          "type": "string",
+          "description": "The room object that triggers this minigame when interacted with."
+        }
+      }
+    }
+  }
+}
