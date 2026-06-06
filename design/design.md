@@ -297,7 +297,7 @@ Y10: [W][W][W][W][W][W][W][W][W][W][W]
  Y7: [W][ ][ ][ ][P][P][P][ ][ ][ ][W]   P=Prep Table (3 tiles)
  Y6: [W][ ][ ][ ][ ][ ][ ][ ][ ][ ][W]
  Y5: [W][ ][S][ ][ ][ ][ ][f][E][f][W]   S=Seed Chest  E=Enrichment Post  f=fence
- Y4: [W][ ][ ][ ][ ][ ][ ][f]·[f][W]   ·=Polly home pos (walkable inside pen)
+ Y4: [W][ ][ ][ ][ ][ ][ ][f][·][f][W]   ·=Polly home pos (walkable inside pen)
  Y3: [W][ ][ ][ ][ ][ ][ ][g][B][f][W]   g=Gate(walkable)  B=Feed Bowl
  Y2: [W][ ][ ][ ][ ][↑][ ][f][N][f][W]   ↑=Player Spawn  N=Nesting Box
  Y1: [W][ ][ ][ ][ ][ ][ ][f][f][f][W]   f=playpen fence
