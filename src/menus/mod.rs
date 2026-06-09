@@ -1,13 +1,14 @@
 //! The game's menus and transitions between them.
 
 mod credits;
-mod main;
+pub mod main;
+pub use main::PlayClickEvent;
 mod pause;
 mod settings;
 
 use bevy::prelude::*;
 
-pub(super) fn plugin(app: &mut App) {
+pub fn plugin(app: &mut App) {
     app.init_state::<Menu>();
 
     app.add_plugins((

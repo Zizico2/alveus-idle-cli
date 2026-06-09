@@ -347,6 +347,19 @@ fn worsen_stat_observer(
 // Systems
 // ---------------------------------------------------------
 
+fn is_valid_save_format(content: &str) -> bool {
+    if let Ok(ron::Value::Map(map)) = ron::from_str::<ron::Value>(content) {
+        for key in map.keys() {
+            if let ron::Value::String(s) = key {
+                if s == "resources" || s == "entities" {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Initialize animal stats on entering gameplay screen, checking save data.
 fn init_stats_system(
     mut commands: Commands,
@@ -361,12 +374,25 @@ fn init_stats_system(
     info!("Initializing animal stats entities...");
 
     if Path::new(&save_path.0).exists() {
-        info!("Loading save from {}...", save_path.0);
-        commands.trigger_load(LoadWorld::default_from_file(&save_path.0));
-        return;
+        let is_valid = if let Ok(content) = std::fs::read_to_string(&save_path.0) {
+            is_valid_save_format(&content)
+        } else {
+            false
+        };
+
+        if is_valid {
+            info!("Loading save from {}...", save_path.0);
+            commands.trigger_load(LoadWorld::default_from_file(&save_path.0));
+            return;
+        } else {
+            warn!(
+                "Save file {} is in an invalid/legacy format. Fallback to default stats.",
+                save_path.0
+            );
+        }
     }
 
-    info!("No save file found. Initializing new stats.");
+    info!("No save file found (or invalid format). Initializing new stats.");
     spawn_default_stats(&mut commands);
 }
 

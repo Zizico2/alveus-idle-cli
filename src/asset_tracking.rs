@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 
-pub(super) fn plugin(app: &mut App) {
+pub fn plugin(app: &mut App) {
     app.init_resource::<ResourceHandles>();
     app.add_systems(PreUpdate, load_resource_assets);
 }

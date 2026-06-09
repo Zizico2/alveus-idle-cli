@@ -4,8 +4,12 @@ use bevy::prelude::*;
 
 use crate::{asset_tracking::ResourceHandles, menus::Menu, screens::Screen, theme::widget};
 
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+pub struct PlayClickEvent;
+
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Menu::Main), spawn_main_menu);
+    app.add_observer(handle_play_click);
 }
 
 fn spawn_main_menu(mut commands: Commands) {
@@ -31,6 +35,13 @@ fn spawn_main_menu(mut commands: Commands) {
 
 fn enter_loading_or_gameplay_screen(
     _: On<Pointer<Click>>,
+    mut commands: Commands,
+) {
+    commands.trigger(PlayClickEvent);
+}
+
+pub fn handle_play_click(
+    _: On<PlayClickEvent>,
     resource_handles: Res<ResourceHandles>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {

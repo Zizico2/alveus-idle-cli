@@ -1,1 +1,141 @@
-(timestamp:1780883482,animals:{"georgie":(hunger:449,happiness:412),"siren":(hunger:449,happiness:412),"stompy":(hunger:449,happiness:412),"polly":(hunger:449,happiness:412)},enclosures:{"nutrition_house_playpen":(cleanliness:487),"pasture":(cleanliness:487),"reptile_enclosure":(cleanliness:487)})
+(
+  resources: {},
+  entities: {
+    4294967119: (
+      components: {
+        "alveus_idle_cli::stats::AnimalDecayAccumulators": (
+          hunger: 0.11122044,
+          happiness: 0.13902543,
+        ),
+        "alveus_idle_cli::stats::AnimalDecayRates": (
+          hunger_rate: 40.0,
+          happiness_rate: 50.0,
+        ),
+        "alveus_idle_cli::stats::AnimalEnclosure": ("reptile_enclosure"),
+        "alveus_idle_cli::stats::AnimalId": ("siren"),
+        "alveus_idle_cli::stats::AnimalName": ("Siren"),
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 700,
+          happiness: 700,
+        ),
+        "bevy_ecs::name::Name": "Persistent Stats - Siren",
+      },
+    ),
+    4294967120: (
+      components: {
+        "alveus_idle_cli::stats::AnimalDecayAccumulators": (
+          hunger: 0.11122044,
+          happiness: 0.13902543,
+        ),
+        "alveus_idle_cli::stats::AnimalDecayRates": (
+          hunger_rate: 40.0,
+          happiness_rate: 50.0,
+        ),
+        "alveus_idle_cli::stats::AnimalEnclosure": ("reptile_enclosure"),
+        "alveus_idle_cli::stats::AnimalId": ("georgie"),
+        "alveus_idle_cli::stats::AnimalName": ("Georgie"),
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 700,
+          happiness: 700,
+        ),
+        "bevy_ecs::name::Name": "Persistent Stats - Georgie",
+      },
+    ),
+    4294967121: (
+      components: {
+        "alveus_idle_cli::stats::AnimalDecayAccumulators": (
+          hunger: 0.11122044,
+          happiness: 0.13902543,
+        ),
+        "alveus_idle_cli::stats::AnimalDecayRates": (
+          hunger_rate: 40.0,
+          happiness_rate: 50.0,
+        ),
+        "alveus_idle_cli::stats::AnimalEnclosure": ("pasture"),
+        "alveus_idle_cli::stats::AnimalId": ("stompy"),
+        "alveus_idle_cli::stats::AnimalName": ("Stompy"),
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 700,
+          happiness: 700,
+        ),
+        "bevy_ecs::name::Name": "Persistent Stats - Stompy",
+      },
+    ),
+    4294967122: (
+      components: {
+        "alveus_idle_cli::stats::AnimalDecayAccumulators": (
+          hunger: 0.11122044,
+          happiness: 0.13902543,
+        ),
+        "alveus_idle_cli::stats::AnimalDecayRates": (
+          hunger_rate: 40.0,
+          happiness_rate: 50.0,
+        ),
+        "alveus_idle_cli::stats::AnimalEnclosure": ("nutrition_house_playpen"),
+        "alveus_idle_cli::stats::AnimalId": ("polly"),
+        "alveus_idle_cli::stats::AnimalName": ("Polly"),
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 700,
+          happiness: 700,
+        ),
+        "bevy_ecs::name::Name": "Persistent Stats - Polly",
+      },
+    ),
+    4294967123: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureDecayAccumulators": (
+          cleanliness: 0.08341527,
+        ),
+        "alveus_idle_cli::stats::EnclosureDecayRates": (
+          cleanliness_rate: 30.0,
+        ),
+        "alveus_idle_cli::stats::EnclosureId": ("reptile_enclosure"),
+        "alveus_idle_cli::stats::EnclosureName": ("Reptile Enclosure"),
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 700,
+        ),
+        "bevy_ecs::name::Name": "Enclosure Stats - Reptile Enclosure",
+      },
+    ),
+    4294967124: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureDecayAccumulators": (
+          cleanliness: 0.08341527,
+        ),
+        "alveus_idle_cli::stats::EnclosureDecayRates": (
+          cleanliness_rate: 30.0,
+        ),
+        "alveus_idle_cli::stats::EnclosureId": ("pasture"),
+        "alveus_idle_cli::stats::EnclosureName": ("Pasture Grassland"),
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 700,
+        ),
+        "bevy_ecs::name::Name": "Enclosure Stats - Pasture Grassland",
+      },
+    ),
+    4294967125: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureDecayAccumulators": (
+          cleanliness: 0.08341527,
+        ),
+        "alveus_idle_cli::stats::EnclosureDecayRates": (
+          cleanliness_rate: 30.0,
+        ),
+        "alveus_idle_cli::stats::EnclosureId": ("nutrition_house_playpen"),
+        "alveus_idle_cli::stats::EnclosureName": ("Nutrition House Playpen"),
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 700,
+        ),
+        "bevy_ecs::name::Name": "Enclosure Stats - Nutrition House Playpen",
+      },
+    ),
+    21474836445: (
+      components: {
+        "alveus_idle_cli::stats::SaveTimestamp": (
+          value: 1780971336,
+        ),
+        "bevy_ecs::name::Name": "Save Timestamp",
+      },
+    ),
+  },
+)
