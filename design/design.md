@@ -43,7 +43,7 @@ This document replaces `concept.md` as the **implementation reference**. Every v
 
 ### Data-Driven Design
 
-All game content is defined in JSON data files validated against JSON Schemas. The game engine reads these at build time (or runtime via asset loading) and constructs the world deterministically. No gameplay parameter exists only in source code — every tunable value has a corresponding field in a schema.
+All game content is defined in JSON data files validated against JSON Schemas. These values should be further canonicalized and restuctured if needed to match in-code structs. They could be rewritten and loaded via RON https://docs.rs/bevy_ron/latest/bevy_ron/.
 
 ```
 design/

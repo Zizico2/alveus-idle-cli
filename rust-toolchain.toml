@@ -1,0 +1,3 @@
+[toolchain]
+# TODO: this should be stable for release build. Only nightly for dev for faster compile times.
+channel = "nightly"

@@ -1,0 +1,259 @@
+use bevy::prelude::*;
+use bevy::state::app::StatesPlugin;
+use bevy::ecs::system::RunSystemOnce;
+use alveus_idle_cli::stats::{
+    AnimalId, AnimalName, AnimalStats, AnimalEnclosure, EnclosureId, EnclosureName, EnclosureStats, SanctuaryUpkeep, StatType, ImproveStatEvent, WorsenStatEvent,
+    StatsPlugin, SavePath, tick_decay_system
+};
+use alveus_idle_cli::screens::Screen;
+
+#[test]
+fn test_stats_initialization() {
+    let save_path = "nonexistent_save_init.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins(StatsPlugin);
+
+    // Enter Gameplay screen to trigger init_stats_system
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update(); // runs state transitions and system updates
+
+    // Verify animal stats entities are spawned
+    let animals: Vec<(String, String, AnimalStats, String)> = {
+        let mut animal_query = app.world_mut().query::<(&AnimalId, &AnimalName, &AnimalStats, &AnimalEnclosure)>();
+        animal_query.iter(app.world()).map(|(id, name, stats, enc)| {
+            (id.0.clone(), name.0.clone(), stats.clone(), enc.0.clone())
+        }).collect()
+    };
+    assert_eq!(animals.len(), 4, "Should spawn 4 animals");
+
+    // Verify enclosure stats entities are spawned
+    let enclosures: Vec<(String, String, EnclosureStats)> = {
+        let mut enclosure_query = app.world_mut().query::<(&EnclosureId, &EnclosureName, &EnclosureStats)>();
+        enclosure_query.iter(app.world()).map(|(id, name, stats)| {
+            (id.0.clone(), name.0.clone(), stats.clone())
+        }).collect()
+    };
+    assert_eq!(enclosures.len(), 3, "Should spawn 3 enclosures (Playpen, Pasture, Reptile)");
+
+    // Find Georgie and Siren and verify they share Reptile Enclosure
+    let mut georgie_enc = None;
+    let mut siren_enc = None;
+    for (id, _name, _stats, enc) in &animals {
+        if id == "georgie" {
+            georgie_enc = Some(enc.clone());
+        } else if id == "siren" {
+            siren_enc = Some(enc.clone());
+        }
+    }
+    assert_eq!(georgie_enc, Some("reptile_enclosure".to_string()));
+    assert_eq!(siren_enc, Some("reptile_enclosure".to_string()));
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn test_stat_observers_and_clamping() {
+    let save_path = "nonexistent_save_obs.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins(StatsPlugin);
+
+    // Transition to Gameplay to spawn entities
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update();
+
+    // Verify initial state
+    let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
+        .iter(app.world())
+        .find(|&e| app.world().get::<AnimalId>(e).unwrap().0 == "polly")
+        .expect("Polly should exist");
+
+    let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    assert_eq!(initial_stats.hunger, 1000);
+
+    // Trigger worsening
+    app.world_mut().trigger(WorsenStatEvent {
+        animal_id: "polly".to_string(),
+        stat_type: StatType::Hunger,
+        amount: 300,
+    });
+    // Observers trigger immediately on world trigger
+    let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    assert_eq!(stats.hunger, 700);
+
+    // Trigger improve
+    app.world_mut().trigger(ImproveStatEvent {
+        animal_id: "polly".to_string(),
+        stat_type: StatType::Hunger,
+        amount: 200,
+    });
+    let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    assert_eq!(stats.hunger, 900);
+
+    // Trigger improve past max to test clamping
+    app.world_mut().trigger(ImproveStatEvent {
+        animal_id: "polly".to_string(),
+        stat_type: StatType::Hunger,
+        amount: 500,
+    });
+    let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    assert_eq!(stats.hunger, 1000);
+
+    // Trigger worsening below 0 to test clamping
+    app.world_mut().trigger(WorsenStatEvent {
+        animal_id: "polly".to_string(),
+        stat_type: StatType::Hunger,
+        amount: 1200,
+    });
+    let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    assert_eq!(stats.hunger, 0);
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn test_shared_enclosure_cleanliness() {
+    let save_path = "nonexistent_save_enc.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins(StatsPlugin);
+
+    // Transition to Gameplay to spawn entities
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update();
+
+    let reptile_entity = app.world_mut().query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| app.world().get::<EnclosureId>(e).unwrap().0 == "reptile_enclosure")
+        .expect("Reptile Enclosure should exist");
+
+    // Initial cleanliness is 1000
+    let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
+    assert_eq!(enc_stats.cleanliness, 1000);
+
+    // Worsen Georgie's cleanliness (targets animal, observer resolves to reptile_enclosure)
+    app.world_mut().trigger(WorsenStatEvent {
+        animal_id: "georgie".to_string(),
+        stat_type: StatType::Cleanliness,
+        amount: 400,
+    });
+
+    // Verify enclosure cleanliness drops
+    let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
+    assert_eq!(enc_stats.cleanliness, 600);
+
+    // Improve Siren's cleanliness (should improve the shared reptile enclosure!)
+    app.world_mut().trigger(ImproveStatEvent {
+        animal_id: "siren".to_string(),
+        stat_type: StatType::Cleanliness,
+        amount: 250,
+    });
+
+    // Verify enclosure cleanliness increases
+    let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
+    assert_eq!(enc_stats.cleanliness, 850);
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn test_upkeep_calculation() {
+    let save_path = "nonexistent_save_upkeep.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins(StatsPlugin);
+
+    // Transition to Gameplay to spawn entities
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update();
+
+    // Worsen stats of specific animals/enclosures to test mean updates
+    app.world_mut().trigger(WorsenStatEvent {
+        animal_id: "polly".to_string(),
+        stat_type: StatType::Hunger,
+        amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000+1000+1000)/4000 = 0.90
+    });
+
+    app.world_mut().trigger(WorsenStatEvent {
+        animal_id: "reptile_enclosure".to_string(),
+        stat_type: StatType::Cleanliness,
+        amount: 600, // reptile_enclosure cleanliness becomes 400, playpen/pasture stay 1000 -> mean cleanliness = (1000+1000+400)/3000 = 0.80
+    });
+
+    // Run system updates to calculate upkeep
+    app.update();
+
+    let upkeep = app.world().resource::<SanctuaryUpkeep>();
+    // Mean hunger: 900/1000 = 0.90
+    assert!((upkeep.mean_hunger - 0.90).abs() < 0.001);
+    // Mean cleanliness: 800/1000 = 0.80
+    assert!((upkeep.mean_cleanliness - 0.80).abs() < 0.001);
+    // Mean happiness: 1.0
+    assert!((upkeep.mean_happiness - 1.0).abs() < 0.001);
+    // Overall upkeep score: (0.90 + 0.80 + 1.0) / 3.0 = 0.90
+    assert!((upkeep.score - 0.90).abs() < 0.001);
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn test_decay_rate() {
+    let save_path = "nonexistent_save_decay.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins(StatsPlugin);
+
+    // Transition to Gameplay to spawn entities
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update();
+
+    // Verify initial Polly entity stats
+    let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
+        .iter(app.world())
+        .find(|&e| app.world().get::<AnimalId>(e).unwrap().0 == "polly")
+        .expect("Polly should exist");
+
+    let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap().clone();
+    assert_eq!(initial_stats.hunger, 1000);
+    assert_eq!(initial_stats.happiness, 1000);
+
+    // Set custom Time resource with delta of 2 hours
+    let mut time = Time::<()>::default();
+    time.advance_by(std::time::Duration::from_secs(7200)); // sets delta to 7200 seconds (2 hours)
+    app.insert_resource(time);
+
+    // Run the tick_decay_system once directly on the world
+    let _ = app.world_mut().run_system_once(tick_decay_system);
+
+    // Get updated stats
+    let updated_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    // Polly's hunger decay rate is 0.04 per hour (40 units per hour out of 1000).
+    // In 2 hours, hunger should decay by 80 units.
+    // Polly's happiness decay rate is 0.05 per hour (50 units per hour out of 1000).
+    // In 2 hours, happiness should decay by 100 units.
+    assert_eq!(updated_stats.hunger, 920);
+    assert_eq!(updated_stats.happiness, 900);
+    let _ = std::fs::remove_file(save_path);
+}
