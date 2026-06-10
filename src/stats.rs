@@ -114,33 +114,51 @@ pub struct SanctuaryUpkeep {
 }
 
 // ---------------------------------------------------------
-// JSON Parsing Structs (for embedding assets)
+// Hardcoded Animal Data (Sync with design/data/animals.json)
 // ---------------------------------------------------------
 
-#[derive(serde::Deserialize)]
-struct JsonAnimalStat {
-    decay_rate_per_hour: f32,
+pub struct AnimalStaticData {
+    pub animal_id: &'static str,
+    pub display_name: &'static str,
+    pub hunger_decay_rate: f32,
+    pub happiness_decay_rate: f32,
 }
 
-#[derive(serde::Deserialize)]
-#[allow(dead_code)]
-struct JsonAnimalStats {
-    hunger: JsonAnimalStat,
-    cleanliness: JsonAnimalStat,
-    happiness: JsonAnimalStat,
-}
-
-#[derive(serde::Deserialize)]
-struct JsonAnimal {
-    animal_id: String,
-    display_name: String,
-    stats: JsonAnimalStats,
-}
-
-#[derive(serde::Deserialize)]
-struct JsonAnimalsData {
-    animals: Vec<JsonAnimal>,
-}
+/// WARNING: The static array `ANIMALS_DATA` is hardcoded to avoid runtime JSON parsing overhead
+/// and ensure fast initialization. It MUST be kept in sync with the canonical config file:
+/// [animals.json](file:///home/bernardo/Projects/alveus-idle-cli/design/data/animals.json) (or `design/data/animals.json`).
+///
+/// If any species, display names, or decay rates are modified in `animals.json`, the corresponding
+/// values in this array MUST be updated manually to match.
+///
+/// Future developers (humans and AI agents) should always consult both files when updating
+/// animal attributes or adding new animals to the sanctuary.
+pub const ANIMALS_DATA: &[AnimalStaticData] = &[
+    AnimalStaticData {
+        animal_id: "polly",
+        display_name: "Polly",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: "stompy",
+        display_name: "Stompy",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: "georgie",
+        display_name: "Georgie",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: "siren",
+        display_name: "Siren",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+];
 
 // ---------------------------------------------------------
 // Plugin
@@ -176,7 +194,7 @@ impl Plugin for StatsPlugin {
             .init_resource::<SanctuaryUpkeep>()
             .add_observer(save_on_default_event)
             .add_observer(load_on_default_event)
-            .add_observer(apply_offline_decay_observer)
+            .add_observer(hydrate_loaded_stats_observer)
             // Register decoupled observers
             .add_observer(improve_stat_observer)
             .add_observer(worsen_stat_observer)
@@ -192,6 +210,7 @@ impl Plugin for StatsPlugin {
                 debug_stats_control_system,
                 save_stats_periodically_system,
                 debug_log_stats_system,
+                apply_offline_decay_system,
             )
                 .run_if(in_gameplay_or_room),
         );
@@ -397,10 +416,6 @@ fn init_stats_system(
 }
 
 fn spawn_default_stats(commands: &mut Commands) {
-    let config_json = include_str!("../design/data/animals.json");
-    let config_data: JsonAnimalsData = serde_json::from_str(config_json)
-        .expect("Failed to parse embedded design/data/animals.json");
-
     let enclosure_mappings = [
         ("nutrition_house_playpen", "Nutrition House Playpen", 0.03 * 1000.0),
         ("pasture", "Pasture Grassland", 0.03 * 1000.0),
@@ -418,16 +433,16 @@ fn spawn_default_stats(commands: &mut Commands) {
         ));
     }
 
-    for json_animal in config_data.animals {
-        let animal_id = json_animal.animal_id;
-        let display_name = json_animal.display_name;
+    for animal in ANIMALS_DATA {
+        let animal_id = animal.animal_id.to_string();
+        let display_name = animal.display_name.to_string();
 
         let decay_rates = AnimalDecayRates {
-            hunger_rate: json_animal.stats.hunger.decay_rate_per_hour * 1000.0,
-            happiness_rate: json_animal.stats.happiness.decay_rate_per_hour * 1000.0,
+            hunger_rate: animal.hunger_decay_rate * 1000.0,
+            happiness_rate: animal.happiness_decay_rate * 1000.0,
         };
 
-        let enc_id = match animal_id.as_str() {
+        let enc_id = match animal.animal_id {
             "polly" => "nutrition_house_playpen",
             "stompy" => "pasture",
             "georgie" => "reptile_enclosure",
@@ -450,8 +465,58 @@ fn spawn_default_stats(commands: &mut Commands) {
     }
 }
 
-fn apply_offline_decay_observer(
+fn hydrate_loaded_stats_observer(
     _trigger: On<Loaded>,
+    mut commands: Commands,
+    animal_query: Query<(Entity, &AnimalId)>,
+    enclosure_query: Query<(Entity, &EnclosureId)>,
+) {
+    info!("Hydrating loaded stats with static config...");
+
+    let enclosure_mappings = [
+        ("nutrition_house_playpen", "Nutrition House Playpen", 0.03 * 1000.0),
+        ("pasture", "Pasture Grassland", 0.03 * 1000.0),
+        ("reptile_enclosure", "Reptile Enclosure", 0.03 * 1000.0),
+    ];
+
+    for (entity, id) in &animal_query {
+        if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == id.0) {
+            let decay_rates = AnimalDecayRates {
+                hunger_rate: animal.hunger_decay_rate * 1000.0,
+                happiness_rate: animal.happiness_decay_rate * 1000.0,
+            };
+
+            let enc_id = match id.0.as_str() {
+                "polly" => "nutrition_house_playpen",
+                "stompy" => "pasture",
+                "georgie" => "reptile_enclosure",
+                "siren" => "reptile_enclosure",
+                _ => "unknown_enclosure",
+            };
+
+            commands.entity(entity).insert((
+                Name::new(format!("Persistent Stats - {}", animal.display_name)),
+                AnimalName(animal.display_name.to_string()),
+                AnimalEnclosure(enc_id.to_string()),
+                decay_rates,
+                AnimalDecayAccumulators::default(),
+            ));
+        }
+    }
+
+    for (entity, id) in &enclosure_query {
+        if let Some(&(_, enc_name, cleanliness_rate)) = enclosure_mappings.iter().find(|(mapped_id, _, _)| *mapped_id == id.0) {
+            commands.entity(entity).insert((
+                Name::new(format!("Enclosure Stats - {}", enc_name)),
+                EnclosureName(enc_name.to_string()),
+                EnclosureDecayRates { cleanliness_rate },
+                EnclosureDecayAccumulators::default(),
+            ));
+        }
+    }
+}
+
+fn apply_offline_decay_system(
     mut commands: Commands,
     timestamp_query: Query<(Entity, &SaveTimestamp)>,
     animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
@@ -460,6 +525,11 @@ fn apply_offline_decay_observer(
     let Ok((timestamp_entity, timestamp)) = timestamp_query.single() else {
         return;
     };
+
+    // If loaded entities are not hydrated yet, wait for the next frame
+    if animal_query.is_empty() {
+        return;
+    }
 
     let now_unix = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -655,7 +725,14 @@ fn save_stats_periodically_system(
         }
 
         info!("Autosaving stats via moonshine-save...");
-        commands.trigger_save(SaveWorld::default_into_file(&save_path.0));
+        let mut save = SaveWorld::default_into_file(&save_path.0);
+        save.components = bevy::scene::SceneFilter::deny_all()
+            .allow::<SaveTimestamp>()
+            .allow::<AnimalId>()
+            .allow::<AnimalStats>()
+            .allow::<EnclosureId>()
+            .allow::<EnclosureStats>();
+        commands.trigger_save(save);
     }
 }
 
