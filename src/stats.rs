@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use moonshine_save::prelude::*;
 use std::path::Path;
 use std::time::SystemTime;
+use crate::AppSystems;
 
 // ---------------------------------------------------------
 // Components
@@ -113,29 +114,38 @@ pub struct EnclosureDecayAccumulators {
 // ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub enum StatTarget {
-    Animal(AnimalId),
-    Enclosure(EnclosureId),
+pub enum AnimalStat {
+    Hunger,
+    Happiness,
+    Cleanliness,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub enum StatType {
-    Hunger,
+pub enum EnclosureStat {
     Cleanliness,
-    Happiness,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum StatTarget {
+    Animal {
+        id: AnimalId,
+        stat: AnimalStat,
+    },
+    Enclosure {
+        id: EnclosureId,
+        stat: EnclosureStat,
+    },
 }
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
 pub struct ImproveStatEvent {
     pub target: StatTarget,
-    pub stat_type: StatType,
     pub amount: u32,
 }
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
 pub struct WorsenStatEvent {
     pub target: StatTarget,
-    pub stat_type: StatType,
     pub amount: u32,
 }
 
@@ -231,6 +241,8 @@ impl Plugin for StatsPlugin {
             .register_type::<EnclosureDecayAccumulators>()
             .register_type::<SanctuaryUpkeep>()
             .init_resource::<SanctuaryUpkeep>()
+            .init_resource::<AutoSaveTimer>()
+            .init_resource::<DebugLogTimer>()
             .add_observer(save_on_default_event)
             .add_observer(load_on_default_event)
             .add_observer(hydrate_loaded_stats_observer)
@@ -244,14 +256,20 @@ impl Plugin for StatsPlugin {
         app.add_systems(
             Update,
             (
-                tick_decay_system,
-                update_upkeep_system,
+                tick_decay_system.in_set(AppSystems::DecayCalculation),
+                update_upkeep_system.in_set(AppSystems::UpkeepCalculation),
                 debug_stats_control_system,
-                save_stats_periodically_system,
+                save_stats_periodically_system.in_set(AppSystems::SaveSystem),
                 debug_log_stats_system,
-                apply_offline_decay_system,
             )
                 .run_if(in_gameplay_or_room),
+        );
+        app.add_systems(
+            Update,
+            apply_offline_decay_system
+                .in_set(AppSystems::DecayCalculation)
+                .run_if(in_gameplay_or_room)
+                .run_if(any_with_component::<SaveTimestamp>),
         );
     }
 }
@@ -271,75 +289,85 @@ fn in_gameplay_or_room(screen_state: Res<State<crate::screens::Screen>>) -> bool
 // Observers (Decoupled Stat Modification)
 // ---------------------------------------------------------
 
+// ---------------------------------------------------------
+// Observers (Decoupled Stat Modification)
+// ---------------------------------------------------------
+
 fn improve_stat_observer(
     trigger: On<ImproveStatEvent>,
     mut animal_query: Query<(&AnimalId, &AnimalName, &mut AnimalStats, &AnimalEnclosure)>,
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
-    info!("improve_stat_observer triggered for target '{:?}', stat '{:?}', amount {}", event.target, event.stat_type, event.amount);
+    info!("improve_stat_observer triggered for target '{:?}', amount {}", event.target, event.amount);
 
-    match event.stat_type {
-        StatType::Hunger => {
-            if let StatTarget::Animal(target_animal_id) = event.target {
-                let mut found = false;
-                for (id, name, mut stats, _) in &mut animal_query {
-                    if *id == target_animal_id {
-                        found = true;
-                        let prev = stats.hunger;
-                        stats.hunger = stats.hunger.saturating_add(event.amount).min(1000);
-                        info!("Improved hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+    match event.target {
+        StatTarget::Animal { id: target_animal_id, stat } => {
+            match stat {
+                AnimalStat::Hunger | AnimalStat::Happiness => {
+                    let mut found = false;
+                    for (id, name, mut stats, _) in &mut animal_query {
+                        if *id == target_animal_id {
+                            found = true;
+                            match stat {
+                                AnimalStat::Hunger => {
+                                    let prev = stats.hunger;
+                                    stats.hunger = stats.hunger.saturating_add(event.amount).min(1000);
+                                    info!("Improved hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+                                }
+                                AnimalStat::Happiness => {
+                                    let prev = stats.happiness;
+                                    stats.happiness = stats.happiness.saturating_add(event.amount).min(1000);
+                                    info!("Improved happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                    if !found {
+                        warn!("ImproveStatEvent: Animal id '{:?}' not found in world", target_animal_id);
                     }
                 }
-                if !found {
-                    warn!("ImproveStatEvent: Animal id '{:?}' not found in world", target_animal_id);
-                }
-            }
-        }
-        StatType::Happiness => {
-            if let StatTarget::Animal(target_animal_id) = event.target {
-                let mut found = false;
-                for (id, name, mut stats, _) in &mut animal_query {
-                    if *id == target_animal_id {
-                        found = true;
-                        let prev = stats.happiness;
-                        stats.happiness = stats.happiness.saturating_add(event.amount).min(1000);
-                        info!("Improved happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
-                    }
-                }
-                if !found {
-                    warn!("ImproveStatEvent: Animal id '{:?}' not found in world", target_animal_id);
-                }
-            }
-        }
-        StatType::Cleanliness => {
-            let target_enclosure = match event.target {
-                StatTarget::Enclosure(enc_id) => Some(enc_id),
-                StatTarget::Animal(anim_id) => {
-                    let mut found_enc = None;
+                AnimalStat::Cleanliness => {
+                    let mut target_enclosure = None;
                     for (id, _, _, animal_enc) in &animal_query {
-                        if *id == anim_id {
-                            found_enc = Some(animal_enc.0);
+                        if *id == target_animal_id {
+                            target_enclosure = Some(animal_enc.0);
                             break;
                         }
                     }
-                    found_enc
-                }
-            };
 
-            if let Some(target_enc_id) = target_enclosure {
-                let mut found = false;
-                for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
-                    if *enc_id == target_enc_id {
-                        found = true;
-                        let prev = enc_stats.cleanliness;
-                        enc_stats.cleanliness = enc_stats.cleanliness.saturating_add(event.amount).min(1000);
-                        info!("Improved cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                    if let Some(target_enc_id) = target_enclosure {
+                        let mut found = false;
+                        for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                            if *enc_id == target_enc_id {
+                                found = true;
+                                let prev = enc_stats.cleanliness;
+                                enc_stats.cleanliness = enc_stats.cleanliness.saturating_add(event.amount).min(1000);
+                                info!("Improved cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                            }
+                        }
+                        if !found {
+                            warn!("ImproveStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+                        }
+                    } else {
+                        warn!("ImproveStatEvent: Enclosure for Animal id '{:?}' not found", target_animal_id);
                     }
                 }
-                if !found {
-                    warn!("ImproveStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+            }
+        }
+        StatTarget::Enclosure { id: target_enc_id, stat: EnclosureStat::Cleanliness } => {
+            let mut found = false;
+            for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                if *enc_id == target_enc_id {
+                    found = true;
+                    let prev = enc_stats.cleanliness;
+                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_add(event.amount).min(1000);
+                    info!("Improved cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
                 }
+            }
+            if !found {
+                warn!("ImproveStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
             }
         }
     }
@@ -351,69 +379,75 @@ fn worsen_stat_observer(
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
-    info!("worsen_stat_observer triggered for target '{:?}', stat '{:?}', amount {}", event.target, event.stat_type, event.amount);
+    info!("worsen_stat_observer triggered for target '{:?}', amount {}", event.target, event.amount);
 
-    match event.stat_type {
-        StatType::Hunger => {
-            if let StatTarget::Animal(target_animal_id) = event.target {
-                let mut found = false;
-                for (id, name, mut stats, _) in &mut animal_query {
-                    if *id == target_animal_id {
-                        found = true;
-                        let prev = stats.hunger;
-                        stats.hunger = stats.hunger.saturating_sub(event.amount);
-                        info!("Worsened hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+    match event.target {
+        StatTarget::Animal { id: target_animal_id, stat } => {
+            match stat {
+                AnimalStat::Hunger | AnimalStat::Happiness => {
+                    let mut found = false;
+                    for (id, name, mut stats, _) in &mut animal_query {
+                        if *id == target_animal_id {
+                            found = true;
+                            match stat {
+                                AnimalStat::Hunger => {
+                                    let prev = stats.hunger;
+                                    stats.hunger = stats.hunger.saturating_sub(event.amount);
+                                    info!("Worsened hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+                                }
+                                AnimalStat::Happiness => {
+                                    let prev = stats.happiness;
+                                    stats.happiness = stats.happiness.saturating_sub(event.amount);
+                                    info!("Worsened happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                    if !found {
+                        warn!("WorsenStatEvent: Animal id '{:?}' not found in world", target_animal_id);
                     }
                 }
-                if !found {
-                    warn!("WorsenStatEvent: Animal id '{:?}' not found in world", target_animal_id);
-                }
-            }
-        }
-        StatType::Happiness => {
-            if let StatTarget::Animal(target_animal_id) = event.target {
-                let mut found = false;
-                for (id, name, mut stats, _) in &mut animal_query {
-                    if *id == target_animal_id {
-                        found = true;
-                        let prev = stats.happiness;
-                        stats.happiness = stats.happiness.saturating_sub(event.amount);
-                        info!("Worsened happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
-                    }
-                }
-                if !found {
-                    warn!("WorsenStatEvent: Animal id '{:?}' not found in world", target_animal_id);
-                }
-            }
-        }
-        StatType::Cleanliness => {
-            let target_enclosure = match event.target {
-                StatTarget::Enclosure(enc_id) => Some(enc_id),
-                StatTarget::Animal(anim_id) => {
-                    let mut found_enc = None;
+                AnimalStat::Cleanliness => {
+                    let mut target_enclosure = None;
                     for (id, _, _, animal_enc) in &animal_query {
-                        if *id == anim_id {
-                            found_enc = Some(animal_enc.0);
+                        if *id == target_animal_id {
+                            target_enclosure = Some(animal_enc.0);
                             break;
                         }
                     }
-                    found_enc
-                }
-            };
 
-            if let Some(target_enc_id) = target_enclosure {
-                let mut found = false;
-                for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
-                    if *enc_id == target_enc_id {
-                        found = true;
-                        let prev = enc_stats.cleanliness;
-                        enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
-                        info!("Worsened cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                    if let Some(target_enc_id) = target_enclosure {
+                        let mut found = false;
+                        for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                            if *enc_id == target_enc_id {
+                                found = true;
+                                let prev = enc_stats.cleanliness;
+                                enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
+                                info!("Worsened cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                            }
+                        }
+                        if !found {
+                            warn!("WorsenStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+                        }
+                    } else {
+                        warn!("WorsenStatEvent: Enclosure for Animal id '{:?}' not found", target_animal_id);
                     }
                 }
-                if !found {
-                    warn!("WorsenStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+            }
+        }
+        StatTarget::Enclosure { id: target_enc_id, stat: EnclosureStat::Cleanliness } => {
+            let mut found = false;
+            for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                if *enc_id == target_enc_id {
+                    found = true;
+                    let prev = enc_stats.cleanliness;
+                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
+                    info!("Worsened cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
                 }
+            }
+            if !found {
+                warn!("WorsenStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
             }
         }
     }
@@ -609,15 +643,19 @@ fn apply_offline_decay_system(
 
             if hunger_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    target: StatTarget::Animal(*id),
-                    stat_type: StatType::Hunger,
+                    target: StatTarget::Animal {
+                        id: *id,
+                        stat: AnimalStat::Hunger,
+                    },
                     amount: hunger_decay,
                 });
             }
             if happiness_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    target: StatTarget::Animal(*id),
-                    stat_type: StatType::Happiness,
+                    target: StatTarget::Animal {
+                        id: *id,
+                        stat: AnimalStat::Happiness,
+                    },
                     amount: happiness_decay,
                 });
             }
@@ -627,8 +665,10 @@ fn apply_offline_decay_system(
             let cleanliness_decay = (decay_rates.cleanliness_rate * hours_elapsed).round() as u32;
             if cleanliness_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    target: StatTarget::Enclosure(*id),
-                    stat_type: StatType::Cleanliness,
+                    target: StatTarget::Enclosure {
+                        id: *id,
+                        stat: EnclosureStat::Cleanliness,
+                    },
                     amount: cleanliness_decay,
                 });
             }
@@ -656,8 +696,10 @@ pub fn tick_decay_system(
             let decay_amount = accs.hunger.floor();
             accs.hunger -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Hunger,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Hunger,
+                },
                 amount: decay_amount as u32,
             });
         }
@@ -665,8 +707,10 @@ pub fn tick_decay_system(
             let decay_amount = accs.happiness.floor();
             accs.happiness -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Happiness,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Happiness,
+                },
                 amount: decay_amount as u32,
             });
         }
@@ -679,8 +723,10 @@ pub fn tick_decay_system(
             let decay_amount = accs.cleanliness.floor();
             accs.cleanliness -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Enclosure(*id),
-                stat_type: StatType::Cleanliness,
+                target: StatTarget::Enclosure {
+                    id: *id,
+                    stat: EnclosureStat::Cleanliness,
+                },
                 amount: decay_amount as u32,
             });
         }
@@ -747,18 +793,10 @@ impl Default for AutoSaveTimer {
 fn save_stats_periodically_system(
     mut commands: Commands,
     time: Res<Time>,
-    timer_opt: Option<ResMut<AutoSaveTimer>>,
+    mut timer: ResMut<AutoSaveTimer>,
     save_path: Res<SavePath>,
     mut timestamp_query: Query<&mut SaveTimestamp>,
 ) {
-    let mut timer = match timer_opt {
-        Some(t) => t,
-        None => {
-            commands.insert_resource(AutoSaveTimer::default());
-            return;
-        }
-    };
-
     timer.tick(time.delta());
     if timer.just_finished() {
         let now_unix = SystemTime::now()
@@ -800,22 +838,28 @@ fn debug_stats_control_system(
     // Keys 1, 2, 3: care actions for Polly
     if input.just_pressed(KeyCode::Digit1) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Polly),
-            stat_type: StatType::Hunger,
+            target: StatTarget::Animal {
+                id: AnimalId::Polly,
+                stat: AnimalStat::Hunger,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit2) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Polly),
-            stat_type: StatType::Cleanliness,
+            target: StatTarget::Animal {
+                id: AnimalId::Polly,
+                stat: AnimalStat::Cleanliness,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit3) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Polly),
-            stat_type: StatType::Happiness,
+            target: StatTarget::Animal {
+                id: AnimalId::Polly,
+                stat: AnimalStat::Happiness,
+            },
             amount: 250,
         });
     }
@@ -823,22 +867,28 @@ fn debug_stats_control_system(
     // Keys 4, 5, 6: care actions for Stompy
     if input.just_pressed(KeyCode::Digit4) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Stompy),
-            stat_type: StatType::Hunger,
+            target: StatTarget::Animal {
+                id: AnimalId::Stompy,
+                stat: AnimalStat::Hunger,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit5) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Stompy),
-            stat_type: StatType::Cleanliness,
+            target: StatTarget::Animal {
+                id: AnimalId::Stompy,
+                stat: AnimalStat::Cleanliness,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit6) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Stompy),
-            stat_type: StatType::Happiness,
+            target: StatTarget::Animal {
+                id: AnimalId::Stompy,
+                stat: AnimalStat::Happiness,
+            },
             amount: 250,
         });
     }
@@ -846,22 +896,28 @@ fn debug_stats_control_system(
     // Keys 7, 8, 9: care actions for Georgie
     if input.just_pressed(KeyCode::Digit7) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Georgie),
-            stat_type: StatType::Hunger,
+            target: StatTarget::Animal {
+                id: AnimalId::Georgie,
+                stat: AnimalStat::Hunger,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit8) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Georgie),
-            stat_type: StatType::Cleanliness,
+            target: StatTarget::Animal {
+                id: AnimalId::Georgie,
+                stat: AnimalStat::Cleanliness,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit9) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Georgie),
-            stat_type: StatType::Happiness,
+            target: StatTarget::Animal {
+                id: AnimalId::Georgie,
+                stat: AnimalStat::Happiness,
+            },
             amount: 250,
         });
     }
@@ -869,22 +925,28 @@ fn debug_stats_control_system(
     // Keys 0, I, O: care actions for Siren
     if input.just_pressed(KeyCode::Digit0) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Siren),
-            stat_type: StatType::Hunger,
+            target: StatTarget::Animal {
+                id: AnimalId::Siren,
+                stat: AnimalStat::Hunger,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::KeyI) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Siren),
-            stat_type: StatType::Cleanliness,
+            target: StatTarget::Animal {
+                id: AnimalId::Siren,
+                stat: AnimalStat::Cleanliness,
+            },
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::KeyO) {
         commands.trigger(ImproveStatEvent {
-            target: StatTarget::Animal(AnimalId::Siren),
-            stat_type: StatType::Happiness,
+            target: StatTarget::Animal {
+                id: AnimalId::Siren,
+                stat: AnimalStat::Happiness,
+            },
             amount: 250,
         });
     }
@@ -897,20 +959,26 @@ fn debug_stats_control_system(
         info!("Debug: Instantly worsening all stats for all animals!");
         for (id, _) in &animal_query {
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Hunger,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Hunger,
+                },
                 amount: 100,
             });
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Happiness,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Happiness,
+                },
                 amount: 100,
             });
         }
         for (id, _) in &enclosure_query {
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Enclosure(*id),
-                stat_type: StatType::Cleanliness,
+                target: StatTarget::Enclosure {
+                    id: *id,
+                    stat: EnclosureStat::Cleanliness,
+                },
                 amount: 100,
             });
         }
@@ -927,13 +995,17 @@ fn debug_stats_control_system(
             let happiness_decay = (decay_rates.happiness_rate * 4.0).round() as u32;
 
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Hunger,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Hunger,
+                },
                 amount: hunger_decay,
             });
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal(*id),
-                stat_type: StatType::Happiness,
+                target: StatTarget::Animal {
+                    id: *id,
+                    stat: AnimalStat::Happiness,
+                },
                 amount: happiness_decay,
             });
         }
@@ -941,31 +1013,31 @@ fn debug_stats_control_system(
             let cleanliness_decay = (decay_rates.cleanliness_rate * 4.0).round() as u32;
 
             commands.trigger(WorsenStatEvent {
-                target: StatTarget::Enclosure(*id),
-                stat_type: StatType::Cleanliness,
+                target: StatTarget::Enclosure {
+                    id: *id,
+                    stat: EnclosureStat::Cleanliness,
+                },
                 amount: cleanliness_decay,
             });
         }
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Deref, DerefMut)]
 struct DebugLogTimer(Timer);
+
+impl Default for DebugLogTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(2.0, TimerMode::Repeating))
+    }
+}
 
 fn debug_log_stats_system(
     time: Res<Time>,
-    timer_opt: Option<ResMut<DebugLogTimer>>,
-    mut commands: Commands,
+    mut timer: ResMut<DebugLogTimer>,
     animal_query: Query<(&AnimalId, &AnimalName, &AnimalStats)>,
     enclosure_query: Query<(&EnclosureId, &EnclosureName, &EnclosureStats)>,
 ) {
-    let mut timer = match timer_opt {
-        Some(t) => t,
-        None => {
-            commands.insert_resource(DebugLogTimer(Timer::from_seconds(2.0, TimerMode::Repeating)));
-            return;
-        }
-    };
     timer.0.tick(time.delta());
     if timer.0.just_finished() {
         info!("--- debug_log_stats_system: Animal count = {}, Enclosure count = {} ---", animal_query.iter().count(), enclosure_query.iter().count());

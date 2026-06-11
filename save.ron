@@ -3,28 +3,25 @@
   entities: {
     4294967119: (
       components: {
-        "alveus_idle_cli::stats::AnimalId": Siren,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 700,
-          happiness: 700,
+        "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 1000,
         ),
       },
     ),
     4294967120: (
       components: {
-        "alveus_idle_cli::stats::AnimalId": Georgie,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 700,
-          happiness: 700,
+        "alveus_idle_cli::stats::EnclosureId": Pasture,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 800,
         ),
       },
     ),
     4294967121: (
       components: {
-        "alveus_idle_cli::stats::AnimalId": Stompy,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 700,
-          happiness: 700,
+        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 800,
         ),
       },
     ),
@@ -32,39 +29,42 @@
       components: {
         "alveus_idle_cli::stats::AnimalId": Polly,
         "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 700,
-          happiness: 700,
+          hunger: 1000,
+          happiness: 1000,
         ),
       },
     ),
     4294967123: (
       components: {
-        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 700,
+        "alveus_idle_cli::stats::AnimalId": Stompy,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 1000,
+          happiness: 800,
         ),
       },
     ),
     4294967124: (
       components: {
-        "alveus_idle_cli::stats::EnclosureId": Pasture,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 700,
+        "alveus_idle_cli::stats::AnimalId": Georgie,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 800,
+          happiness: 800,
         ),
       },
     ),
     4294967125: (
       components: {
-        "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 700,
+        "alveus_idle_cli::stats::AnimalId": Siren,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 800,
+          happiness: 800,
         ),
       },
     ),
-    17179869141: (
+    8589931984: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1780972580,
+          value: 1781137770,
         ),
       },
     ),

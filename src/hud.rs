@@ -1,6 +1,7 @@
 use bevy::prelude::*;
-use crate::stats::{AnimalId, AnimalStats, SanctuaryUpkeep, StatType};
+use crate::stats::{AnimalId, AnimalStats, SanctuaryUpkeep, AnimalStat};
 use crate::screens::Screen;
+use crate::AppSystems;
 
 // ---------------------------------------------------------
 // Component Markers
@@ -18,13 +19,13 @@ struct UpkeepBarFill;
 #[derive(Component)]
 struct AnimalStatBarFill {
     animal_id: AnimalId,
-    stat_type: StatType,
+    stat: AnimalStat,
 }
 
 #[derive(Component)]
 struct AnimalStatText {
     animal_id: AnimalId,
-    stat_type: StatType,
+    stat: AnimalStat,
 }
 
 #[derive(Component)]
@@ -57,11 +58,12 @@ impl Plugin for HudPlugin {
 
         // Update systems run when player is actively playing
         app.add_systems(
-            PostUpdate,
+            Update,
             (
                 update_hud_system,
                 animate_neglect_banner_system,
             )
+                .in_set(AppSystems::UiUpdate)
                 .run_if(in_gameplay_or_room),
         );
     }
@@ -316,16 +318,16 @@ fn spawn_animal_card(
         });
 
         // Stats Progress Bars
-        spawn_stat_row(card, animal_id, StatType::Hunger, "Hunger", Color::srgb(0.2, 0.8, 0.3));
-        spawn_stat_row(card, animal_id, StatType::Cleanliness, "Cleanliness", Color::srgb(0.2, 0.6, 0.9));
-        spawn_stat_row(card, animal_id, StatType::Happiness, "Happiness", Color::srgb(0.8, 0.4, 0.9));
+        spawn_stat_row(card, animal_id, AnimalStat::Hunger, "Hunger", Color::srgb(0.2, 0.8, 0.3));
+        spawn_stat_row(card, animal_id, AnimalStat::Cleanliness, "Cleanliness", Color::srgb(0.2, 0.6, 0.9));
+        spawn_stat_row(card, animal_id, AnimalStat::Happiness, "Happiness", Color::srgb(0.8, 0.4, 0.9));
     });
 }
 
 fn spawn_stat_row(
     parent: &mut ChildSpawnerCommands,
     animal_id: AnimalId,
-    stat_type: StatType,
+    stat: AnimalStat,
     label_text: &str,
     bar_color: Color,
 ) {
@@ -362,7 +364,7 @@ fn spawn_stat_row(
                 TextColor(Color::WHITE),
                 AnimalStatText {
                     animal_id,
-                    stat_type,
+                    stat,
                 },
             ));
         });
@@ -387,7 +389,7 @@ fn spawn_stat_row(
                 BackgroundColor(bar_color),
                 AnimalStatBarFill {
                     animal_id,
-                    stat_type,
+                    stat,
                 },
             ));
         });
@@ -446,11 +448,11 @@ fn update_hud_system(
     }
 
     // Helper to resolve the value of a stat for a given animal_id
-    let resolve_stat = |animal_id: AnimalId, stat_type: StatType| -> Option<u32> {
-        match stat_type {
-            StatType::Hunger => animal_stats_map.get(&animal_id).map(|s| s.hunger),
-            StatType::Happiness => animal_stats_map.get(&animal_id).map(|s| s.happiness),
-            StatType::Cleanliness => {
+    let resolve_stat = |animal_id: AnimalId, stat: AnimalStat| -> Option<u32> {
+        match stat {
+            AnimalStat::Hunger => animal_stats_map.get(&animal_id).map(|s| s.hunger),
+            AnimalStat::Happiness => animal_stats_map.get(&animal_id).map(|s| s.happiness),
+            AnimalStat::Cleanliness => {
                 let enc_id = animal_enclosure_map.get(&animal_id)?;
                 enclosure_cleanliness_map.get(enc_id).copied()
             }
@@ -459,14 +461,14 @@ fn update_hud_system(
 
     // 3. Update Individual Stat Texts
     for (mut txt, marker) in &mut stat_text_query {
-        if let Some(val) = resolve_stat(marker.animal_id, marker.stat_type) {
+        if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
             txt.0 = format!("{}%", (val as f32 / 10.0).round() as i32);
         }
     }
 
     // 4. Update Individual Stat Progress Bars
     for (mut node, marker) in &mut stat_bar_query {
-        if let Some(val) = resolve_stat(marker.animal_id, marker.stat_type) {
+        if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
             node.width = Val::Percent(val as f32 / 10.0);
         }
     }
@@ -487,9 +489,12 @@ fn update_hud_system(
 /// Animate the Neglect Banner with a pulsating glow/alpha transition.
 fn animate_neglect_banner_system(
     time: Res<Time>,
-    mut banner_query: Query<&mut BackgroundColor, With<NeglectBanner>>,
+    mut banner_query: Query<(&mut BackgroundColor, &Visibility), With<NeglectBanner>>,
 ) {
-    for mut bg in &mut banner_query {
+    for (mut bg, visibility) in &mut banner_query {
+        if visibility == Visibility::Hidden {
+            continue;
+        }
         // Compute pulsating alpha value
         let pulse = (time.elapsed_secs() * 4.0).sin().abs() * 0.35 + 0.65;
         bg.0.set_alpha(pulse);

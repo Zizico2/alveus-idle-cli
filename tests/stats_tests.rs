@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 use bevy::ecs::system::RunSystemOnce;
 use alveus_idle_cli::stats::{
-    AnimalId, AnimalName, AnimalStats, AnimalEnclosure, EnclosureId, EnclosureName, EnclosureStats, SanctuaryUpkeep, StatType, ImproveStatEvent, WorsenStatEvent,
+    AnimalId, AnimalName, AnimalStats, AnimalEnclosure, EnclosureId, EnclosureName, EnclosureStats, SanctuaryUpkeep, AnimalStat, EnclosureStat, ImproveStatEvent, WorsenStatEvent,
     StatTarget, StatsPlugin, SavePath, tick_decay_system
 };
 use alveus_idle_cli::screens::Screen;
@@ -83,8 +83,10 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger worsening
     app.world_mut().trigger(WorsenStatEvent {
-        target: StatTarget::Animal(AnimalId::Polly),
-        stat_type: StatType::Hunger,
+        target: StatTarget::Animal {
+            id: AnimalId::Polly,
+            stat: AnimalStat::Hunger,
+        },
         amount: 300,
     });
     // Observers trigger immediately on world trigger
@@ -93,8 +95,10 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger improve
     app.world_mut().trigger(ImproveStatEvent {
-        target: StatTarget::Animal(AnimalId::Polly),
-        stat_type: StatType::Hunger,
+        target: StatTarget::Animal {
+            id: AnimalId::Polly,
+            stat: AnimalStat::Hunger,
+        },
         amount: 200,
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
@@ -102,8 +106,10 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger improve past max to test clamping
     app.world_mut().trigger(ImproveStatEvent {
-        target: StatTarget::Animal(AnimalId::Polly),
-        stat_type: StatType::Hunger,
+        target: StatTarget::Animal {
+            id: AnimalId::Polly,
+            stat: AnimalStat::Hunger,
+        },
         amount: 500,
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
@@ -111,8 +117,10 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger worsening below 0 to test clamping
     app.world_mut().trigger(WorsenStatEvent {
-        target: StatTarget::Animal(AnimalId::Polly),
-        stat_type: StatType::Hunger,
+        target: StatTarget::Animal {
+            id: AnimalId::Polly,
+            stat: AnimalStat::Hunger,
+        },
         amount: 1200,
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
@@ -147,8 +155,10 @@ fn test_shared_enclosure_cleanliness() {
 
     // Worsen Georgie's cleanliness (targets animal, observer resolves to reptile_enclosure)
     app.world_mut().trigger(WorsenStatEvent {
-        target: StatTarget::Animal(AnimalId::Georgie),
-        stat_type: StatType::Cleanliness,
+        target: StatTarget::Animal {
+            id: AnimalId::Georgie,
+            stat: AnimalStat::Cleanliness,
+        },
         amount: 400,
     });
 
@@ -158,8 +168,10 @@ fn test_shared_enclosure_cleanliness() {
 
     // Improve Siren's cleanliness (should improve the shared reptile enclosure!)
     app.world_mut().trigger(ImproveStatEvent {
-        target: StatTarget::Animal(AnimalId::Siren),
-        stat_type: StatType::Cleanliness,
+        target: StatTarget::Animal {
+            id: AnimalId::Siren,
+            stat: AnimalStat::Cleanliness,
+        },
         amount: 250,
     });
 
@@ -187,14 +199,18 @@ fn test_upkeep_calculation() {
 
     // Worsen stats of specific animals/enclosures to test mean updates
     app.world_mut().trigger(WorsenStatEvent {
-        target: StatTarget::Animal(AnimalId::Polly),
-        stat_type: StatType::Hunger,
+        target: StatTarget::Animal {
+            id: AnimalId::Polly,
+            stat: AnimalStat::Hunger,
+        },
         amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000+1000+1000)/4000 = 0.90
     });
 
     app.world_mut().trigger(WorsenStatEvent {
-        target: StatTarget::Enclosure(EnclosureId::ReptileEnclosure),
-        stat_type: StatType::Cleanliness,
+        target: StatTarget::Enclosure {
+            id: EnclosureId::ReptileEnclosure,
+            stat: EnclosureStat::Cleanliness,
+        },
         amount: 600, // reptile_enclosure cleanliness becomes 400, playpen/pasture stay 1000 -> mean cleanliness = (1000+1000+400)/3000 = 0.80
     });
 

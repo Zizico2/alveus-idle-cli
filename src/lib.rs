@@ -72,6 +72,10 @@ impl Plugin for AppPlugin {
             (
                 AppSystems::TickTimers,
                 AppSystems::RecordInput,
+                AppSystems::DecayCalculation,
+                AppSystems::UpkeepCalculation,
+                AppSystems::UiUpdate,
+                AppSystems::SaveSystem,
                 AppSystems::Update,
             )
                 .chain(),
@@ -95,7 +99,15 @@ pub enum AppSystems {
     TickTimers,
     /// Record player input.
     RecordInput,
-    /// Do everything else (consider splitting this into further variants).
+    /// Systems that run decay logic.
+    DecayCalculation,
+    /// Systems that update global upkeep.
+    UpkeepCalculation,
+    /// Systems that update HUD / UI text/bars.
+    UiUpdate,
+    /// Systems that periodically save/autosave state.
+    SaveSystem,
+    /// Do everything else.
     Update,
 }
 
