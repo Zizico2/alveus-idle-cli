@@ -17,13 +17,13 @@ struct UpkeepBarFill;
 
 #[derive(Component)]
 struct AnimalStatBarFill {
-    animal_id: String,
+    animal_id: AnimalId,
     stat_type: StatType,
 }
 
 #[derive(Component)]
 struct AnimalStatText {
-    animal_id: String,
+    animal_id: AnimalId,
     stat_type: StatType,
 }
 
@@ -210,10 +210,10 @@ fn spawn_hud_system(
                     },
                 )).with_children(|stack| {
                     // Spawn animal cards for the 4 ambassadors
-                    spawn_animal_card(stack, "polly", "Polly", "Silkie Chicken", "Playpen");
-                    spawn_animal_card(stack, "stompy", "Stompy", "Emu", "Pasture Grassland");
-                    spawn_animal_card(stack, "georgie", "Georgie", "African Bullfrog", "Reptile Enclosure");
-                    spawn_animal_card(stack, "siren", "Siren", "Ball Python", "Reptile Enclosure");
+                    spawn_animal_card(stack, AnimalId::Polly, "Polly", "Silkie Chicken", "Playpen");
+                    spawn_animal_card(stack, AnimalId::Stompy, "Stompy", "Emu", "Pasture Grassland");
+                    spawn_animal_card(stack, AnimalId::Georgie, "Georgie", "African Bullfrog", "Reptile Enclosure");
+                    spawn_animal_card(stack, AnimalId::Siren, "Siren", "Ball Python", "Reptile Enclosure");
                 });
 
                 // C. Debug Controls Help Card
@@ -254,7 +254,7 @@ fn spawn_hud_system(
 
 fn spawn_animal_card(
     parent: &mut ChildSpawnerCommands,
-    animal_id: &str,
+    animal_id: AnimalId,
     name: &str,
     species: &str,
     enclosure_name: &str,
@@ -324,7 +324,7 @@ fn spawn_animal_card(
 
 fn spawn_stat_row(
     parent: &mut ChildSpawnerCommands,
-    animal_id: &str,
+    animal_id: AnimalId,
     stat_type: StatType,
     label_text: &str,
     bar_color: Color,
@@ -361,7 +361,7 @@ fn spawn_stat_row(
                 },
                 TextColor(Color::WHITE),
                 AnimalStatText {
-                    animal_id: animal_id.to_string(),
+                    animal_id,
                     stat_type,
                 },
             ));
@@ -386,7 +386,7 @@ fn spawn_stat_row(
                 },
                 BackgroundColor(bar_color),
                 AnimalStatBarFill {
-                    animal_id: animal_id.to_string(),
+                    animal_id,
                     stat_type,
                 },
             ));
@@ -436,22 +436,22 @@ fn update_hud_system(
     let mut animal_stats_map = std::collections::HashMap::new();
     let mut animal_enclosure_map = std::collections::HashMap::new();
     for (id, stats, enclosure) in &animals_query {
-        animal_stats_map.insert(id.0.clone(), stats.clone());
-        animal_enclosure_map.insert(id.0.clone(), enclosure.0.clone());
+        animal_stats_map.insert(*id, stats.clone());
+        animal_enclosure_map.insert(*id, enclosure.0);
     }
 
     let mut enclosure_cleanliness_map = std::collections::HashMap::new();
     for (id, stats) in &enclosures_query {
-        enclosure_cleanliness_map.insert(id.0.clone(), stats.cleanliness);
+        enclosure_cleanliness_map.insert(*id, stats.cleanliness);
     }
 
     // Helper to resolve the value of a stat for a given animal_id
-    let resolve_stat = |animal_id: &str, stat_type: StatType| -> Option<u32> {
+    let resolve_stat = |animal_id: AnimalId, stat_type: StatType| -> Option<u32> {
         match stat_type {
-            StatType::Hunger => animal_stats_map.get(animal_id).map(|s| s.hunger),
-            StatType::Happiness => animal_stats_map.get(animal_id).map(|s| s.happiness),
+            StatType::Hunger => animal_stats_map.get(&animal_id).map(|s| s.hunger),
+            StatType::Happiness => animal_stats_map.get(&animal_id).map(|s| s.happiness),
             StatType::Cleanliness => {
-                let enc_id = animal_enclosure_map.get(animal_id)?;
+                let enc_id = animal_enclosure_map.get(&animal_id)?;
                 enclosure_cleanliness_map.get(enc_id).copied()
             }
         }
@@ -459,14 +459,14 @@ fn update_hud_system(
 
     // 3. Update Individual Stat Texts
     for (mut txt, marker) in &mut stat_text_query {
-        if let Some(val) = resolve_stat(&marker.animal_id, marker.stat_type) {
+        if let Some(val) = resolve_stat(marker.animal_id, marker.stat_type) {
             txt.0 = format!("{}%", (val as f32 / 10.0).round() as i32);
         }
     }
 
     // 4. Update Individual Stat Progress Bars
     for (mut node, marker) in &mut stat_bar_query {
-        if let Some(val) = resolve_stat(&marker.animal_id, marker.stat_type) {
+        if let Some(val) = resolve_stat(marker.animal_id, marker.stat_type) {
             node.width = Val::Percent(val as f32 / 10.0);
         }
     }

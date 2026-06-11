@@ -14,10 +14,28 @@ pub struct SaveTimestamp {
     pub value: u64,
 }
 
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 #[reflect(Component)]
 #[require(Save, Unload)]
-pub struct AnimalId(pub String);
+pub enum AnimalId {
+    #[default]
+    Polly,
+    Stompy,
+    Georgie,
+    Siren,
+}
+
+impl AnimalId {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AnimalId::Polly => "polly",
+            AnimalId::Stompy => "stompy",
+            AnimalId::Georgie => "georgie",
+            AnimalId::Siren => "siren",
+        }
+    }
+}
+
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -44,14 +62,29 @@ pub struct AnimalDecayAccumulators {
     pub happiness: f32,
 }
 
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 #[reflect(Component)]
-pub struct AnimalEnclosure(pub String); // Links an animal to an EnclosureId
+pub struct AnimalEnclosure(pub EnclosureId);
 
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 #[reflect(Component)]
 #[require(Save, Unload)]
-pub struct EnclosureId(pub String);
+pub enum EnclosureId {
+    #[default]
+    NutritionHousePlaypen,
+    Pasture,
+    ReptileEnclosure,
+}
+
+impl EnclosureId {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EnclosureId::NutritionHousePlaypen => "nutrition_house_playpen",
+            EnclosureId::Pasture => "pasture",
+            EnclosureId::ReptileEnclosure => "reptile_enclosure",
+        }
+    }
+}
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -80,22 +113,28 @@ pub struct EnclosureDecayAccumulators {
 // ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum StatTarget {
+    Animal(AnimalId),
+    Enclosure(EnclosureId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum StatType {
     Hunger,
     Cleanliness,
     Happiness,
 }
 
-#[derive(Event, Debug, Clone, Reflect)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
 pub struct ImproveStatEvent {
-    pub animal_id: String,
+    pub target: StatTarget,
     pub stat_type: StatType,
     pub amount: u32,
 }
 
-#[derive(Event, Debug, Clone, Reflect)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
 pub struct WorsenStatEvent {
-    pub animal_id: String,
+    pub target: StatTarget,
     pub stat_type: StatType,
     pub amount: u32,
 }
@@ -118,7 +157,7 @@ pub struct SanctuaryUpkeep {
 // ---------------------------------------------------------
 
 pub struct AnimalStaticData {
-    pub animal_id: &'static str,
+    pub animal_id: AnimalId,
     pub display_name: &'static str,
     pub hunger_decay_rate: f32,
     pub happiness_decay_rate: f32,
@@ -135,25 +174,25 @@ pub struct AnimalStaticData {
 /// animal attributes or adding new animals to the sanctuary.
 pub const ANIMALS_DATA: &[AnimalStaticData] = &[
     AnimalStaticData {
-        animal_id: "polly",
+        animal_id: AnimalId::Polly,
         display_name: "Polly",
         hunger_decay_rate: 0.04,
         happiness_decay_rate: 0.05,
     },
     AnimalStaticData {
-        animal_id: "stompy",
+        animal_id: AnimalId::Stompy,
         display_name: "Stompy",
         hunger_decay_rate: 0.04,
         happiness_decay_rate: 0.05,
     },
     AnimalStaticData {
-        animal_id: "georgie",
+        animal_id: AnimalId::Georgie,
         display_name: "Georgie",
         hunger_decay_rate: 0.04,
         happiness_decay_rate: 0.05,
     },
     AnimalStaticData {
-        animal_id: "siren",
+        animal_id: AnimalId::Siren,
         display_name: "Siren",
         hunger_decay_rate: 0.04,
         happiness_decay_rate: 0.05,
@@ -238,60 +277,69 @@ fn improve_stat_observer(
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
-    info!("improve_stat_observer triggered for animal/target '{}', stat '{:?}', amount {}", event.animal_id, event.stat_type, event.amount);
+    info!("improve_stat_observer triggered for target '{:?}', stat '{:?}', amount {}", event.target, event.stat_type, event.amount);
 
     match event.stat_type {
         StatType::Hunger => {
-            let mut found = false;
-            for (id, name, mut stats, _) in &mut animal_query {
-                if id.0 == event.animal_id {
-                    found = true;
-                    let prev = stats.hunger;
-                    stats.hunger = stats.hunger.saturating_add(event.amount).min(1000);
-                    info!("Improved hunger for {} ({}): {} -> {}", name.0, id.0, prev, stats.hunger);
+            if let StatTarget::Animal(target_animal_id) = event.target {
+                let mut found = false;
+                for (id, name, mut stats, _) in &mut animal_query {
+                    if *id == target_animal_id {
+                        found = true;
+                        let prev = stats.hunger;
+                        stats.hunger = stats.hunger.saturating_add(event.amount).min(1000);
+                        info!("Improved hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+                    }
                 }
-            }
-            if !found {
-                warn!("ImproveStatEvent: Animal id '{}' not found in world", event.animal_id);
+                if !found {
+                    warn!("ImproveStatEvent: Animal id '{:?}' not found in world", target_animal_id);
+                }
             }
         }
         StatType::Happiness => {
-            let mut found = false;
-            for (id, name, mut stats, _) in &mut animal_query {
-                if id.0 == event.animal_id {
-                    found = true;
-                    let prev = stats.happiness;
-                    stats.happiness = stats.happiness.saturating_add(event.amount).min(1000);
-                    info!("Improved happiness for {} ({}): {} -> {}", name.0, id.0, prev, stats.happiness);
+            if let StatTarget::Animal(target_animal_id) = event.target {
+                let mut found = false;
+                for (id, name, mut stats, _) in &mut animal_query {
+                    if *id == target_animal_id {
+                        found = true;
+                        let prev = stats.happiness;
+                        stats.happiness = stats.happiness.saturating_add(event.amount).min(1000);
+                        info!("Improved happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
+                    }
                 }
-            }
-            if !found {
-                warn!("ImproveStatEvent: Animal id '{}' not found in world", event.animal_id);
+                if !found {
+                    warn!("ImproveStatEvent: Animal id '{:?}' not found in world", target_animal_id);
+                }
             }
         }
         StatType::Cleanliness => {
-            let mut target_enclosure_id = event.animal_id.clone();
-
-            // If targeted by animal_id, find the animal's enclosure
-            for (id, _, _, animal_enc) in &animal_query {
-                if id.0 == event.animal_id {
-                    target_enclosure_id = animal_enc.0.clone();
-                    break;
+            let target_enclosure = match event.target {
+                StatTarget::Enclosure(enc_id) => Some(enc_id),
+                StatTarget::Animal(anim_id) => {
+                    let mut found_enc = None;
+                    for (id, _, _, animal_enc) in &animal_query {
+                        if *id == anim_id {
+                            found_enc = Some(animal_enc.0);
+                            break;
+                        }
+                    }
+                    found_enc
                 }
-            }
+            };
 
-            let mut found = false;
-            for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
-                if enc_id.0 == target_enclosure_id {
-                    found = true;
-                    let prev = enc_stats.cleanliness;
-                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_add(event.amount).min(1000);
-                    info!("Improved cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.0, prev, enc_stats.cleanliness);
+            if let Some(target_enc_id) = target_enclosure {
+                let mut found = false;
+                for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                    if *enc_id == target_enc_id {
+                        found = true;
+                        let prev = enc_stats.cleanliness;
+                        enc_stats.cleanliness = enc_stats.cleanliness.saturating_add(event.amount).min(1000);
+                        info!("Improved cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                    }
                 }
-            }
-
-            if !found {
-                warn!("ImproveStatEvent: Enclosure id '{}' not found in world", target_enclosure_id);
+                if !found {
+                    warn!("ImproveStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+                }
             }
         }
     }
@@ -303,60 +351,69 @@ fn worsen_stat_observer(
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
-    info!("worsen_stat_observer triggered for animal/target '{}', stat '{:?}', amount {}", event.animal_id, event.stat_type, event.amount);
+    info!("worsen_stat_observer triggered for target '{:?}', stat '{:?}', amount {}", event.target, event.stat_type, event.amount);
 
     match event.stat_type {
         StatType::Hunger => {
-            let mut found = false;
-            for (id, name, mut stats, _) in &mut animal_query {
-                if id.0 == event.animal_id {
-                    found = true;
-                    let prev = stats.hunger;
-                    stats.hunger = stats.hunger.saturating_sub(event.amount);
-                    info!("Worsened hunger for {} ({}): {} -> {}", name.0, id.0, prev, stats.hunger);
+            if let StatTarget::Animal(target_animal_id) = event.target {
+                let mut found = false;
+                for (id, name, mut stats, _) in &mut animal_query {
+                    if *id == target_animal_id {
+                        found = true;
+                        let prev = stats.hunger;
+                        stats.hunger = stats.hunger.saturating_sub(event.amount);
+                        info!("Worsened hunger for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.hunger);
+                    }
                 }
-            }
-            if !found {
-                warn!("WorsenStatEvent: Animal id '{}' not found in world", event.animal_id);
+                if !found {
+                    warn!("WorsenStatEvent: Animal id '{:?}' not found in world", target_animal_id);
+                }
             }
         }
         StatType::Happiness => {
-            let mut found = false;
-            for (id, name, mut stats, _) in &mut animal_query {
-                if id.0 == event.animal_id {
-                    found = true;
-                    let prev = stats.happiness;
-                    stats.happiness = stats.happiness.saturating_sub(event.amount);
-                    info!("Worsened happiness for {} ({}): {} -> {}", name.0, id.0, prev, stats.happiness);
+            if let StatTarget::Animal(target_animal_id) = event.target {
+                let mut found = false;
+                for (id, name, mut stats, _) in &mut animal_query {
+                    if *id == target_animal_id {
+                        found = true;
+                        let prev = stats.happiness;
+                        stats.happiness = stats.happiness.saturating_sub(event.amount);
+                        info!("Worsened happiness for {} ({}): {} -> {}", name.0, id.as_str(), prev, stats.happiness);
+                    }
                 }
-            }
-            if !found {
-                warn!("WorsenStatEvent: Animal id '{}' not found in world", event.animal_id);
+                if !found {
+                    warn!("WorsenStatEvent: Animal id '{:?}' not found in world", target_animal_id);
+                }
             }
         }
         StatType::Cleanliness => {
-            let mut target_enclosure_id = event.animal_id.clone();
-
-            // If targeted by animal_id, find the animal's enclosure
-            for (id, _, _, animal_enc) in &animal_query {
-                if id.0 == event.animal_id {
-                    target_enclosure_id = animal_enc.0.clone();
-                    break;
+            let target_enclosure = match event.target {
+                StatTarget::Enclosure(enc_id) => Some(enc_id),
+                StatTarget::Animal(anim_id) => {
+                    let mut found_enc = None;
+                    for (id, _, _, animal_enc) in &animal_query {
+                        if *id == anim_id {
+                            found_enc = Some(animal_enc.0);
+                            break;
+                        }
+                    }
+                    found_enc
                 }
-            }
+            };
 
-            let mut found = false;
-            for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
-                if enc_id.0 == target_enclosure_id {
-                    found = true;
-                    let prev = enc_stats.cleanliness;
-                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
-                    info!("Worsened cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.0, prev, enc_stats.cleanliness);
+            if let Some(target_enc_id) = target_enclosure {
+                let mut found = false;
+                for (enc_id, enc_name, mut enc_stats) in &mut enclosure_query {
+                    if *enc_id == target_enc_id {
+                        found = true;
+                        let prev = enc_stats.cleanliness;
+                        enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
+                        info!("Worsened cleanliness for Enclosure {} ({}): {} -> {}", enc_name.0, enc_id.as_str(), prev, enc_stats.cleanliness);
+                    }
                 }
-            }
-
-            if !found {
-                warn!("WorsenStatEvent: Enclosure id '{}' not found in world", target_enclosure_id);
+                if !found {
+                    warn!("WorsenStatEvent: Enclosure id '{:?}' not found in world", target_enc_id);
+                }
             }
         }
     }
@@ -417,15 +474,15 @@ fn init_stats_system(
 
 fn spawn_default_stats(commands: &mut Commands) {
     let enclosure_mappings = [
-        ("nutrition_house_playpen", "Nutrition House Playpen", 0.03 * 1000.0),
-        ("pasture", "Pasture Grassland", 0.03 * 1000.0),
-        ("reptile_enclosure", "Reptile Enclosure", 0.03 * 1000.0),
+        (EnclosureId::NutritionHousePlaypen, "Nutrition House Playpen", 0.03 * 1000.0),
+        (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
+        (EnclosureId::ReptileEnclosure, "Reptile Enclosure", 0.03 * 1000.0),
     ];
 
     for &(enc_id, enc_name, cleanliness_rate) in &enclosure_mappings {
         commands.spawn((
             Name::new(format!("Enclosure Stats - {}", enc_name)),
-            EnclosureId(enc_id.to_string()),
+            enc_id,
             EnclosureName(enc_name.to_string()),
             EnclosureStats { cleanliness: 1000 },
             EnclosureDecayRates { cleanliness_rate },
@@ -434,7 +491,6 @@ fn spawn_default_stats(commands: &mut Commands) {
     }
 
     for animal in ANIMALS_DATA {
-        let animal_id = animal.animal_id.to_string();
         let display_name = animal.display_name.to_string();
 
         let decay_rates = AnimalDecayRates {
@@ -443,18 +499,17 @@ fn spawn_default_stats(commands: &mut Commands) {
         };
 
         let enc_id = match animal.animal_id {
-            "polly" => "nutrition_house_playpen",
-            "stompy" => "pasture",
-            "georgie" => "reptile_enclosure",
-            "siren" => "reptile_enclosure",
-            _ => "unknown_enclosure",
+            AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
+            AnimalId::Stompy => EnclosureId::Pasture,
+            AnimalId::Georgie => EnclosureId::ReptileEnclosure,
+            AnimalId::Siren => EnclosureId::ReptileEnclosure,
         };
 
         commands.spawn((
             Name::new(format!("Persistent Stats - {}", display_name)),
-            AnimalId(animal_id),
+            animal.animal_id,
             AnimalName(display_name),
-            AnimalEnclosure(enc_id.to_string()),
+            AnimalEnclosure(enc_id),
             AnimalStats {
                 hunger: 1000,
                 happiness: 1000,
@@ -474,30 +529,29 @@ fn hydrate_loaded_stats_observer(
     info!("Hydrating loaded stats with static config...");
 
     let enclosure_mappings = [
-        ("nutrition_house_playpen", "Nutrition House Playpen", 0.03 * 1000.0),
-        ("pasture", "Pasture Grassland", 0.03 * 1000.0),
-        ("reptile_enclosure", "Reptile Enclosure", 0.03 * 1000.0),
+        (EnclosureId::NutritionHousePlaypen, "Nutrition House Playpen", 0.03 * 1000.0),
+        (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
+        (EnclosureId::ReptileEnclosure, "Reptile Enclosure", 0.03 * 1000.0),
     ];
 
     for (entity, id) in &animal_query {
-        if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == id.0) {
+        if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == *id) {
             let decay_rates = AnimalDecayRates {
                 hunger_rate: animal.hunger_decay_rate * 1000.0,
                 happiness_rate: animal.happiness_decay_rate * 1000.0,
             };
 
-            let enc_id = match id.0.as_str() {
-                "polly" => "nutrition_house_playpen",
-                "stompy" => "pasture",
-                "georgie" => "reptile_enclosure",
-                "siren" => "reptile_enclosure",
-                _ => "unknown_enclosure",
+            let enc_id = match id {
+                AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
+                AnimalId::Stompy => EnclosureId::Pasture,
+                AnimalId::Georgie => EnclosureId::ReptileEnclosure,
+                AnimalId::Siren => EnclosureId::ReptileEnclosure,
             };
 
             commands.entity(entity).insert((
                 Name::new(format!("Persistent Stats - {}", animal.display_name)),
                 AnimalName(animal.display_name.to_string()),
-                AnimalEnclosure(enc_id.to_string()),
+                AnimalEnclosure(enc_id),
                 decay_rates,
                 AnimalDecayAccumulators::default(),
             ));
@@ -505,7 +559,7 @@ fn hydrate_loaded_stats_observer(
     }
 
     for (entity, id) in &enclosure_query {
-        if let Some(&(_, enc_name, cleanliness_rate)) = enclosure_mappings.iter().find(|(mapped_id, _, _)| *mapped_id == id.0) {
+        if let Some(&(_, enc_name, cleanliness_rate)) = enclosure_mappings.iter().find(|(mapped_id, _, _)| *mapped_id == *id) {
             commands.entity(entity).insert((
                 Name::new(format!("Enclosure Stats - {}", enc_name)),
                 EnclosureName(enc_name.to_string()),
@@ -555,14 +609,14 @@ fn apply_offline_decay_system(
 
             if hunger_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    animal_id: id.0.clone(),
+                    target: StatTarget::Animal(*id),
                     stat_type: StatType::Hunger,
                     amount: hunger_decay,
                 });
             }
             if happiness_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    animal_id: id.0.clone(),
+                    target: StatTarget::Animal(*id),
                     stat_type: StatType::Happiness,
                     amount: happiness_decay,
                 });
@@ -573,7 +627,7 @@ fn apply_offline_decay_system(
             let cleanliness_decay = (decay_rates.cleanliness_rate * hours_elapsed).round() as u32;
             if cleanliness_decay > 0 {
                 commands.trigger(WorsenStatEvent {
-                    animal_id: id.0.clone(),
+                    target: StatTarget::Enclosure(*id),
                     stat_type: StatType::Cleanliness,
                     amount: cleanliness_decay,
                 });
@@ -602,7 +656,7 @@ pub fn tick_decay_system(
             let decay_amount = accs.hunger.floor();
             accs.hunger -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Hunger,
                 amount: decay_amount as u32,
             });
@@ -611,7 +665,7 @@ pub fn tick_decay_system(
             let decay_amount = accs.happiness.floor();
             accs.happiness -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Happiness,
                 amount: decay_amount as u32,
             });
@@ -625,7 +679,7 @@ pub fn tick_decay_system(
             let decay_amount = accs.cleanliness.floor();
             accs.cleanliness -= decay_amount;
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Enclosure(*id),
                 stat_type: StatType::Cleanliness,
                 amount: decay_amount as u32,
             });
@@ -746,21 +800,21 @@ fn debug_stats_control_system(
     // Keys 1, 2, 3: care actions for Polly
     if input.just_pressed(KeyCode::Digit1) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "polly".to_string(),
+            target: StatTarget::Animal(AnimalId::Polly),
             stat_type: StatType::Hunger,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit2) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "polly".to_string(),
+            target: StatTarget::Animal(AnimalId::Polly),
             stat_type: StatType::Cleanliness,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit3) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "polly".to_string(),
+            target: StatTarget::Animal(AnimalId::Polly),
             stat_type: StatType::Happiness,
             amount: 250,
         });
@@ -769,21 +823,21 @@ fn debug_stats_control_system(
     // Keys 4, 5, 6: care actions for Stompy
     if input.just_pressed(KeyCode::Digit4) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "stompy".to_string(),
+            target: StatTarget::Animal(AnimalId::Stompy),
             stat_type: StatType::Hunger,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit5) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "stompy".to_string(),
+            target: StatTarget::Animal(AnimalId::Stompy),
             stat_type: StatType::Cleanliness,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit6) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "stompy".to_string(),
+            target: StatTarget::Animal(AnimalId::Stompy),
             stat_type: StatType::Happiness,
             amount: 250,
         });
@@ -792,21 +846,21 @@ fn debug_stats_control_system(
     // Keys 7, 8, 9: care actions for Georgie
     if input.just_pressed(KeyCode::Digit7) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "georgie".to_string(),
+            target: StatTarget::Animal(AnimalId::Georgie),
             stat_type: StatType::Hunger,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit8) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "georgie".to_string(),
+            target: StatTarget::Animal(AnimalId::Georgie),
             stat_type: StatType::Cleanliness,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::Digit9) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "georgie".to_string(),
+            target: StatTarget::Animal(AnimalId::Georgie),
             stat_type: StatType::Happiness,
             amount: 250,
         });
@@ -815,21 +869,21 @@ fn debug_stats_control_system(
     // Keys 0, I, O: care actions for Siren
     if input.just_pressed(KeyCode::Digit0) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "siren".to_string(),
+            target: StatTarget::Animal(AnimalId::Siren),
             stat_type: StatType::Hunger,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::KeyI) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "siren".to_string(),
+            target: StatTarget::Animal(AnimalId::Siren),
             stat_type: StatType::Cleanliness,
             amount: 250,
         });
     }
     if input.just_pressed(KeyCode::KeyO) {
         commands.trigger(ImproveStatEvent {
-            animal_id: "siren".to_string(),
+            target: StatTarget::Animal(AnimalId::Siren),
             stat_type: StatType::Happiness,
             amount: 250,
         });
@@ -843,19 +897,19 @@ fn debug_stats_control_system(
         info!("Debug: Instantly worsening all stats for all animals!");
         for (id, _) in &animal_query {
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Hunger,
                 amount: 100,
             });
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Happiness,
                 amount: 100,
             });
         }
         for (id, _) in &enclosure_query {
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Enclosure(*id),
                 stat_type: StatType::Cleanliness,
                 amount: 100,
             });
@@ -873,12 +927,12 @@ fn debug_stats_control_system(
             let happiness_decay = (decay_rates.happiness_rate * 4.0).round() as u32;
 
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Hunger,
                 amount: hunger_decay,
             });
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Animal(*id),
                 stat_type: StatType::Happiness,
                 amount: happiness_decay,
             });
@@ -887,7 +941,7 @@ fn debug_stats_control_system(
             let cleanliness_decay = (decay_rates.cleanliness_rate * 4.0).round() as u32;
 
             commands.trigger(WorsenStatEvent {
-                animal_id: id.0.clone(),
+                target: StatTarget::Enclosure(*id),
                 stat_type: StatType::Cleanliness,
                 amount: cleanliness_decay,
             });
@@ -916,10 +970,10 @@ fn debug_log_stats_system(
     if timer.0.just_finished() {
         info!("--- debug_log_stats_system: Animal count = {}, Enclosure count = {} ---", animal_query.iter().count(), enclosure_query.iter().count());
         for (id, name, stats) in &animal_query {
-            info!("  - Animal {} ({}): hunger={}, happiness={}", name.0, id.0, stats.hunger, stats.happiness);
+            info!("  - Animal {} ({}): hunger={}, happiness={}", name.0, id.as_str(), stats.hunger, stats.happiness);
         }
         for (id, name, stats) in &enclosure_query {
-            info!("  - Enclosure {} ({}): cleanliness={}", name.0, id.0, stats.cleanliness);
+            info!("  - Enclosure {} ({}): cleanliness={}", name.0, id.as_str(), stats.cleanliness);
         }
     }
 }

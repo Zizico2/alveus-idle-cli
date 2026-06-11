@@ -3,7 +3,7 @@ use bevy::state::app::StatesPlugin;
 use bevy::ecs::system::RunSystemOnce;
 use alveus_idle_cli::stats::{
     AnimalId, AnimalName, AnimalStats, AnimalEnclosure, EnclosureId, EnclosureName, EnclosureStats, SanctuaryUpkeep, StatType, ImproveStatEvent, WorsenStatEvent,
-    StatsPlugin, SavePath, tick_decay_system
+    StatTarget, StatsPlugin, SavePath, tick_decay_system
 };
 use alveus_idle_cli::screens::Screen;
 
@@ -24,19 +24,19 @@ fn test_stats_initialization() {
     app.update(); // runs state transitions and system updates
 
     // Verify animal stats entities are spawned
-    let animals: Vec<(String, String, AnimalStats, String)> = {
+    let animals: Vec<(AnimalId, String, AnimalStats, EnclosureId)> = {
         let mut animal_query = app.world_mut().query::<(&AnimalId, &AnimalName, &AnimalStats, &AnimalEnclosure)>();
         animal_query.iter(app.world()).map(|(id, name, stats, enc)| {
-            (id.0.clone(), name.0.clone(), stats.clone(), enc.0.clone())
+            (*id, name.0.clone(), stats.clone(), enc.0)
         }).collect()
     };
     assert_eq!(animals.len(), 4, "Should spawn 4 animals");
 
     // Verify enclosure stats entities are spawned
-    let enclosures: Vec<(String, String, EnclosureStats)> = {
+    let enclosures: Vec<(EnclosureId, String, EnclosureStats)> = {
         let mut enclosure_query = app.world_mut().query::<(&EnclosureId, &EnclosureName, &EnclosureStats)>();
         enclosure_query.iter(app.world()).map(|(id, name, stats)| {
-            (id.0.clone(), name.0.clone(), stats.clone())
+            (*id, name.0.clone(), stats.clone())
         }).collect()
     };
     assert_eq!(enclosures.len(), 3, "Should spawn 3 enclosures (Playpen, Pasture, Reptile)");
@@ -45,14 +45,14 @@ fn test_stats_initialization() {
     let mut georgie_enc = None;
     let mut siren_enc = None;
     for (id, _name, _stats, enc) in &animals {
-        if id == "georgie" {
-            georgie_enc = Some(enc.clone());
-        } else if id == "siren" {
-            siren_enc = Some(enc.clone());
+        if *id == AnimalId::Georgie {
+            georgie_enc = Some(*enc);
+        } else if *id == AnimalId::Siren {
+            siren_enc = Some(*enc);
         }
     }
-    assert_eq!(georgie_enc, Some("reptile_enclosure".to_string()));
-    assert_eq!(siren_enc, Some("reptile_enclosure".to_string()));
+    assert_eq!(georgie_enc, Some(EnclosureId::ReptileEnclosure));
+    assert_eq!(siren_enc, Some(EnclosureId::ReptileEnclosure));
     let _ = std::fs::remove_file(save_path);
 }
 
@@ -75,7 +75,7 @@ fn test_stat_observers_and_clamping() {
     // Verify initial state
     let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
         .iter(app.world())
-        .find(|&e| app.world().get::<AnimalId>(e).unwrap().0 == "polly")
+        .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
         .expect("Polly should exist");
 
     let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
@@ -83,7 +83,7 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger worsening
     app.world_mut().trigger(WorsenStatEvent {
-        animal_id: "polly".to_string(),
+        target: StatTarget::Animal(AnimalId::Polly),
         stat_type: StatType::Hunger,
         amount: 300,
     });
@@ -93,7 +93,7 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger improve
     app.world_mut().trigger(ImproveStatEvent {
-        animal_id: "polly".to_string(),
+        target: StatTarget::Animal(AnimalId::Polly),
         stat_type: StatType::Hunger,
         amount: 200,
     });
@@ -102,7 +102,7 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger improve past max to test clamping
     app.world_mut().trigger(ImproveStatEvent {
-        animal_id: "polly".to_string(),
+        target: StatTarget::Animal(AnimalId::Polly),
         stat_type: StatType::Hunger,
         amount: 500,
     });
@@ -111,7 +111,7 @@ fn test_stat_observers_and_clamping() {
 
     // Trigger worsening below 0 to test clamping
     app.world_mut().trigger(WorsenStatEvent {
-        animal_id: "polly".to_string(),
+        target: StatTarget::Animal(AnimalId::Polly),
         stat_type: StatType::Hunger,
         amount: 1200,
     });
@@ -138,7 +138,7 @@ fn test_shared_enclosure_cleanliness() {
 
     let reptile_entity = app.world_mut().query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| app.world().get::<EnclosureId>(e).unwrap().0 == "reptile_enclosure")
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::ReptileEnclosure)
         .expect("Reptile Enclosure should exist");
 
     // Initial cleanliness is 1000
@@ -147,7 +147,7 @@ fn test_shared_enclosure_cleanliness() {
 
     // Worsen Georgie's cleanliness (targets animal, observer resolves to reptile_enclosure)
     app.world_mut().trigger(WorsenStatEvent {
-        animal_id: "georgie".to_string(),
+        target: StatTarget::Animal(AnimalId::Georgie),
         stat_type: StatType::Cleanliness,
         amount: 400,
     });
@@ -158,7 +158,7 @@ fn test_shared_enclosure_cleanliness() {
 
     // Improve Siren's cleanliness (should improve the shared reptile enclosure!)
     app.world_mut().trigger(ImproveStatEvent {
-        animal_id: "siren".to_string(),
+        target: StatTarget::Animal(AnimalId::Siren),
         stat_type: StatType::Cleanliness,
         amount: 250,
     });
@@ -187,13 +187,13 @@ fn test_upkeep_calculation() {
 
     // Worsen stats of specific animals/enclosures to test mean updates
     app.world_mut().trigger(WorsenStatEvent {
-        animal_id: "polly".to_string(),
+        target: StatTarget::Animal(AnimalId::Polly),
         stat_type: StatType::Hunger,
         amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000+1000+1000)/4000 = 0.90
     });
 
     app.world_mut().trigger(WorsenStatEvent {
-        animal_id: "reptile_enclosure".to_string(),
+        target: StatTarget::Enclosure(EnclosureId::ReptileEnclosure),
         stat_type: StatType::Cleanliness,
         amount: 600, // reptile_enclosure cleanliness becomes 400, playpen/pasture stay 1000 -> mean cleanliness = (1000+1000+400)/3000 = 0.80
     });
@@ -232,7 +232,7 @@ fn test_decay_rate() {
     // Verify initial Polly entity stats
     let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
         .iter(app.world())
-        .find(|&e| app.world().get::<AnimalId>(e).unwrap().0 == "polly")
+        .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
         .expect("Polly should exist");
 
     let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap().clone();

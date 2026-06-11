@@ -88,9 +88,9 @@ fn test_save_exclude_and_hydration() {
 
     // Verify that the default entities have static components (e.g. AnimalName, EnclosureName)
     let polly_entity = app.world_mut().query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
-        .iter(app.world())
-        .find(|&e| app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap().0 == "polly")
-        .expect("Polly should exist");
+         .iter(app.world())
+         .find(|&e| *app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap() == alveus_idle_cli::stats::AnimalId::Polly)
+         .expect("Polly should exist");
 
     assert!(app.world().get::<alveus_idle_cli::stats::AnimalName>(polly_entity).is_some());
     assert!(app.world().get::<alveus_idle_cli::stats::AnimalEnclosure>(polly_entity).is_some());
@@ -153,9 +153,9 @@ fn test_save_exclude_and_hydration() {
 
     // Now, verify that the loaded entity got hydrated with static components!
     let loaded_polly_entity = app.world_mut().query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
-        .iter(app.world())
-        .find(|&e| app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap().0 == "polly")
-        .expect("Loaded Polly should exist");
+         .iter(app.world())
+         .find(|&e| *app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap() == alveus_idle_cli::stats::AnimalId::Polly)
+         .expect("Loaded Polly should exist");
 
     // Check stats are loaded correctly (hunger is 450)
     let stats = app.world().get::<alveus_idle_cli::stats::AnimalStats>(loaded_polly_entity).expect("Stats missing");
@@ -166,7 +166,7 @@ fn test_save_exclude_and_hydration() {
     assert_eq!(name.0, "Polly", "Name should be hydrated");
 
     let enc = app.world().get::<alveus_idle_cli::stats::AnimalEnclosure>(loaded_polly_entity).expect("Enclosure not hydrated");
-    assert_eq!(enc.0, "nutrition_house_playpen", "Enclosure should be hydrated");
+    assert_eq!(enc.0, alveus_idle_cli::stats::EnclosureId::NutritionHousePlaypen, "Enclosure should be hydrated");
 
     // Cleanup
     let _ = std::fs::remove_file(test_save_path);
