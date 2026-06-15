@@ -21,6 +21,7 @@ pub fn plugin(app: &mut App) {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum InRoom {
     NutritionHouse,
+    PushPopEnclosure,
 }
 
 /// The game's main screen states.

@@ -13,6 +13,9 @@ pub mod menus;
 pub mod screens;
 pub mod theme;
 pub mod stats;
+pub mod content;
+pub mod interaction;
+pub mod animals;
 pub mod hud;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
@@ -39,6 +42,16 @@ impl Plugin for AppPlugin {
                     primary_window: Window {
                         title: "Alveus Idle Cli".to_string(),
                         fit_canvas_to_parent: true,
+                        // Force an integer scale factor so UI glyphs stay pixel-aligned.
+                        // On fractional HiDPI scale factors, Bevy 0.18's tightly-packed
+                        // font atlas + DynamicTextureAtlasBuilder padding bug (bevy #22716 /
+                        // #23091, fixed only on 0.19+) corrupts glyphs as new ones are added
+                        // at runtime, garbling text across the whole UI. Pixel-aligned text
+                        // avoids the trigger entirely.
+                        // TODO: Remove this once Bevy 0.19 is released.
+                        // TODO: troubleshooting
+                        resolution: bevy::window::WindowResolution::default()
+                            .with_scale_factor_override(1.0),
                         ..default()
                     }
                     .into(),
@@ -63,6 +76,8 @@ impl Plugin for AppPlugin {
             theme::plugin,
             bevy_tweening::TweeningPlugin,
             stats::StatsPlugin,
+            interaction::InteractionPlugin,
+            animals::AnimalsPlugin,
             hud::HudPlugin,
         ));
 

@@ -228,6 +228,12 @@ fn toast_trigger_observer(
     }
 }
 
+pub fn despawn_active_toast(mut commands: Commands, query: Query<Entity, With<ActiveToast>>) {
+    for entity in &query {
+        commands.entity(entity).despawn();
+    }
+}
+
 fn toast_dismiss_observer(
     _trigger: On<DismissToastEvent>,
     mut commands: Commands,
@@ -284,6 +290,7 @@ fn player_entered_building_observer(
     let entrance = trigger.event().entrance;
     let name = match entrance {
         BuildingEntrance::NutritionHouse => "Nutrition House",
+        BuildingEntrance::PushPopEnclosure => "Push Pop Enclosure",
         _ => "Unknown Area",
     };
     commands.trigger(TriggerToastEvent::presence(format!("Press [Enter] to enter {}", name)));

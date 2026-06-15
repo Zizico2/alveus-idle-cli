@@ -36,7 +36,14 @@
       "interaction": {
         "type": "open_menu",
         "menu_id": "fridge_menu",
-        "prompt_text": "Open Diet Fridge"
+        "prompt_text": "Open Diet Fridge",
+        "give_item_options": [
+          {
+            "type": "give_item",
+            "item_id": "tortoise_leafy_greens",
+            "prompt_text": "Scoop tortoise leafy greens"
+          }
+        ]
       },
       "color": { "r": 0.75, "g": 0.78, "b": 0.80 },
       "z_layer": 0.2

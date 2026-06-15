@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use moonshine_save::prelude::*;
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 use crate::AppSystems;
@@ -21,6 +22,7 @@ pub struct SaveTimestamp {
 pub enum AnimalId {
     #[default]
     Polly,
+    PushPop,
     Stompy,
     Georgie,
     Siren,
@@ -30,6 +32,7 @@ impl AnimalId {
     pub fn as_str(&self) -> &'static str {
         match self {
             AnimalId::Polly => "polly",
+            AnimalId::PushPop => "push_pop",
             AnimalId::Stompy => "stompy",
             AnimalId::Georgie => "georgie",
             AnimalId::Siren => "siren",
@@ -73,6 +76,7 @@ pub struct AnimalEnclosure(pub EnclosureId);
 pub enum EnclosureId {
     #[default]
     NutritionHousePlaypen,
+    PushPopEnclosure,
     Pasture,
     ReptileEnclosure,
 }
@@ -81,6 +85,7 @@ impl EnclosureId {
     pub fn as_str(&self) -> &'static str {
         match self {
             EnclosureId::NutritionHousePlaypen => "nutrition_house_playpen",
+            EnclosureId::PushPopEnclosure => "push_pop_enclosure",
             EnclosureId::Pasture => "pasture",
             EnclosureId::ReptileEnclosure => "reptile_enclosure",
         }
@@ -190,6 +195,12 @@ pub const ANIMALS_DATA: &[AnimalStaticData] = &[
         happiness_decay_rate: 0.05,
     },
     AnimalStaticData {
+        animal_id: AnimalId::PushPop,
+        display_name: "Push Pop",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
         animal_id: AnimalId::Stompy,
         display_name: "Stompy",
         hunger_decay_rate: 0.04,
@@ -207,6 +218,22 @@ pub const ANIMALS_DATA: &[AnimalStaticData] = &[
         hunger_decay_rate: 0.04,
         happiness_decay_rate: 0.05,
     },
+];
+
+fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
+    match animal_id {
+        AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
+        AnimalId::PushPop => EnclosureId::PushPopEnclosure,
+        AnimalId::Stompy => EnclosureId::Pasture,
+        AnimalId::Georgie | AnimalId::Siren => EnclosureId::ReptileEnclosure,
+    }
+}
+
+const ENCLOSURE_MAPPINGS: &[(EnclosureId, &str, f32)] = &[
+    (EnclosureId::NutritionHousePlaypen, "Nutrition House Playpen", 0.03 * 1000.0),
+    (EnclosureId::PushPopEnclosure, "Push Pop Enclosure", 0.03 * 1000.0),
+    (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
+    (EnclosureId::ReptileEnclosure, "Reptile Enclosure", 0.03 * 1000.0),
 ];
 
 // ---------------------------------------------------------
@@ -507,13 +534,7 @@ fn init_stats_system(
 }
 
 fn spawn_default_stats(commands: &mut Commands) {
-    let enclosure_mappings = [
-        (EnclosureId::NutritionHousePlaypen, "Nutrition House Playpen", 0.03 * 1000.0),
-        (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
-        (EnclosureId::ReptileEnclosure, "Reptile Enclosure", 0.03 * 1000.0),
-    ];
-
-    for &(enc_id, enc_name, cleanliness_rate) in &enclosure_mappings {
+    for &(enc_id, enc_name, cleanliness_rate) in ENCLOSURE_MAPPINGS {
         commands.spawn((
             Name::new(format!("Enclosure Stats - {}", enc_name)),
             enc_id,
@@ -532,18 +553,64 @@ fn spawn_default_stats(commands: &mut Commands) {
             happiness_rate: animal.happiness_decay_rate * 1000.0,
         };
 
-        let enc_id = match animal.animal_id {
-            AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
-            AnimalId::Stompy => EnclosureId::Pasture,
-            AnimalId::Georgie => EnclosureId::ReptileEnclosure,
-            AnimalId::Siren => EnclosureId::ReptileEnclosure,
-        };
+        let enc_id = enclosure_for_animal(animal.animal_id);
 
         commands.spawn((
             Name::new(format!("Persistent Stats - {}", display_name)),
             animal.animal_id,
             AnimalName(display_name),
             AnimalEnclosure(enc_id),
+            AnimalStats {
+                hunger: 1000,
+                happiness: 1000,
+            },
+            decay_rates,
+            AnimalDecayAccumulators::default(),
+        ));
+    }
+}
+
+fn spawn_missing_stat_entities(
+    commands: &mut Commands,
+    animal_query: &Query<(Entity, &AnimalId)>,
+    enclosure_query: &Query<(Entity, &EnclosureId)>,
+) {
+    let existing_animals: HashSet<AnimalId> = animal_query.iter().map(|(_, id)| *id).collect();
+    let existing_enclosures: HashSet<EnclosureId> =
+        enclosure_query.iter().map(|(_, id)| *id).collect();
+
+    for &(enc_id, enc_name, cleanliness_rate) in ENCLOSURE_MAPPINGS {
+        if existing_enclosures.contains(&enc_id) {
+            continue;
+        }
+        info!("Spawning missing enclosure stats entity: {}", enc_name);
+        commands.spawn((
+            Name::new(format!("Enclosure Stats - {}", enc_name)),
+            enc_id,
+            EnclosureName(enc_name.to_string()),
+            EnclosureStats { cleanliness: 1000 },
+            EnclosureDecayRates { cleanliness_rate },
+            EnclosureDecayAccumulators::default(),
+        ));
+    }
+
+    for animal in ANIMALS_DATA {
+        if existing_animals.contains(&animal.animal_id) {
+            continue;
+        }
+        info!(
+            "Spawning missing animal stats entity: {}",
+            animal.display_name
+        );
+        let decay_rates = AnimalDecayRates {
+            hunger_rate: animal.hunger_decay_rate * 1000.0,
+            happiness_rate: animal.happiness_decay_rate * 1000.0,
+        };
+        commands.spawn((
+            Name::new(format!("Persistent Stats - {}", animal.display_name)),
+            animal.animal_id,
+            AnimalName(animal.display_name.to_string()),
+            AnimalEnclosure(enclosure_for_animal(animal.animal_id)),
             AnimalStats {
                 hunger: 1000,
                 happiness: 1000,
@@ -562,12 +629,6 @@ fn hydrate_loaded_stats_observer(
 ) {
     info!("Hydrating loaded stats with static config...");
 
-    let enclosure_mappings = [
-        (EnclosureId::NutritionHousePlaypen, "Nutrition House Playpen", 0.03 * 1000.0),
-        (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
-        (EnclosureId::ReptileEnclosure, "Reptile Enclosure", 0.03 * 1000.0),
-    ];
-
     for (entity, id) in &animal_query {
         if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == *id) {
             let decay_rates = AnimalDecayRates {
@@ -575,12 +636,7 @@ fn hydrate_loaded_stats_observer(
                 happiness_rate: animal.happiness_decay_rate * 1000.0,
             };
 
-            let enc_id = match id {
-                AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
-                AnimalId::Stompy => EnclosureId::Pasture,
-                AnimalId::Georgie => EnclosureId::ReptileEnclosure,
-                AnimalId::Siren => EnclosureId::ReptileEnclosure,
-            };
+            let enc_id = enclosure_for_animal(*id);
 
             commands.entity(entity).insert((
                 Name::new(format!("Persistent Stats - {}", animal.display_name)),
@@ -593,7 +649,9 @@ fn hydrate_loaded_stats_observer(
     }
 
     for (entity, id) in &enclosure_query {
-        if let Some(&(_, enc_name, cleanliness_rate)) = enclosure_mappings.iter().find(|(mapped_id, _, _)| *mapped_id == *id) {
+        if let Some(&(_, enc_name, cleanliness_rate)) =
+            ENCLOSURE_MAPPINGS.iter().find(|(mapped_id, _, _)| *mapped_id == *id)
+        {
             commands.entity(entity).insert((
                 Name::new(format!("Enclosure Stats - {}", enc_name)),
                 EnclosureName(enc_name.to_string()),
@@ -602,6 +660,8 @@ fn hydrate_loaded_stats_observer(
             ));
         }
     }
+
+    spawn_missing_stat_entities(&mut commands, &animal_query, &enclosure_query);
 }
 
 fn apply_offline_decay_system(
@@ -945,6 +1005,35 @@ fn debug_stats_control_system(
         commands.trigger(ImproveStatEvent {
             target: StatTarget::Animal {
                 id: AnimalId::Siren,
+                stat: AnimalStat::Happiness,
+            },
+            amount: 250,
+        });
+    }
+
+    // Keys U, J, K: care actions for Push Pop
+    if input.just_pressed(KeyCode::KeyU) {
+        commands.trigger(ImproveStatEvent {
+            target: StatTarget::Animal {
+                id: AnimalId::PushPop,
+                stat: AnimalStat::Hunger,
+            },
+            amount: 250,
+        });
+    }
+    if input.just_pressed(KeyCode::KeyJ) {
+        commands.trigger(ImproveStatEvent {
+            target: StatTarget::Animal {
+                id: AnimalId::PushPop,
+                stat: AnimalStat::Cleanliness,
+            },
+            amount: 250,
+        });
+    }
+    if input.just_pressed(KeyCode::KeyY) {
+        commands.trigger(ImproveStatEvent {
+            target: StatTarget::Animal {
+                id: AnimalId::PushPop,
                 stat: AnimalStat::Happiness,
             },
             amount: 250,

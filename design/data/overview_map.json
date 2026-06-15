@@ -65,6 +65,18 @@
       "target_room_id": "pasture"
     },
     {
+      "building_id": "push_pop_enclosure",
+      "display_name": "Push Pop Enclosure",
+      "position": { "x": 37, "y": 14 },
+      "sprite_asset": "maps/overview/push_pop_enclosure.png",
+      "sprite_size_px": { "w": 200, "h": 284 },
+      "entrance_zone": {
+        "bottom_left": { "x": 38, "y": 33 },
+        "top_right": { "x": 41, "y": 34 }
+      },
+      "target_room_id": "push_pop_enclosure"
+    },
+    {
       "building_id": "hq_office",
       "display_name": "Alveus HQ Office",
       "position": { "x": 22, "y": 6 },

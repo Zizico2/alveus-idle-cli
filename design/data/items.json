@@ -31,6 +31,16 @@
       "consumable_by": ["stompy"]
     },
     {
+      "item_id": "tortoise_leafy_greens",
+      "display_name": "Tortoise Leafy Greens",
+      "category": "prepared_diet",
+      "description": "A fresh bundle of leafy greens prepared for Push Pop's diet.",
+      "icon_asset": "images/items/tortoise_leafy_greens.png",
+      "carry_sprite_asset": "images/items/carry_salad_bowl.png",
+      "stackable": false,
+      "consumable_by": ["push_pop"]
+    },
+    {
       "item_id": "chicken_grains",
       "display_name": "Chicken Grains",
       "category": "prepared_diet",

@@ -30,7 +30,7 @@ fn test_stats_initialization() {
             (*id, name.0.clone(), stats.clone(), enc.0)
         }).collect()
     };
-    assert_eq!(animals.len(), 4, "Should spawn 4 animals");
+    assert_eq!(animals.len(), 5, "Should spawn 5 animals");
 
     // Verify enclosure stats entities are spawned
     let enclosures: Vec<(EnclosureId, String, EnclosureStats)> = {
@@ -39,18 +39,22 @@ fn test_stats_initialization() {
             (*id, name.0.clone(), stats.clone())
         }).collect()
     };
-    assert_eq!(enclosures.len(), 3, "Should spawn 3 enclosures (Playpen, Pasture, Reptile)");
+    assert_eq!(enclosures.len(), 4, "Should spawn 4 enclosures (Playpen, Push Pop, Pasture, Reptile)");
 
     // Find Georgie and Siren and verify they share Reptile Enclosure
+    let mut push_pop_enc = None;
     let mut georgie_enc = None;
     let mut siren_enc = None;
     for (id, _name, _stats, enc) in &animals {
-        if *id == AnimalId::Georgie {
+        if *id == AnimalId::PushPop {
+            push_pop_enc = Some(*enc);
+        } else if *id == AnimalId::Georgie {
             georgie_enc = Some(*enc);
         } else if *id == AnimalId::Siren {
             siren_enc = Some(*enc);
         }
     }
+    assert_eq!(push_pop_enc, Some(EnclosureId::PushPopEnclosure));
     assert_eq!(georgie_enc, Some(EnclosureId::ReptileEnclosure));
     assert_eq!(siren_enc, Some(EnclosureId::ReptileEnclosure));
     let _ = std::fs::remove_file(save_path);
@@ -203,7 +207,7 @@ fn test_upkeep_calculation() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000+1000+1000)/4000 = 0.90
+        amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000*4)/5000 = 0.92
     });
 
     app.world_mut().trigger(WorsenStatEvent {
@@ -211,21 +215,17 @@ fn test_upkeep_calculation() {
             id: EnclosureId::ReptileEnclosure,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: 600, // reptile_enclosure cleanliness becomes 400, playpen/pasture stay 1000 -> mean cleanliness = (1000+1000+400)/3000 = 0.80
+        amount: 600, // reptile cleanliness becomes 400, other 3 enclosures stay 1000 -> mean = 3400/4000 = 0.85
     });
 
     // Run system updates to calculate upkeep
     app.update();
 
     let upkeep = app.world().resource::<SanctuaryUpkeep>();
-    // Mean hunger: 900/1000 = 0.90
-    assert!((upkeep.mean_hunger - 0.90).abs() < 0.001);
-    // Mean cleanliness: 800/1000 = 0.80
-    assert!((upkeep.mean_cleanliness - 0.80).abs() < 0.001);
-    // Mean happiness: 1.0
+    assert!((upkeep.mean_hunger - 0.92).abs() < 0.001);
+    assert!((upkeep.mean_cleanliness - 0.85).abs() < 0.001);
     assert!((upkeep.mean_happiness - 1.0).abs() < 0.001);
-    // Overall upkeep score: (0.90 + 0.80 + 1.0) / 3.0 = 0.90
-    assert!((upkeep.score - 0.90).abs() < 0.001);
+    assert!((upkeep.score - 0.923333).abs() < 0.001);
     let _ = std::fs::remove_file(save_path);
 }
 

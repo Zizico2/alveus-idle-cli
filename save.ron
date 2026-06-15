@@ -1,70 +1,87 @@
 (
   resources: {},
   entities: {
-    4294967119: (
+    4294967087: (
       components: {
-        "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 1000,
-        ),
-      },
-    ),
-    4294967120: (
-      components: {
-        "alveus_idle_cli::stats::EnclosureId": Pasture,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 800,
-        ),
-      },
-    ),
-    4294967121: (
-      components: {
-        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 800,
-        ),
-      },
-    ),
-    4294967122: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Polly,
+        "alveus_idle_cli::stats::AnimalId": PushPop,
         "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 1000,
-          happiness: 1000,
+          hunger: 0,
+          happiness: 0,
         ),
       },
     ),
-    4294967123: (
+    4294967088: (
       components: {
-        "alveus_idle_cli::stats::AnimalId": Stompy,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 1000,
-          happiness: 800,
+        "alveus_idle_cli::stats::EnclosureId": PushPopEnclosure,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 0,
         ),
       },
     ),
-    4294967124: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Georgie,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 800,
-          happiness: 800,
-        ),
-      },
-    ),
-    4294967125: (
+    4294967089: (
       components: {
         "alveus_idle_cli::stats::AnimalId": Siren,
         "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 800,
-          happiness: 800,
+          hunger: 0,
+          happiness: 0,
         ),
       },
     ),
-    8589931984: (
+    4294967090: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Georgie,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294967091: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Stompy,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 248,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294967092: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Polly,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 399,
+        ),
+      },
+    ),
+    4294967093: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 0,
+        ),
+      },
+    ),
+    4294967094: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureId": Pasture,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 150,
+        ),
+      },
+    ),
+    4294967095: (
+      components: {
+        "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 199,
+        ),
+      },
+    ),
+    34359735864: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1781137770,
+          value: 1781566123,
         ),
       },
     ),

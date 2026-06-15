@@ -1,8 +1,13 @@
 use bevy::prelude::*;
 use bevy::state::state::FreelyMutableState;
+use crate::animals::spawn_push_pop_npc;
 use crate::components::{CurrentTilePosition, DesiredTilePosition, Obstacle, TilePosition, BuildingEntrance};
+use crate::content::{
+    PUSH_POP_ENCLOSURE_OBJECTS, PUSH_POP_PLACEMENT, NUTRITION_HOUSE_OBJECTS, RoomObjectDef,
+};
 use crate::demo::player::{player, Player, PlayerAssets};
-use crate::demo::toast::DismissToastEvent;
+use crate::demo::toast::despawn_active_toast;
+use crate::interaction::Interactable;
 use crate::screens::{Screen, InRoom};
 use crate::demo::level::TILE_SIZE;
 
@@ -111,10 +116,7 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                         ));
                     });
             },
-            // Dismiss active toast on entry
-            |mut commands: Commands| {
-                commands.trigger(DismissToastEvent);
-            }
+            despawn_active_toast,
         )
     );
 
@@ -180,6 +182,59 @@ impl Plugin for NutritionHousePlugin {
             exit_door: TilePosition { x: 5, y: 0 },
             spawn_interior_fn: spawn_nutrition_house_interior,
             room_title: "Nutrition House".to_string(),
+        });
+    }
+}
+
+pub struct PushPopEnclosurePlugin;
+
+impl Plugin for PushPopEnclosurePlugin {
+    fn build(&self, app: &mut App) {
+        build_room(app, RoomConfig {
+            room_state: Screen::InRoom(InRoom::PushPopEnclosure),
+            gameplay_state: Screen::Gameplay,
+            entrance: BuildingEntrance::PushPopEnclosure,
+            room_spawn: TilePosition { x: 6, y: 2 },
+            exit_spawn: TilePosition { x: 40, y: 33 },
+            exit_door: TilePosition { x: 6, y: 0 },
+            spawn_interior_fn: spawn_push_pop_enclosure_interior,
+            room_title: "Push Pop Enclosure".to_string(),
+        });
+    }
+}
+
+fn spawn_room_object(
+    parent: &mut ChildSpawnerCommands,
+    _meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    wall_mesh: &Handle<Mesh>,
+    object: &RoomObjectDef,
+) {
+    let material = materials.add(object.color);
+    let mut entity = parent.spawn((
+        Name::new(object.display_name),
+        Mesh2d(wall_mesh.clone()),
+        MeshMaterial2d(material),
+        Transform::from_xyz(
+            object.position.x as f32 * TILE_SIZE as f32,
+            object.position.y as f32 * TILE_SIZE as f32,
+            0.2,
+        ),
+        TilePosition {
+            x: object.position.x,
+            y: object.position.y,
+        },
+    ));
+
+    if object.is_obstacle {
+        entity.insert(Obstacle);
+    }
+
+    if let Some(interaction) = object.interaction {
+        entity.insert(Interactable {
+            object_id: object.object_id,
+            position: object.position,
+            interaction,
         });
     }
 }
@@ -261,12 +316,12 @@ fn spawn_nutrition_house_interior(
         spawn_wall(parent, 10, y);
     }
 
-    // Obstacles (Smoothie Counter)
+    // Prep Table (x: 4..=6, y: 7)
     let counter_color = Color::srgb(0.1, 0.5, 0.4);
     let counter_material = materials.add(counter_color);
     for x in 4..=6 {
         parent.spawn((
-            Name::new(format!("Counter ({}, 7)", x)),
+            Name::new(format!("Prep Table ({}, 7)", x)),
             Mesh2d(wall_mesh.clone()),
             MeshMaterial2d(counter_material.clone()),
             Transform::from_xyz(
@@ -279,33 +334,109 @@ fn spawn_nutrition_house_interior(
         ));
     }
 
-    // Herb Garden Patch (x: 8, y: 4)
-    let garden_color = Color::srgb(0.2, 0.7, 0.3);
+    for object in NUTRITION_HOUSE_OBJECTS {
+        spawn_room_object(parent, meshes, materials, &wall_mesh, object);
+    }
+}
+
+fn spawn_push_pop_enclosure_interior(
+    parent: &mut ChildSpawnerCommands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+) {
+    let floor_color = Color::srgb(0.72, 0.62, 0.45);
+    let floor_material = materials.add(floor_color);
+    let floor_mesh = meshes.add(Rectangle::new(30.0, 30.0));
+    for x in 1..=11 {
+        for y in 1..=11 {
+            parent.spawn((
+                Name::new(format!("Floor Tile ({}, {})", x, y)),
+                Mesh2d(floor_mesh.clone()),
+                MeshMaterial2d(floor_material.clone()),
+                Transform::from_xyz(
+                    x as f32 * TILE_SIZE as f32,
+                    y as f32 * TILE_SIZE as f32,
+                    0.0,
+                ),
+            ));
+        }
+    }
+
+    let door_color = Color::srgb(0.50, 0.40, 0.28);
     parent.spawn((
-        Name::new("Herb Garden Patch"),
-        Mesh2d(wall_mesh.clone()),
-        MeshMaterial2d(materials.add(garden_color)),
+        Name::new("Door Tile"),
+        Mesh2d(meshes.add(Rectangle::new(30.0, 30.0))),
+        MeshMaterial2d(materials.add(door_color)),
         Transform::from_xyz(
-            8.0 * TILE_SIZE as f32,
-            4.0 * TILE_SIZE as f32,
-            0.2,
+            6.0 * TILE_SIZE as f32,
+            0.0 * TILE_SIZE as f32,
+            0.01,
         ),
-        TilePosition { x: 8, y: 4 },
-        Obstacle,
+        TilePosition { x: 6, y: 0 },
     ));
 
-    // Seed Chest (x: 2, y: 4)
-    let chest_color = Color::srgb(0.6, 0.4, 0.1);
-    parent.spawn((
-        Name::new("Seed Chest"),
-        Mesh2d(meshes.add(Rectangle::new(26.0, 26.0))),
-        MeshMaterial2d(materials.add(chest_color)),
-        Transform::from_xyz(
-            2.0 * TILE_SIZE as f32,
-            4.0 * TILE_SIZE as f32,
-            0.2,
-        ),
-        TilePosition { x: 2, y: 4 },
-        Obstacle,
-    ));
+    let wall_color = Color::srgb(0.45, 0.38, 0.28);
+    let wall_material = materials.add(wall_color);
+    let wall_mesh = meshes.add(Rectangle::new(30.0, 30.0));
+
+    let spawn_wall = |p: &mut ChildSpawnerCommands, x: u32, y: u32| {
+        p.spawn((
+            Name::new(format!("Fence ({}, {})", x, y)),
+            Mesh2d(wall_mesh.clone()),
+            MeshMaterial2d(wall_material.clone()),
+            Transform::from_xyz(
+                x as f32 * TILE_SIZE as f32,
+                y as f32 * TILE_SIZE as f32,
+                0.1,
+            ),
+            TilePosition { x, y },
+            Obstacle,
+        ));
+    };
+
+    for x in 0..=12 {
+        if x != 6 {
+            spawn_wall(parent, x, 0);
+        }
+    }
+    for x in 0..=12 {
+        spawn_wall(parent, x, 12);
+    }
+    for y in 1..=11 {
+        spawn_wall(parent, 0, y);
+    }
+    for y in 1..=11 {
+        spawn_wall(parent, 12, y);
+    }
+
+    // Shelter (3,9) 2x2
+    let shelter_color = Color::srgb(0.40, 0.32, 0.22);
+    let shelter_material = materials.add(shelter_color);
+    for x in 3..=4 {
+        for y in 9..=10 {
+            parent.spawn((
+                Name::new(format!("Shelter ({}, {})", x, y)),
+                Mesh2d(wall_mesh.clone()),
+                MeshMaterial2d(shelter_material.clone()),
+                Transform::from_xyz(
+                    x as f32 * TILE_SIZE as f32,
+                    y as f32 * TILE_SIZE as f32,
+                    0.2,
+                ),
+                TilePosition { x, y },
+                Obstacle,
+            ));
+        }
+    }
+
+    for object in PUSH_POP_ENCLOSURE_OBJECTS {
+        spawn_room_object(parent, meshes, materials, &wall_mesh, object);
+    }
+
+    spawn_push_pop_npc(
+        parent,
+        meshes,
+        materials,
+        PUSH_POP_PLACEMENT.home_position,
+    );
 }

@@ -1,3 +1,2 @@
 [toolchain]
-# TODO: this should be stable for release build. Only nightly for dev for faster compile times.
-channel = "nightly"
+channel = "nightly-2026-06-14"

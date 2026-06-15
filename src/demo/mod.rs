@@ -10,7 +10,7 @@ mod camera;
 pub mod level;
 mod movement;
 pub mod player;
-mod toast;
+pub mod toast;
 mod entrance;
 pub mod room;
 
@@ -24,5 +24,6 @@ pub(super) fn plugin(app: &mut App) {
         toast::ToastPlugin,
         entrance::EntrancePlugin,
         room::NutritionHousePlugin,
+        room::PushPopEnclosurePlugin,
     ));
 }

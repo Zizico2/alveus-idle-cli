@@ -95,9 +95,14 @@ fn validate_and_snap_entrances(
 
 fn check_player_entrance_transitions(
     mut commands: Commands,
+    screen: Res<State<crate::screens::Screen>>,
     player_query: Query<(Entity, &CurrentTilePosition, Option<&BuildingEntrance>), With<Player>>,
     entrance_query: Query<(&TileGroup, &BuildingEntrance)>,
 ) {
+    if !matches!(screen.get(), crate::screens::Screen::Gameplay) {
+        return;
+    }
+
     let Some((player_entity, player_pos, current_entrance)) = player_query.iter().next() else {
         return;
     };

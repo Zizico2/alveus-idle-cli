@@ -1,6 +1,10 @@
 use bevy::prelude::*;
+use crate::content::{item_display_name, InteractionKind};
+use crate::interaction::{
+    ActiveInteractionTarget, Interactable, LastPickupMessage, PlayerSatchel,
+};
+use crate::screens::{InRoom, Screen};
 use crate::stats::{AnimalId, AnimalStats, SanctuaryUpkeep, AnimalStat};
-use crate::screens::Screen;
 use crate::AppSystems;
 
 // ---------------------------------------------------------
@@ -30,6 +34,18 @@ struct AnimalStatText {
 
 #[derive(Component)]
 struct NeglectBanner;
+
+#[derive(Component)]
+struct InteractionPromptRoot;
+
+#[derive(Component)]
+struct InteractionPromptText;
+
+#[derive(Component)]
+struct SatchelHudRoot;
+
+#[derive(Component)]
+struct SatchelBodyText;
 
 // ---------------------------------------------------------
 // Plugin
@@ -61,6 +77,7 @@ impl Plugin for HudPlugin {
             Update,
             (
                 update_hud_system,
+                update_room_feedback_hud_system,
                 animate_neglect_banner_system,
             )
                 .in_set(AppSystems::UiUpdate)
@@ -176,6 +193,7 @@ fn spawn_hud_system(
                             ..default()
                         },
                         TextColor(Color::srgb(0.2, 0.9, 0.6)), // Radiant teal/green
+                        TextLayout::new_with_no_wrap(),
                         UpkeepText,
                     ));
 
@@ -202,7 +220,44 @@ fn spawn_hud_system(
                     });
                 });
 
-                // B. Animal Stats Cards (vertical container)
+                // B. Satchel Card (in the stats column — avoids overlapping animal cards)
+                panel.spawn((
+                    Name::new("Satchel Card"),
+                    SatchelHudRoot,
+                    Node {
+                        width: Val::Percent(100.0),
+                        padding: UiRect::all(Val::Px(12.0)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(6.0),
+                        border_radius: BorderRadius::all(Val::Px(10.0)),
+                        border: UiRect::all(Val::Px(1.0)),
+                        display: Display::None,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.1, 0.1, 0.12, 0.75)),
+                    BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.05)),
+                )).with_children(|card| {
+                    card.spawn((
+                        Text::new("SATCHEL"),
+                        TextFont {
+                            font_size: 11.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.5, 0.8, 0.7)),
+                    ));
+                    card.spawn((
+                        Text::new("Empty"),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        TextLayout::new_with_no_wrap(),
+                        SatchelBodyText,
+                    ));
+                });
+
+                // C. Animal Stats Cards (vertical container)
                 panel.spawn((
                     Name::new("Animal Cards Stack"),
                     Node {
@@ -213,12 +268,13 @@ fn spawn_hud_system(
                 )).with_children(|stack| {
                     // Spawn animal cards for the 4 ambassadors
                     spawn_animal_card(stack, AnimalId::Polly, "Polly", "Silkie Chicken", "Playpen");
+                    spawn_animal_card(stack, AnimalId::PushPop, "Push Pop", "Sulcata Tortoise", "Push Pop Enclosure");
                     spawn_animal_card(stack, AnimalId::Stompy, "Stompy", "Emu", "Pasture Grassland");
                     spawn_animal_card(stack, AnimalId::Georgie, "Georgie", "African Bullfrog", "Reptile Enclosure");
                     spawn_animal_card(stack, AnimalId::Siren, "Siren", "Ball Python", "Reptile Enclosure");
                 });
 
-                // C. Debug Controls Help Card
+                // D. Debug Controls Help Card
                 panel.spawn((
                     Name::new("Debug Card"),
                     Node {
@@ -242,7 +298,7 @@ fn spawn_hud_system(
                         TextColor(Color::srgb(0.8, 0.8, 0.4)),
                     ));
                     debug_card.spawn((
-                        Text::new("1-3: Polly (Feed/Clean/Enrich)\n4-6: Stompy (Feed/Clean/Enrich)\n7-9: Georgie (Feed/Clean/Enrich)\n0/I/O: Siren (Feed/Clean/Enrich)\nNote: Georgie & Siren share Reptile Enclosure!\n- (or M): Worsen stats  = (or L): Fast-forward"),
+                        Text::new("1-3: Polly (Feed/Clean/Enrich)\n4-6: Stompy (Feed/Clean/Enrich)\n7-9: Georgie (Feed/Clean/Enrich)\n0/I/O: Siren (Feed/Clean/Enrich)\nU/J/Y: Push Pop (Feed/Clean/Enrich)\nNote: Georgie & Siren share Reptile Enclosure!\n- (or M): Worsen stats  = (or L): Fast-forward"),
                         TextFont {
                             font_size: 10.0,
                             ..default()
@@ -250,6 +306,38 @@ fn spawn_hud_system(
                         TextColor(Color::srgb(0.7, 0.7, 0.7)),
                     ));
                 });
+            });
+
+            // 3. Interaction prompt (bottom-left, same card style as upkeep)
+            parent.spawn((
+                Name::new("Interaction Prompt Card"),
+                InteractionPromptRoot,
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(24.0),
+                    left: Val::Px(24.0),
+                    width: Val::Auto,
+                    padding: UiRect::all(Val::Px(16.0)),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(4.0),
+                    border_radius: BorderRadius::all(Val::Px(12.0)),
+                    border: UiRect::all(Val::Px(1.0)),
+                    display: Display::None,
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.08, 0.1, 0.12, 0.85)),
+                BorderColor::all(Color::srgba(0.2, 0.8, 0.6, 0.3)),
+            )).with_children(|card| {
+                card.spawn((
+                    Text::new(" "),
+                    TextFont {
+                        font_size: 16.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    TextLayout::new_with_no_wrap(),
+                    InteractionPromptText,
+                ));
             });
         });
 }
@@ -362,6 +450,7 @@ fn spawn_stat_row(
                     ..default()
                 },
                 TextColor(Color::WHITE),
+                TextLayout::new_with_no_wrap(),
                 AnimalStatText {
                     animal_id,
                     stat,
@@ -419,9 +508,24 @@ fn update_hud_system(
     upkeep: Res<SanctuaryUpkeep>,
     animals_query: Query<(&AnimalId, &AnimalStats, &crate::stats::AnimalEnclosure)>,
     enclosures_query: Query<(&crate::stats::EnclosureId, &crate::stats::EnclosureStats)>,
-    mut upkeep_text_query: Query<&mut Text, (With<UpkeepText>, Without<AnimalStatText>)>,
+    mut upkeep_text_query: Query<
+        &mut Text,
+        (
+            With<UpkeepText>,
+            Without<AnimalStatText>,
+            Without<SatchelBodyText>,
+            Without<InteractionPromptText>,
+        ),
+    >,
     mut upkeep_bar_query: Query<&mut Node, (With<UpkeepBarFill>, Without<AnimalStatBarFill>)>,
-    mut stat_text_query: Query<(&mut Text, &AnimalStatText), Without<UpkeepText>>,
+    mut stat_text_query: Query<
+        (&mut Text, &AnimalStatText),
+        (
+            Without<UpkeepText>,
+            Without<SatchelBodyText>,
+            Without<InteractionPromptText>,
+        ),
+    >,
     mut stat_bar_query: Query<(&mut Node, &AnimalStatBarFill), Without<UpkeepBarFill>>,
     mut neglect_banner_query: Query<&mut Visibility, With<NeglectBanner>>,
 ) {
@@ -484,6 +588,126 @@ fn update_hud_system(
             *vis = desired_visibility;
         }
     }
+}
+
+fn update_room_feedback_hud_system(
+    screen: Res<State<Screen>>,
+    satchel: Res<PlayerSatchel>,
+    pickup_message: Res<LastPickupMessage>,
+    active: Res<ActiveInteractionTarget>,
+    interactable_query: Query<&Interactable>,
+    mut interaction_root: Query<
+        &mut Node,
+        (
+            With<InteractionPromptRoot>,
+            Without<SatchelHudRoot>,
+            Without<UpkeepBarFill>,
+            Without<AnimalStatBarFill>,
+        ),
+    >,
+    mut interaction_text: Query<
+        &mut Text,
+        (
+            With<InteractionPromptText>,
+            Without<UpkeepText>,
+            Without<AnimalStatText>,
+            Without<SatchelBodyText>,
+        ),
+    >,
+    mut satchel_root: Query<
+        &mut Node,
+        (
+            With<SatchelHudRoot>,
+            Without<InteractionPromptRoot>,
+            Without<UpkeepBarFill>,
+            Without<AnimalStatBarFill>,
+        ),
+    >,
+    mut satchel_body: Query<
+        &mut Text,
+        (
+            With<SatchelBodyText>,
+            Without<UpkeepText>,
+            Without<AnimalStatText>,
+            Without<InteractionPromptText>,
+        ),
+    >,
+) {
+    let in_interactive_room = matches!(
+        screen.get(),
+        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
+    );
+
+    let prompt_message = if in_interactive_room {
+        active.interactable.and_then(|entity| {
+            interactable_query.get(entity).ok().map(|interactable| {
+                let action = match interactable.interaction {
+                    InteractionKind::GiveItem { prompt, .. }
+                    | InteractionKind::FeedAnimal { prompt, .. } => prompt,
+                };
+                format!("Press [Space] to {action}")
+            })
+        })
+    } else {
+        None
+    };
+
+    let prompt_display = if prompt_message.is_some() {
+        Display::Flex
+    } else {
+        Display::None
+    };
+
+    for mut node in &mut interaction_root {
+        if node.display != prompt_display {
+            node.display = prompt_display;
+        }
+    }
+
+    if let Some(message) = &prompt_message {
+        for mut txt in &mut interaction_text {
+            if txt.as_str() != message {
+                txt.0 = message.clone();
+            }
+        }
+    }
+
+    let on_overview_with_item =
+        matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some();
+    let show_satchel = in_interactive_room || on_overview_with_item;
+    let satchel_display = if show_satchel {
+        Display::Flex
+    } else {
+        Display::None
+    };
+
+    for mut node in &mut satchel_root {
+        if node.display != satchel_display {
+            node.display = satchel_display;
+        }
+    }
+
+    let body_label = satchel_body_label(&pickup_message, &satchel);
+    for mut txt in &mut satchel_body {
+        if txt.as_str() != body_label {
+            txt.0 = body_label.clone();
+        }
+    }
+}
+
+fn satchel_body_label(pickup_message: &LastPickupMessage, satchel: &PlayerSatchel) -> String {
+    if let Some(message) = &pickup_message.text {
+        return message.clone();
+    }
+
+    if let Some(item) = satchel.item {
+        return format!(
+            "Carrying: {}\nPress [K] to drop",
+            item_display_name(item)
+        );
+    }
+
+    "Empty".to_string()
 }
 
 /// Animate the Neglect Banner with a pulsating glow/alpha transition.

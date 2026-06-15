@@ -30,6 +30,7 @@ pub enum BuildingEntrance {
     #[default]
     NoEntrance,
     NutritionHouse,
+    PushPopEnclosure,
 }
 
 #[derive(Component, Debug, Reflect, Default, Clone, Copy, PartialEq, Eq)]

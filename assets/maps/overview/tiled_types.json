@@ -24,7 +24,8 @@
     "storageType": "string",
     "values": [
       "NoEntrance",
-      "NutritionHouse"
+      "NutritionHouse",
+      "PushPopEnclosure"
     ],
     "valuesAsFlags": false
   },

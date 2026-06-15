@@ -180,6 +180,7 @@ fn test_play_without_save() {
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
+    app.insert_resource(SavePath("nonexistent_play_without_save.ron".to_string()));
 
     // Manually register only the play click observer and stats plugin
     app.add_observer(alveus_idle_cli::menus::main::handle_play_click);
@@ -198,5 +199,5 @@ fn test_play_without_save() {
     assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Gameplay);
 
     let animal_count = app.world_mut().query::<&alveus_idle_cli::stats::AnimalId>().iter(app.world()).count();
-    assert_eq!(animal_count, 4, "Should initialize default 4 animals when save does not exist");
+    assert_eq!(animal_count, 5, "Should initialize default 5 animals when save does not exist");
 }
