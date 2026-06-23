@@ -1,23 +1,23 @@
 (
   resources: {},
   entities: {
-    4294967087: (
+    4294967072: (
       components: {
         "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
         "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 173,
+          cleanliness: 0,
         ),
       },
     ),
-    4294967088: (
+    4294967073: (
       components: {
         "alveus_idle_cli::stats::EnclosureId": Pasture,
         "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 124,
+          cleanliness: 0,
         ),
       },
     ),
-    4294967089: (
+    4294967074: (
       components: {
         "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
         "alveus_idle_cli::stats::EnclosureStats": (
@@ -25,25 +25,25 @@
         ),
       },
     ),
-    4294967090: (
+    4294967075: (
       components: {
         "alveus_idle_cli::stats::AnimalId": Polly,
         "alveus_idle_cli::stats::AnimalStats": (
           hunger: 0,
-          happiness: 355,
-        ),
-      },
-    ),
-    4294967091: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Stompy,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 213,
           happiness: 0,
         ),
       },
     ),
-    4294967092: (
+    4294967076: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Stompy,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294967077: (
       components: {
         "alveus_idle_cli::stats::AnimalId": Georgie,
         "alveus_idle_cli::stats::AnimalStats": (
@@ -52,7 +52,7 @@
         ),
       },
     ),
-    4294967093: (
+    4294967078: (
       components: {
         "alveus_idle_cli::stats::AnimalId": Siren,
         "alveus_idle_cli::stats::AnimalStats": (
@@ -61,7 +61,7 @@
         ),
       },
     ),
-    4294967094: (
+    4294967079: (
       components: {
         "alveus_idle_cli::stats::EnclosureId": PushPopEnclosure,
         "alveus_idle_cli::stats::EnclosureStats": (
@@ -69,7 +69,7 @@
         ),
       },
     ),
-    4294967095: (
+    4294967080: (
       components: {
         "alveus_idle_cli::stats::AnimalId": PushPop,
         "alveus_idle_cli::stats::AnimalStats": (
@@ -78,10 +78,10 @@
         ),
       },
     ),
-    21474833936: (
+    30064770657: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1781569269,
+          value: 1782257937,
         ),
       },
     ),

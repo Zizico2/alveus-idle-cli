@@ -8,7 +8,8 @@ use bevy_ecs_tiled::prelude::{regex::RegexSet, *};
 use crate::{
     asset_tracking::LoadResource,
     audio::music,
-    components::{CurrentTilePosition, DesiredTilePosition},
+    components::{CurrentTilePosition, DesiredTilePosition, TilePosition},
+    components::Obstacle,
     demo::player::{PlayerAssets, player},
     demo::room::PlayerSpawnPoint,
     screens::Screen,
@@ -35,7 +36,9 @@ pub(super) fn plugin(app: &mut App) {
         ),
     }))
     // .init_asset::<TiledMapAsset>()
-    .load_resource::<LevelAssets>();
+    .load_resource::<LevelAssets>()
+    .load_resource::<InteriorAssets>()
+    .add_observer(bridge_obstacle_tile_position);
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]
@@ -58,6 +61,47 @@ impl FromWorld for LevelAssets {
             map: assets.load("maps/overview/map.tmx"),
         }
     }
+}
+
+#[derive(Resource, Asset, Clone, Reflect)]
+#[reflect(Resource)]
+pub struct InteriorAssets {
+    #[dependency]
+    pub nutrition_house: Handle<TiledMapAsset>,
+    #[dependency]
+    pub push_pop_enclosure: Handle<TiledMapAsset>,
+}
+
+impl FromWorld for InteriorAssets {
+    fn from_world(world: &mut World) -> Self {
+        let assets = world.resource::<AssetServer>();
+        Self {
+            nutrition_house: assets.load("maps/interiors/nutrition_house_interior.tmx"),
+            push_pop_enclosure: assets.load("maps/interiors/push_pop_enclosure_interior.tmx"),
+        }
+    }
+}
+
+/// Tiles with the `Obstacle` custom property get `TilePos` from bevy_ecs_tilemap but
+/// movement collision queries our `TilePosition`. Bridge the two when obstacle tiles spawn.
+fn bridge_obstacle_tile_position(
+    event: On<TiledEvent<TileCreated>>,
+    mut commands: Commands,
+    tiles: Query<&Obstacle>,
+) {
+    let Some(pos) = event.get_tile_pos() else {
+        return;
+    };
+
+    let entity = event
+        .get_tile_entity()
+        .unwrap_or(event.entity);
+
+    if tiles.get(entity).is_err() {
+        return;
+    }
+
+    commands.entity(entity).insert(TilePosition { x: pos.x, y: pos.y });
 }
 
 /// A system that spawns the main level.
