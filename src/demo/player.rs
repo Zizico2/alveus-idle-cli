@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::components::{CurrentTilePosition, DesiredTilePosition, TilePosition};
+use crate::components::{CurrentTilePosition, DesiredTilePosition, DynamicObstacle, TilePosition};
 use crate::demo::level::TILE_SIZE;
 
 use crate::{
@@ -38,8 +38,8 @@ pub const PLAYER_Z_INDEX: f32 = 2.0;
 
 /// The player character.
 pub fn player(
-    max_speed: f32,
-    player_assets: &PlayerAssets,
+    _max_speed: f32,
+    _player_assets: &PlayerAssets,
     texture_atlas_layouts: &mut Assets<TextureAtlasLayout>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
@@ -48,12 +48,13 @@ pub fn player(
     // A texture atlas is a way to split a single image into a grid of related images.
     // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
     let layout = TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
-    let texture_atlas_layout = texture_atlas_layouts.add(layout);
+    let _texture_atlas_layout = texture_atlas_layouts.add(layout);
     let player_animation = PlayerAnimation::new();
 
     (
         Name::new("Player"),
         Player,
+        DynamicObstacle,
         // Sprite::from_atlas_image(
         //     player_assets.ducky.clone(),
         //     TextureAtlas {

@@ -1,19 +1,18 @@
 use bevy::prelude::*;
 use crate::components::{CurrentTilePosition, TilePosition};
-use crate::content::{
-    can_interact, item_display_name, InteractionKind, ItemId, RoomObjectId,
-};
+use crate::content::{can_interact, item_display_name, ItemId};
 use crate::demo::player::Player;
 use crate::screens::{InRoom, Screen};
-use crate::stats::{AnimalId, ImproveStatEvent, StatTarget};
+use crate::stats::{AnimalId, AnimalStat, ImproveStatEvent, StatTarget};
 
 pub struct InteractionPlugin;
 
 impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ItemId>()
-            .register_type::<RoomObjectId>()
             .register_type::<Interactable>()
+            .register_type::<GiveItem>()
+            .register_type::<FeedAnimal>()
             .init_resource::<PlayerSatchel>()
             .init_resource::<ActiveInteractionTarget>()
             .init_resource::<LastPickupMessage>()
@@ -28,7 +27,8 @@ impl Plugin for InteractionPlugin {
                     .chain()
                     .run_if(in_interactive_room),
             )
-            .add_systems(Update, handle_drop_input.run_if(on_overview_with_satchel_item));
+            .add_systems(Update, handle_drop_input.run_if(on_overview_with_satchel_item))
+            .add_observer(apply_animal_fed);
     }
 }
 
@@ -36,12 +36,38 @@ fn on_overview_with_satchel_item(screen: Res<State<Screen>>, satchel: Res<Player
     matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some()
 }
 
-#[derive(Component, Debug, Clone, Copy, Reflect)]
+/// Marker for tiles the player can interact with when adjacent.
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct Interactable;
+
+/// Gives the player an item when interacted with.
+///
+/// An entity must not also have [`FeedAnimal`]. Bevy does not yet enforce
+/// mutually exclusive components ([bevy#23569](https://github.com/bevyengine/bevy/issues/23569)).
+/// Until that lands, authoring should ensure only one interaction component per tile.
+#[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
-pub struct Interactable {
-    pub object_id: RoomObjectId,
-    pub position: TilePosition,
-    pub interaction: InteractionKind,
+#[require(Interactable)]
+pub struct GiveItem {
+    pub item_id: ItemId,
+    pub prompt: String,
+}
+
+/// Feeds an animal when the player interacts with the correct item.
+///
+/// An entity must not also have [`GiveItem`]. Bevy does not yet enforce
+/// mutually exclusive components ([bevy#23569](https://github.com/bevyengine/bevy/issues/23569)).
+/// Until that lands, authoring should ensure only one interaction component per tile.
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Interactable)]
+pub struct FeedAnimal {
+    pub animal_id: AnimalId,
+    pub required_item: ItemId,
+    pub stat: AnimalStat,
+    pub delta: u32,
+    pub prompt: String,
 }
 
 #[derive(Resource, Debug, Clone, Copy, Default, Reflect)]
@@ -61,9 +87,14 @@ pub struct LastPickupMessage {
     pub timer: Timer,
 }
 
+/// Emitted when the player successfully feeds an animal at a dish.
+/// Item consumption, stat changes, and UI feedback are handled by observers.
 #[derive(Event, Debug, Clone, Copy)]
 pub struct AnimalFedEvent {
-    pub animal: AnimalId,
+    pub animal_id: AnimalId,
+    pub required_item: ItemId,
+    pub stat: AnimalStat,
+    pub delta: u32,
     pub dish_position: TilePosition,
 }
 
@@ -76,7 +107,7 @@ fn in_interactive_room(screen: Res<State<Screen>>) -> bool {
 
 fn update_interaction_target(
     player_query: Query<&CurrentTilePosition, With<Player>>,
-    interactable_query: Query<(Entity, &Interactable)>,
+    interactable_query: Query<(Entity, &TilePosition), With<Interactable>>,
     mut active: ResMut<ActiveInteractionTarget>,
 ) {
     let Ok(player_pos) = player_query.single() else {
@@ -86,7 +117,7 @@ fn update_interaction_target(
 
     active.interactable = interactable_query
         .iter()
-        .find(|(_, interactable)| can_interact(player_pos.0, interactable.position))
+        .find(|(_, tile_pos)| can_interact(player_pos.0, **tile_pos))
         .map(|(entity, _)| entity);
 }
 
@@ -130,7 +161,9 @@ fn decay_pickup_message(time: Res<Time>, mut message: ResMut<LastPickupMessage>)
 fn handle_interaction_input(
     input: Res<ButtonInput<KeyCode>>,
     active: Res<ActiveInteractionTarget>,
-    interactable_query: Query<&Interactable>,
+    tile_query: Query<&TilePosition>,
+    give_query: Query<&GiveItem>,
+    feed_query: Query<&FeedAnimal>,
     mut satchel: ResMut<PlayerSatchel>,
     mut commands: Commands,
 ) {
@@ -142,55 +175,69 @@ fn handle_interaction_input(
         return;
     };
 
-    let Ok(interactable) = interactable_query.get(entity) else {
+    if let Ok(give) = give_query.get(entity) {
+        if let Err(message) = try_give_item(&mut satchel, give.item_id) {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+        } else {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(format!("Picked up {}", item_display_name(give.item_id))),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+        }
         return;
-    };
-
-    match interactable.interaction {
-        InteractionKind::GiveItem { item_id, .. } => {
-            if let Err(message) = try_give_item(&mut satchel, item_id) {
-                commands.insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            } else {
-                commands.insert_resource(LastPickupMessage {
-                    text: Some(format!("Picked up {}", item_display_name(item_id))),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            }
-        }
-        InteractionKind::FeedAnimal {
-            animal_id,
-            required_item,
-            stat,
-            delta,
-            ..
-        } => {
-            if let Err(message) = try_feed_animal(&mut satchel, required_item) {
-                commands.insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            } else {
-                commands.trigger(ImproveStatEvent {
-                    target: StatTarget::Animal {
-                        id: animal_id,
-                        stat,
-                    },
-                    amount: delta,
-                });
-                commands.trigger(AnimalFedEvent {
-                    animal: animal_id,
-                    dish_position: interactable.position,
-                });
-                commands.insert_resource(LastPickupMessage {
-                    text: Some(format!("Fed {}", animal_display_name(animal_id))),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            }
-        }
     }
+
+    if let Ok(feed) = feed_query.get(entity) {
+        if let Err(message) = validate_feed_animal(&satchel, feed.required_item) {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+
+        let Ok(tile_pos) = tile_query.get(entity) else {
+            return;
+        };
+
+        commands.trigger(AnimalFedEvent {
+            animal_id: feed.animal_id,
+            required_item: feed.required_item,
+            stat: feed.stat,
+            delta: feed.delta,
+            dish_position: *tile_pos,
+        });
+    }
+}
+
+fn apply_animal_fed(
+    trigger: On<AnimalFedEvent>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut commands: Commands,
+) {
+    let event = trigger.event();
+    if let Err(message) = try_feed_animal(&mut satchel, event.required_item) {
+        commands.insert_resource(LastPickupMessage {
+            text: Some(message.to_string()),
+            timer: Timer::from_seconds(2.5, TimerMode::Once),
+        });
+        return;
+    }
+
+    commands.trigger(ImproveStatEvent {
+        target: StatTarget::Animal {
+            id: event.animal_id,
+            stat: event.stat,
+        },
+        amount: event.delta,
+    });
+    commands.insert_resource(LastPickupMessage {
+        text: Some(format!("Fed {}", animal_display_name(event.animal_id))),
+        timer: Timer::from_seconds(2.5, TimerMode::Once),
+    });
 }
 
 fn animal_display_name(animal_id: AnimalId) -> &'static str {
@@ -215,16 +262,22 @@ pub fn try_give_item(satchel: &mut PlayerSatchel, item_id: ItemId) -> Result<(),
     Ok(())
 }
 
+pub fn validate_feed_animal(
+    satchel: &PlayerSatchel,
+    required_item: ItemId,
+) -> Result<(), &'static str> {
+    match satchel.item {
+        Some(item) if item == required_item => Ok(()),
+        Some(_) => Err("Wrong item for this feeding dish"),
+        None => Err("You are not carrying any food"),
+    }
+}
+
 pub fn try_feed_animal(
     satchel: &mut PlayerSatchel,
     required_item: ItemId,
 ) -> Result<(), &'static str> {
-    match satchel.item {
-        Some(item) if item == required_item => {
-            satchel.item = None;
-            Ok(())
-        }
-        Some(_) => Err("Wrong item for this feeding dish"),
-        None => Err("You are not carrying any food"),
-    }
+    validate_feed_animal(satchel, required_item)?;
+    satchel.item = None;
+    Ok(())
 }

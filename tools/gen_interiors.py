@@ -3,9 +3,8 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from PIL import Image, ImageDraw
 
@@ -19,6 +18,76 @@ OBSTACLE_PROP = """   <properties>
      <properties/>
     </property>
    </properties>"""
+
+
+def enum_variant_prop(name: str, type_path: str, variant: str) -> str:
+    return f"""    <property name="{name}" type="class" propertytype="{type_path}">
+     <properties>
+      <property name=":variant" propertytype="{type_path}:::Variant" value="{variant}"/>
+     </properties>
+    </property>"""
+
+
+def give_item_prop(item_id: str, prompt: str) -> str:
+    return f"""    <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
+     <properties>
+{enum_variant_prop("item_id", "alveus_idle_cli::content::ItemId", item_id)}
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def feed_animal_prop(
+    animal_id: str,
+    required_item: str,
+    stat: str,
+    delta: int,
+    prompt: str,
+) -> str:
+    return f"""    <property name="feed_animal" type="class" propertytype="alveus_idle_cli::interaction::FeedAnimal">
+     <properties>
+{enum_variant_prop("animal_id", "alveus_idle_cli::stats::AnimalId", animal_id)}
+{enum_variant_prop("required_item", "alveus_idle_cli::content::ItemId", required_item)}
+{enum_variant_prop("stat", "alveus_idle_cli::stats::AnimalStat", stat)}
+      <property name="delta" type="int" value="{delta}"/>
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def interactable_tile_props(
+    room_object: str,
+    *,
+    give_item: tuple[str, str] | None = None,
+    feed_animal: tuple[str, str, str, int, str] | None = None,
+) -> str:
+    interaction = ""
+    if give_item is not None:
+        item_id, prompt = give_item
+        interaction = give_item_prop(item_id, prompt)
+    elif feed_animal is not None:
+        animal_id, required_item, stat, delta, prompt = feed_animal
+        interaction = feed_animal_prop(animal_id, required_item, stat, delta, prompt)
+
+    return f"""   <properties>
+    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+     <properties/>
+    </property>
+    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+     <properties>
+      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="{room_object}"/>
+     </properties>
+    </property>
+{interaction}   </properties>"""
+
+
+class TileDef(NamedTuple):
+    filename: str
+    draw: Callable[[], Image.Image]
+    obstacle: bool
+    room_object: str | None = None
+    give_item: tuple[str, str] | None = None
+    feed_animal: tuple[str, str, str, int, str] | None = None
 
 # Palette derived from room.rs Color::srgb values and nutrition_house.png cottage style.
 PALETTE = {
@@ -195,20 +264,44 @@ def draw_feeding_dish() -> Image.Image:
     return img
 
 
-TILE_DEFS: list[tuple[str, Callable[[], Image.Image], bool]] = [
-    ("wood_floor.png", lambda: draw_wood_floor(0), False),
-    ("wood_floor_alt.png", lambda: draw_wood_floor(1), False),
-    ("wall.png", draw_wall, True),
-    ("wood_door.png", draw_wood_door, False),
-    ("prep_table.png", draw_prep_table, True),
-    ("fridge.png", draw_fridge, False),
-    ("seed_chest.png", draw_seed_chest, False),
-    ("sand_floor.png", lambda: draw_sand_floor(0), False),
-    ("sand_floor_alt.png", lambda: draw_sand_floor(1), False),
-    ("fence.png", draw_fence, True),
-    ("gate.png", draw_gate, False),
-    ("shelter.png", draw_shelter, True),
-    ("feeding_dish.png", draw_feeding_dish, False),
+TILE_DEFS: list[TileDef] = [
+    TileDef("wood_floor.png", lambda: draw_wood_floor(0), False),
+    TileDef("wood_floor_alt.png", lambda: draw_wood_floor(1), False),
+    TileDef("wall.png", draw_wall, True),
+    TileDef("wood_door.png", draw_wood_door, False),
+    TileDef("prep_table.png", draw_prep_table, True),
+    TileDef(
+        "fridge.png",
+        draw_fridge,
+        True,
+        room_object="DietFridge",
+        give_item=("TortoiseLeafyGreens", "Scoop tortoise leafy greens"),
+    ),
+    TileDef(
+        "seed_chest.png",
+        draw_seed_chest,
+        True,
+        room_object="SeedChest",
+        give_item=("ChickenGrains", "Scoop chicken grains"),
+    ),
+    TileDef("sand_floor.png", lambda: draw_sand_floor(0), False),
+    TileDef("sand_floor_alt.png", lambda: draw_sand_floor(1), False),
+    TileDef("fence.png", draw_fence, True),
+    TileDef("gate.png", draw_gate, False),
+    TileDef("shelter.png", draw_shelter, True),
+    TileDef(
+        "feeding_dish.png",
+        draw_feeding_dish,
+        True,
+        room_object="PushPopFeedingDish",
+        feed_animal=(
+            "PushPop",
+            "TortoiseLeafyGreens",
+            "Hunger",
+            1000,
+            "Place leafy greens for Push Pop",
+        ),
+    ),
 ]
 
 # Tile indices (0-based in tileset)
@@ -240,10 +333,18 @@ def emit_tsx() -> None:
         f'tilewidth="{TILE}" tileheight="{TILE}" tilecount="{len(TILE_DEFS)}" columns="0">',
         ' <grid orientation="orthogonal" width="1" height="1"/>',
     ]
-    for idx, (filename, _, has_obstacle) in enumerate(TILE_DEFS):
+    for idx, tile_def in enumerate(TILE_DEFS):
         lines.append(f' <tile id="{idx}">')
-        lines.append(f'  <image source="tiles/{filename}" width="{TILE}" height="{TILE}"/>')
-        if has_obstacle:
+        lines.append(f'  <image source="tiles/{tile_def.filename}" width="{TILE}" height="{TILE}"/>')
+        if tile_def.room_object is not None:
+            lines.append(
+                interactable_tile_props(
+                    tile_def.room_object,
+                    give_item=tile_def.give_item,
+                    feed_animal=tile_def.feed_animal,
+                )
+            )
+        elif tile_def.obstacle:
             lines.append(OBSTACLE_PROP)
         lines.append(" </tile>")
     lines.append("</tileset>")
@@ -355,8 +456,8 @@ def main() -> None:
     print("Generating interior tiles...")
     TILES_DIR.mkdir(parents=True, exist_ok=True)
 
-    for filename, draw_fn, _ in TILE_DEFS:
-        save_tile(draw_fn(), filename)
+    for tile_def in TILE_DEFS:
+        save_tile(tile_def.draw(), tile_def.filename)
 
     print("Generating tileset...")
     emit_tsx()

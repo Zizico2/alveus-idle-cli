@@ -12,6 +12,7 @@ mod movement;
 pub mod player;
 pub mod toast;
 mod entrance;
+pub mod interiors;
 pub mod room;
 
 pub(super) fn plugin(app: &mut App) {
@@ -23,6 +24,7 @@ pub(super) fn plugin(app: &mut App) {
         player::plugin,
         toast::ToastPlugin,
         entrance::EntrancePlugin,
+        interiors::plugin,
         room::NutritionHousePlugin,
         room::PushPopEnclosurePlugin,
     ));

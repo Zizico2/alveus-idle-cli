@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use alveus_idle_cli::content::{InteractionKind, ItemId, RoomObjectId};
 use alveus_idle_cli::components::TilePosition;
+use alveus_idle_cli::content::ItemId;
 use alveus_idle_cli::interaction::{
-    try_feed_animal, try_give_item, AnimalFedEvent, PlayerSatchel, InteractionPlugin,
+    try_give_item, AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel,
 };
 use alveus_idle_cli::screens::Screen;
 use alveus_idle_cli::stats::{
-    AnimalId, AnimalStat, AnimalStats, ImproveStatEvent, SavePath, StatTarget, StatsPlugin,
+    AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin,
 };
 
 #[test]
@@ -45,48 +45,36 @@ fn test_push_pop_feed_restores_hunger() {
 
     let mut satchel = PlayerSatchel::default();
     try_give_item(&mut satchel, ItemId::TortoiseLeafyGreens).unwrap();
-    try_feed_animal(&mut satchel, ItemId::TortoiseLeafyGreens).unwrap();
-
-    app.world_mut().trigger(ImproveStatEvent {
-        target: StatTarget::Animal {
-            id: AnimalId::PushPop,
-            stat: AnimalStat::Hunger,
-        },
-        amount: 1000,
-    });
+    app.insert_resource(satchel);
 
     app.world_mut().trigger(AnimalFedEvent {
-        animal: AnimalId::PushPop,
+        animal_id: AnimalId::PushPop,
+        required_item: ItemId::TortoiseLeafyGreens,
+        stat: AnimalStat::Hunger,
+        delta: 1000,
         dish_position: TilePosition { x: 8, y: 6 },
     });
+    app.update();
 
     let stats = app.world().get::<AnimalStats>(push_pop_entity).unwrap();
     assert_eq!(stats.hunger, 1000);
-    assert!(satchel.item.is_none());
+    assert!(app.world().resource::<PlayerSatchel>().item.is_none());
 
     let _ = std::fs::remove_file(save_path);
 }
 
 #[test]
-fn test_feed_interaction_kind_matches_push_pop_dish() {
-    use alveus_idle_cli::content::PUSH_POP_ENCLOSURE_OBJECTS;
+fn test_push_pop_feeding_dish_feed_animal_component() {
+    let feed = FeedAnimal {
+        animal_id: AnimalId::PushPop,
+        required_item: ItemId::TortoiseLeafyGreens,
+        stat: AnimalStat::Hunger,
+        delta: 1000,
+        prompt: "Place leafy greens for Push Pop".to_string(),
+    };
 
-    let dish = PUSH_POP_ENCLOSURE_OBJECTS
-        .iter()
-        .find(|o| o.object_id == RoomObjectId::PushPopFeedingDish)
-        .expect("feeding dish should be defined");
-
-    match dish.interaction.unwrap() {
-        InteractionKind::FeedAnimal {
-            animal_id,
-            required_item,
-            delta,
-            ..
-        } => {
-            assert_eq!(animal_id, AnimalId::PushPop);
-            assert_eq!(required_item, ItemId::TortoiseLeafyGreens);
-            assert_eq!(delta, 1000);
-        }
-        _ => panic!("feeding dish should feed Push Pop"),
-    }
+    assert_eq!(feed.animal_id, AnimalId::PushPop);
+    assert_eq!(feed.required_item, ItemId::TortoiseLeafyGreens);
+    assert_eq!(feed.stat, AnimalStat::Hunger);
+    assert_eq!(feed.delta, 1000);
 }

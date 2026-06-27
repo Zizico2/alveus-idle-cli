@@ -1,11 +1,14 @@
 use bevy::prelude::*;
 use rand::prelude::*;
-use crate::components::{CurrentTilePosition, DesiredTilePosition, TilePosition};
-use crate::content::{tile_in_bounds, PUSH_POP_PLACEMENT};
+use crate::collision::{
+    collision_key_for_animal, walkable_neighbors, CollisionMapKey, CollisionMasks,
+    DynamicObstacleTiles, LiveObstacleItem,
+};
+use crate::components::{CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure, TilePosition};
+use crate::content::animal_default_placement;
 use crate::demo::level::TILE_SIZE;
-use crate::interaction::AnimalFedEvent;
 use crate::screens::{InRoom, Screen};
-use crate::stats::AnimalId;
+use crate::stats::{AnimalBackgroundWander, AnimalEnclosure, AnimalId, AnimalTilePosition, EnclosureId};
 
 pub struct AnimalsPlugin;
 
@@ -17,10 +20,14 @@ impl Plugin for AnimalsPlugin {
                 tick_animal_wander,
                 start_animal_movement,
                 apply_animal_movement,
+                sync_npc_position_to_stats,
             )
                 .run_if(in_state(Screen::InRoom(InRoom::PushPopEnclosure))),
         )
-        .add_observer(react_to_feeding);
+        .add_systems(
+            Update,
+            tick_background_animal_wander.run_if(in_state(Screen::Gameplay)),
+        );
     }
 }
 
@@ -35,7 +42,6 @@ pub struct WanderInZone {
     pub idle_timer: Timer,
     pub move_timer: Timer,
     pub target: Option<TilePosition>,
-    pub eating_timer: Option<Timer>,
 }
 
 impl WanderInZone {
@@ -45,7 +51,6 @@ impl WanderInZone {
             idle_timer: Timer::from_seconds(2.0, TimerMode::Repeating),
             move_timer: Timer::from_seconds(0.35, TimerMode::Once),
             target: None,
-            eating_timer: None,
         }
     }
 }
@@ -54,9 +59,10 @@ pub fn spawn_push_pop_npc(
     parent: &mut ChildSpawnerCommands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
-    home: TilePosition,
+    tile: TilePosition,
 ) {
-    let placement = PUSH_POP_PLACEMENT;
+    let placement = animal_default_placement(AnimalId::PushPop)
+        .expect("Push Pop must have placement config");
     let mesh = meshes.add(Circle::new(14.0));
     let material = materials.add(Color::srgb(0.45, 0.55, 0.30));
 
@@ -65,25 +71,36 @@ pub fn spawn_push_pop_npc(
         AnimalNpc {
             animal_id: AnimalId::PushPop,
         },
+        DynamicObstacle,
+        InEnclosure(EnclosureId::PushPopEnclosure),
         WanderInZone::new(placement.wander_bounds),
-        CurrentTilePosition(home),
-        DesiredTilePosition(home),
+        CurrentTilePosition(tile),
+        DesiredTilePosition(tile),
         Mesh2d(mesh),
         MeshMaterial2d(material),
         Transform::from_xyz(
-            home.x as f32 * TILE_SIZE as f32,
-            home.y as f32 * TILE_SIZE as f32,
+            tile.x as f32 * TILE_SIZE as f32,
+            tile.y as f32 * TILE_SIZE as f32,
             0.5,
         ),
     ));
 }
 
-fn tick_animal_wander(
+fn tick_background_animal_wander(
     time: Res<Time>,
-    mut query: Query<(&CurrentTilePosition, &mut WanderInZone)>,
+    masks: Res<CollisionMasks>,
+    persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    live_obstacles: Query<LiveObstacleItem<'_>>,
+    mut query: Query<(
+        Entity,
+        &AnimalEnclosure,
+        &mut AnimalTilePosition,
+        &mut AnimalBackgroundWander,
+    )>,
 ) {
-    for (pos, mut wander) in &mut query {
-        if wander.eating_timer.is_some() || wander.target.is_some() {
+    for (entity, enclosure, mut pos, mut wander) in &mut query {
+        let key = CollisionMapKey::Enclosure(enclosure.0);
+        if !masks.contains(key) {
             continue;
         }
 
@@ -93,10 +110,69 @@ fn tick_animal_wander(
         }
 
         let mut rng = rand::rng();
-        let candidates = adjacent_tiles(pos.0)
-            .into_iter()
-            .filter(|tile| tile_in_bounds(*tile, wander.bounds))
-            .collect::<Vec<_>>();
+        let candidates = walkable_neighbors(
+            pos.0,
+            wander.bounds,
+            key,
+            &masks,
+            &persisted_obstacles,
+            &live_obstacles,
+            Some(entity),
+        );
+
+        if let Some(target) = candidates.choose(&mut rng).copied() {
+            pos.0 = target;
+        }
+    }
+}
+
+fn sync_npc_position_to_stats(
+    npc_query: Query<(&AnimalNpc, &CurrentTilePosition), Changed<CurrentTilePosition>>,
+    mut stats_query: Query<(&AnimalId, &mut AnimalTilePosition)>,
+) {
+    for (npc, pos) in &npc_query {
+        for (id, mut saved) in &mut stats_query {
+            if *id == npc.animal_id {
+                saved.0 = pos.0;
+            }
+        }
+    }
+}
+
+fn tick_animal_wander(
+    time: Res<Time>,
+    masks: Res<CollisionMasks>,
+    persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    live_obstacles: Query<LiveObstacleItem<'_>>,
+    mut query: Query<(Entity, &AnimalNpc, &CurrentTilePosition, &mut WanderInZone)>,
+) {
+    for (entity, npc, pos, mut wander) in &mut query {
+        let Some(key) = collision_key_for_animal(npc.animal_id) else {
+            continue;
+        };
+        if !masks.contains(key) {
+            continue;
+        }
+
+        if wander.target.is_some() {
+            continue;
+        }
+
+        wander.idle_timer.tick(time.delta());
+        if !wander.idle_timer.just_finished() {
+            continue;
+        }
+
+        let mut rng = rand::rng();
+        let candidates = walkable_neighbors(
+            pos.0,
+            wander.bounds,
+            key,
+            &masks,
+            &persisted_obstacles,
+            &live_obstacles,
+            Some(entity),
+        );
 
         if let Some(target) = candidates.choose(&mut rng).copied() {
             wander.target = Some(target);
@@ -107,21 +183,22 @@ fn tick_animal_wander(
 
 fn start_animal_movement(
     time: Res<Time>,
+    masks: Res<CollisionMasks>,
+    persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    live_obstacles: Query<LiveObstacleItem<'_>>,
     mut query: Query<(
+        Entity,
+        &AnimalNpc,
         &CurrentTilePosition,
         &mut DesiredTilePosition,
         &mut WanderInZone,
         &mut Transform,
     )>,
 ) {
-    for (current, mut desired, mut wander, mut transform) in &mut query {
-        if let Some(timer) = wander.eating_timer.as_mut() {
-            timer.tick(time.delta());
-            if timer.is_finished() {
-                wander.eating_timer = None;
-            }
+    for (entity, npc, current, mut desired, mut wander, mut transform) in &mut query {
+        let Some(key) = collision_key_for_animal(npc.animal_id) else {
             continue;
-        }
+        };
 
         let Some(target) = wander.target else {
             continue;
@@ -134,7 +211,18 @@ fn start_animal_movement(
 
         wander.move_timer.tick(time.delta());
         if wander.move_timer.is_finished() {
-            desired.0 = target;
+            if masks.contains(key)
+                && crate::collision::is_walkable(
+                    &masks,
+                    &persisted_obstacles,
+                    &live_obstacles,
+                    key,
+                    target,
+                    Some(entity),
+                )
+            {
+                desired.0 = target;
+            }
             wander.target = None;
             continue;
         }
@@ -166,71 +254,6 @@ fn apply_animal_movement(
         transform.translation.y = world.y;
         wander.move_timer.reset();
     }
-}
-
-fn react_to_feeding(
-    trigger: On<AnimalFedEvent>,
-    mut query: Query<(
-        &AnimalNpc,
-        &mut WanderInZone,
-        &mut DesiredTilePosition,
-        &CurrentTilePosition,
-    )>,
-) {
-    let event = trigger.event();
-    for (npc, mut wander, mut desired, current) in &mut query {
-        if npc.animal_id != event.animal {
-            continue;
-        }
-
-        wander.target = None;
-        wander.eating_timer = Some(Timer::from_seconds(1.5, TimerMode::Once));
-        desired.0 = adjacent_toward(current.0, event.dish_position);
-    }
-}
-
-fn adjacent_toward(from: TilePosition, goal: TilePosition) -> TilePosition {
-    if from == goal {
-        return from;
-    }
-
-    let dx = goal.x as i32 - from.x as i32;
-    let dy = goal.y as i32 - from.y as i32;
-
-    if dx.abs() >= dy.abs() && dx != 0 {
-        TilePosition {
-            x: from.x.saturating_add_signed(dx.signum()),
-            y: from.y,
-        }
-    } else if dy != 0 {
-        TilePosition {
-            x: from.x,
-            y: from.y.saturating_add_signed(dy.signum()),
-        }
-    } else {
-        from
-    }
-}
-
-fn adjacent_tiles(tile: TilePosition) -> [TilePosition; 4] {
-    [
-        TilePosition {
-            x: tile.x.saturating_sub(1),
-            y: tile.y,
-        },
-        TilePosition {
-            x: tile.x + 1,
-            y: tile.y,
-        },
-        TilePosition {
-            x: tile.x,
-            y: tile.y.saturating_sub(1),
-        },
-        TilePosition {
-            x: tile.x,
-            y: tile.y + 1,
-        },
-    ]
 }
 
 fn tile_to_world(tile: TilePosition) -> Vec2 {

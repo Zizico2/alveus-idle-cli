@@ -31,7 +31,7 @@
   },
   {
     "id": 3,
-    "name": "alveus_idle_cli::components::Obstacle",
+    "name": "alveus_idle_cli::components::DynamicObstacle",
     "type": "class",
     "useAs": [
       "property"
@@ -42,6 +42,46 @@
   },
   {
     "id": 4,
+    "name": "alveus_idle_cli::components::InEnclosure",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "propertyType": "alveus_idle_cli::stats::EnclosureId",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "name": "alveus_idle_cli::components::Obstacle",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 6,
+    "name": "alveus_idle_cli::components::PersistedDynamicObstacle",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 7,
     "name": "alveus_idle_cli::components::TilePosition",
     "type": "class",
     "useAs": [
@@ -59,6 +99,539 @@
         "name": "y",
         "type": "int",
         "value": 0
+      }
+    ]
+  },
+  {
+    "id": 31,
+    "name": "alveus_idle_cli::content::ItemId",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::content::ItemId:::Variant",
+        "type": "class",
+        "value": "TortoiseLeafyGreens"
+      }
+    ]
+  },
+  {
+    "id": 30,
+    "name": "alveus_idle_cli::content::ItemId:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "TortoiseLeafyGreens",
+      "ChickenGrains"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 9,
+    "name": "alveus_idle_cli::content::RoomObjectId",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::content::RoomObjectId:::Variant",
+        "type": "class",
+        "value": "DietFridge"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "name": "alveus_idle_cli::content::RoomObjectId:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "DietFridge",
+      "SeedChest",
+      "PushPopFeedingDish"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 10,
+    "name": "alveus_idle_cli::interaction::FeedAnimal",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "animal_id",
+        "propertyType": "alveus_idle_cli::stats::AnimalId",
+        "type": "string",
+        "value": null
+      },
+      {
+        "name": "required_item",
+        "propertyType": "alveus_idle_cli::content::ItemId",
+        "type": "string",
+        "value": null
+      },
+      {
+        "name": "stat",
+        "propertyType": "alveus_idle_cli::stats::AnimalStat",
+        "type": "string",
+        "value": null
+      },
+      {
+        "name": "delta",
+        "type": "int",
+        "value": null
+      },
+      {
+        "name": "prompt",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "name": "alveus_idle_cli::interaction::GiveItem",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "item_id",
+        "propertyType": "alveus_idle_cli::content::ItemId",
+        "type": "string",
+        "value": null
+      },
+      {
+        "name": "prompt",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "name": "alveus_idle_cli::interaction::Interactable",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 13,
+    "name": "alveus_idle_cli::interaction::PlayerSatchel",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "item",
+        "propertyType": "core::option::Option<alveus_idle_cli::content::ItemId>",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 14,
+    "name": "alveus_idle_cli::stats::AnimalDecayAccumulators",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "hunger",
+        "type": "float",
+        "value": null
+      },
+      {
+        "name": "happiness",
+        "type": "float",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "name": "alveus_idle_cli::stats::AnimalDecayRates",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "hunger_rate",
+        "type": "float",
+        "value": null
+      },
+      {
+        "name": "happiness_rate",
+        "type": "float",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "name": "alveus_idle_cli::stats::AnimalEnclosure",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "propertyType": "alveus_idle_cli::stats::EnclosureId",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 18,
+    "name": "alveus_idle_cli::stats::AnimalId",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::stats::AnimalId:::Variant",
+        "type": "class",
+        "value": "Polly"
+      }
+    ]
+  },
+  {
+    "id": 17,
+    "name": "alveus_idle_cli::stats::AnimalId:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "Polly",
+      "PushPop",
+      "Stompy",
+      "Georgie",
+      "Siren"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 19,
+    "name": "alveus_idle_cli::stats::AnimalName",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 33,
+    "name": "alveus_idle_cli::stats::AnimalStat",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::stats::AnimalStat:::Variant",
+        "type": "class",
+        "value": "Hunger"
+      }
+    ]
+  },
+  {
+    "id": 32,
+    "name": "alveus_idle_cli::stats::AnimalStat:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "Hunger",
+      "Happiness",
+      "Cleanliness"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 20,
+    "name": "alveus_idle_cli::stats::AnimalStats",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "hunger",
+        "type": "int",
+        "value": null
+      },
+      {
+        "name": "happiness",
+        "type": "int",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 21,
+    "name": "alveus_idle_cli::stats::AnimalTilePosition",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "propertyType": "alveus_idle_cli::components::TilePosition",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 22,
+    "name": "alveus_idle_cli::stats::EnclosureDecayAccumulators",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "cleanliness",
+        "type": "float",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 23,
+    "name": "alveus_idle_cli::stats::EnclosureDecayRates",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "cleanliness_rate",
+        "type": "float",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 25,
+    "name": "alveus_idle_cli::stats::EnclosureId",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_idle_cli::stats::EnclosureId:::Variant",
+        "type": "class",
+        "value": "NutritionHousePlaypen"
+      }
+    ]
+  },
+  {
+    "id": 24,
+    "name": "alveus_idle_cli::stats::EnclosureId:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "NutritionHousePlaypen",
+      "PushPopEnclosure",
+      "Pasture",
+      "ReptileEnclosure"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 26,
+    "name": "alveus_idle_cli::stats::EnclosureName",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 27,
+    "name": "alveus_idle_cli::stats::EnclosureStats",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "cleanliness",
+        "type": "int",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 28,
+    "name": "alveus_idle_cli::stats::SanctuaryUpkeep",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "score",
+        "type": "float",
+        "value": null
+      },
+      {
+        "name": "mean_hunger",
+        "type": "float",
+        "value": null
+      },
+      {
+        "name": "mean_cleanliness",
+        "type": "float",
+        "value": null
+      },
+      {
+        "name": "mean_happiness",
+        "type": "float",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 29,
+    "name": "alveus_idle_cli::stats::SaveTimestamp",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "value",
+        "type": "int",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 36,
+    "name": "core::option::Option<alveus_idle_cli::content::ItemId>",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "core::option::Option<alveus_idle_cli::content::ItemId>:::Variant",
+        "type": "class",
+        "value": "None"
+      },
+      {
+        "name": "Some",
+        "propertyType": "core::option::Option<alveus_idle_cli::content::ItemId>::Some",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 34,
+    "name": "core::option::Option<alveus_idle_cli::content::ItemId>:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "None",
+      "Some"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 35,
+    "name": "core::option::Option<alveus_idle_cli::content::ItemId>::Some",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "propertyType": "alveus_idle_cli::content::ItemId",
+        "type": "string",
+        "value": null
       }
     ]
   }

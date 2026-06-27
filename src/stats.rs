@@ -1,8 +1,17 @@
 use bevy::prelude::*;
 use moonshine_save::prelude::*;
+use rand::rng;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
+use crate::components::TilePosition;
+use crate::collision::{
+    apply_daily_dynamic_spawns, random_wander_step, CollisionMapKey, CollisionMasks,
+    DynamicObstacleTiles, LiveObstacleItem, OFFLINE_DAY_HOURS,
+};
+use crate::content::{
+    default_tile_position, enclosure_for_animal, OFFLINE_WANDER_STEPS_PER_HOUR,
+};
 use crate::AppSystems;
 
 // ---------------------------------------------------------
@@ -69,6 +78,26 @@ pub struct AnimalDecayAccumulators {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 #[reflect(Component)]
 pub struct AnimalEnclosure(pub EnclosureId);
+
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+#[require(Save, Unload)]
+pub struct AnimalTilePosition(pub TilePosition);
+
+#[derive(Component, Debug, Clone)]
+pub struct AnimalBackgroundWander {
+    pub bounds: crate::content::TileBounds,
+    pub idle_timer: Timer,
+}
+
+impl AnimalBackgroundWander {
+    pub fn new(bounds: crate::content::TileBounds) -> Self {
+        Self {
+            bounds,
+            idle_timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+        }
+    }
+}
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
 #[reflect(Component)]
@@ -167,6 +196,12 @@ pub struct SanctuaryUpkeep {
     pub mean_happiness: f32,
 }
 
+/// Offline wander steps to apply once collision masks are ready.
+#[derive(Resource, Debug, Default)]
+pub struct PendingOfflineWander {
+    pub steps: u32,
+}
+
 // ---------------------------------------------------------
 // Hardcoded Animal Data (Sync with design/data/animals.json)
 // ---------------------------------------------------------
@@ -220,12 +255,13 @@ pub const ANIMALS_DATA: &[AnimalStaticData] = &[
     },
 ];
 
-fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
-    match animal_id {
-        AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
-        AnimalId::PushPop => EnclosureId::PushPopEnclosure,
-        AnimalId::Stompy => EnclosureId::Pasture,
-        AnimalId::Georgie | AnimalId::Siren => EnclosureId::ReptileEnclosure,
+fn animal_world_components(animal_id: AnimalId) -> (Option<AnimalTilePosition>, Option<AnimalBackgroundWander>) {
+    match crate::content::animal_default_placement(animal_id) {
+        Some(placement) => (
+            Some(AnimalTilePosition(placement.home_position)),
+            Some(AnimalBackgroundWander::new(placement.wander_bounds)),
+        ),
+        None => (None, None),
     }
 }
 
@@ -256,11 +292,14 @@ impl Plugin for StatsPlugin {
         app.init_resource::<SavePath>()
             .register_type::<SaveTimestamp>()
             .register_type::<AnimalId>()
+            .register_type::<AnimalStat>()
             .register_type::<AnimalName>()
             .register_type::<AnimalStats>()
             .register_type::<AnimalDecayRates>()
             .register_type::<AnimalDecayAccumulators>()
             .register_type::<AnimalEnclosure>()
+            .register_type::<AnimalTilePosition>()
+            .register_type::<DynamicObstacleTiles>()
             .register_type::<EnclosureId>()
             .register_type::<EnclosureName>()
             .register_type::<EnclosureStats>()
@@ -268,11 +307,14 @@ impl Plugin for StatsPlugin {
             .register_type::<EnclosureDecayAccumulators>()
             .register_type::<SanctuaryUpkeep>()
             .init_resource::<SanctuaryUpkeep>()
+            .init_resource::<PendingOfflineWander>()
             .init_resource::<AutoSaveTimer>()
             .init_resource::<DebugLogTimer>()
             .add_observer(save_on_default_event)
             .add_observer(load_on_default_event)
             .add_observer(hydrate_loaded_stats_observer)
+            .add_systems(Update, ensure_animal_world_state)
+            .add_systems(Update, ensure_dynamic_obstacle_tiles)
             // Register decoupled observers
             .add_observer(improve_stat_observer)
             .add_observer(worsen_stat_observer)
@@ -297,6 +339,13 @@ impl Plugin for StatsPlugin {
                 .in_set(AppSystems::DecayCalculation)
                 .run_if(in_gameplay_or_room)
                 .run_if(any_with_component::<SaveTimestamp>),
+        );
+        app.add_systems(
+            Update,
+            apply_offline_wander_system
+                .in_set(AppSystems::DecayCalculation)
+                .run_if(in_gameplay_or_room)
+                .run_if(|pending: Res<PendingOfflineWander>| pending.steps > 0),
         );
     }
 }
@@ -487,11 +536,10 @@ fn worsen_stat_observer(
 fn is_valid_save_format(content: &str) -> bool {
     if let Ok(ron::Value::Map(map)) = ron::from_str::<ron::Value>(content) {
         for key in map.keys() {
-            if let ron::Value::String(s) = key {
-                if s == "resources" || s == "entities" {
+            if let ron::Value::String(s) = key
+                && (s == "resources" || s == "entities") {
                     return true;
                 }
-            }
         }
     }
     false
@@ -542,6 +590,7 @@ fn spawn_default_stats(commands: &mut Commands) {
             EnclosureStats { cleanliness: 1000 },
             EnclosureDecayRates { cleanliness_rate },
             EnclosureDecayAccumulators::default(),
+            DynamicObstacleTiles::default(),
         ));
     }
 
@@ -554,8 +603,9 @@ fn spawn_default_stats(commands: &mut Commands) {
         };
 
         let enc_id = enclosure_for_animal(animal.animal_id);
+        let (tile_position, background_wander) = animal_world_components(animal.animal_id);
 
-        commands.spawn((
+        let mut entity = commands.spawn((
             Name::new(format!("Persistent Stats - {}", display_name)),
             animal.animal_id,
             AnimalName(display_name),
@@ -567,6 +617,13 @@ fn spawn_default_stats(commands: &mut Commands) {
             decay_rates,
             AnimalDecayAccumulators::default(),
         ));
+
+        if let Some(pos) = tile_position {
+            entity.insert(pos);
+        }
+        if let Some(wander) = background_wander {
+            entity.insert(wander);
+        }
     }
 }
 
@@ -591,6 +648,7 @@ fn spawn_missing_stat_entities(
             EnclosureStats { cleanliness: 1000 },
             EnclosureDecayRates { cleanliness_rate },
             EnclosureDecayAccumulators::default(),
+            DynamicObstacleTiles::default(),
         ));
     }
 
@@ -606,7 +664,9 @@ fn spawn_missing_stat_entities(
             hunger_rate: animal.hunger_decay_rate * 1000.0,
             happiness_rate: animal.happiness_decay_rate * 1000.0,
         };
-        commands.spawn((
+        let (tile_position, background_wander) = animal_world_components(animal.animal_id);
+
+        let mut entity = commands.spawn((
             Name::new(format!("Persistent Stats - {}", animal.display_name)),
             animal.animal_id,
             AnimalName(animal.display_name.to_string()),
@@ -618,6 +678,13 @@ fn spawn_missing_stat_entities(
             decay_rates,
             AnimalDecayAccumulators::default(),
         ));
+
+        if let Some(pos) = tile_position {
+            entity.insert(pos);
+        }
+        if let Some(wander) = background_wander {
+            entity.insert(wander);
+        }
     }
 }
 
@@ -657,6 +724,7 @@ fn hydrate_loaded_stats_observer(
                 EnclosureName(enc_name.to_string()),
                 EnclosureDecayRates { cleanliness_rate },
                 EnclosureDecayAccumulators::default(),
+                DynamicObstacleTiles::default(),
             ));
         }
     }
@@ -664,11 +732,44 @@ fn hydrate_loaded_stats_observer(
     spawn_missing_stat_entities(&mut commands, &animal_query, &enclosure_query);
 }
 
+fn ensure_animal_world_state(
+    mut commands: Commands,
+    missing_position: Query<(Entity, &AnimalId), Without<AnimalTilePosition>>,
+    missing_wander: Query<(Entity, &AnimalId), (With<AnimalTilePosition>, Without<AnimalBackgroundWander>)>,
+) {
+    for (entity, id) in &missing_position {
+        if let Some(pos) = default_tile_position(*id) {
+            commands.entity(entity).insert(AnimalTilePosition(pos));
+        }
+    }
+
+    for (entity, id) in &missing_wander {
+        if let Some(placement) = crate::content::animal_default_placement(*id) {
+            commands
+                .entity(entity)
+                .insert(AnimalBackgroundWander::new(placement.wander_bounds));
+        }
+    }
+}
+
+fn ensure_dynamic_obstacle_tiles(
+    mut commands: Commands,
+    missing: Query<(Entity, &EnclosureId), Without<DynamicObstacleTiles>>,
+) {
+    for (entity, _) in &missing {
+        commands
+            .entity(entity)
+            .insert(DynamicObstacleTiles::default());
+    }
+}
+
 fn apply_offline_decay_system(
     mut commands: Commands,
+    masks: Option<Res<CollisionMasks>>,
     timestamp_query: Query<(Entity, &SaveTimestamp)>,
     animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
     enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates)>,
+    dynamic_enclosure_query: Query<(&EnclosureId, &mut DynamicObstacleTiles)>,
 ) {
     let Ok((timestamp_entity, timestamp)) = timestamp_query.single() else {
         return;
@@ -733,9 +834,69 @@ fn apply_offline_decay_system(
                 });
             }
         }
+
+        let wander_steps = (hours_elapsed * OFFLINE_WANDER_STEPS_PER_HOUR).round() as u32;
+        if wander_steps > 0 {
+            commands.insert_resource(PendingOfflineWander {
+                steps: wander_steps,
+            });
+        }
+
+        if hours_elapsed >= OFFLINE_DAY_HOURS
+            && let Some(masks) = masks.as_ref() {
+                apply_daily_dynamic_spawns(masks, dynamic_enclosure_query);
+            }
     }
 
     commands.entity(timestamp_entity).despawn();
+}
+
+fn apply_offline_wander_system(
+    mut pending: ResMut<PendingOfflineWander>,
+    masks: Option<Res<CollisionMasks>>,
+    persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    live_obstacles: Query<LiveObstacleItem<'_>>,
+    mut wander_query: Query<(
+        Entity,
+        &AnimalEnclosure,
+        &mut AnimalTilePosition,
+        &AnimalBackgroundWander,
+    )>,
+) {
+    if pending.steps == 0 {
+        return;
+    }
+
+    let Some(masks) = masks else {
+        return;
+    };
+
+    for (_, enclosure, _, _) in &wander_query {
+        let key = CollisionMapKey::Enclosure(enclosure.0);
+        if !masks.contains(key) {
+            return;
+        }
+    }
+
+    let steps = pending.steps;
+    let mut rng = rng();
+    for (entity, enclosure, mut pos, wander) in &mut wander_query {
+        let key = CollisionMapKey::Enclosure(enclosure.0);
+        for _ in 0..steps {
+            pos.0 = random_wander_step(
+                pos.0,
+                wander.bounds,
+                key,
+                &masks,
+                &persisted_obstacles,
+                &live_obstacles,
+                Some(entity),
+                &mut rng,
+            );
+        }
+    }
+
+    pending.steps = 0;
 }
 
 /// Continuous decay calculation in real-time when game is running.
@@ -882,6 +1043,8 @@ fn save_stats_periodically_system(
             .allow::<SaveTimestamp>()
             .allow::<AnimalId>()
             .allow::<AnimalStats>()
+            .allow::<AnimalTilePosition>()
+            .allow::<DynamicObstacleTiles>()
             .allow::<EnclosureId>()
             .allow::<EnclosureStats>();
         commands.trigger_save(save);

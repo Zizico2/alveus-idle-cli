@@ -41,7 +41,7 @@ fn update_animation_timer(time: Res<Time>, mut query: Query<&mut PlayerAnimation
 
 /// Update the sprite direction and animation state (idling/walking).
 fn update_animation_movement(
-    mut player_query: Query<(&MovementController, &mut Sprite, &mut PlayerAnimation)>,
+    _player_query: Query<(&MovementController, &mut Sprite, &mut PlayerAnimation)>,
 ) {
     // DISABLED
     // for (controller, mut sprite, mut animation) in &mut player_query {

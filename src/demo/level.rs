@@ -1,15 +1,13 @@
 //! Spawn the main level.
 
-use std::{env, path::PathBuf};
+use std::env;
 
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::{regex::RegexSet, *};
 
 use crate::{
     asset_tracking::LoadResource,
-    audio::music,
-    components::{CurrentTilePosition, DesiredTilePosition, TilePosition},
-    components::Obstacle,
+    components::{CurrentTilePosition, DesiredTilePosition},
     demo::player::{PlayerAssets, player},
     demo::room::PlayerSpawnPoint,
     screens::Screen,
@@ -32,13 +30,18 @@ pub(super) fn plugin(app: &mut App) {
         //     "alveus_idle::components::BuildingEntrance".into(),
         // ]),
         tiled_types_filter: TiledFilter::from(
-            RegexSet::new([r"^alveus_idle_cli::components::.*"]).unwrap(),
+            RegexSet::new([
+                r"^alveus_idle_cli::components::.*",
+                r"^alveus_idle_cli::content::.*",
+                r"^alveus_idle_cli::interaction::.*",
+                r"^alveus_idle_cli::stats::.*",
+            ])
+            .unwrap(),
         ),
     }))
     // .init_asset::<TiledMapAsset>()
     .load_resource::<LevelAssets>()
-    .load_resource::<InteriorAssets>()
-    .add_observer(bridge_obstacle_tile_position);
+    .load_resource::<InteriorAssets>();
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]
@@ -47,9 +50,9 @@ pub struct LevelAssets {
     // #[dependency]
     // music: Handle<AudioSource>,
     #[dependency]
-    enter_building_toast: Handle<Image>,
+    pub enter_building_toast: Handle<Image>,
     #[dependency]
-    map: Handle<TiledMapAsset>,
+    pub map: Handle<TiledMapAsset>,
 }
 
 impl FromWorld for LevelAssets {
@@ -82,26 +85,14 @@ impl FromWorld for InteriorAssets {
     }
 }
 
-/// Tiles with the `Obstacle` custom property get `TilePos` from bevy_ecs_tilemap but
-/// movement collision queries our `TilePosition`. Bridge the two when obstacle tiles spawn.
-fn bridge_obstacle_tile_position(
-    event: On<TiledEvent<TileCreated>>,
-    mut commands: Commands,
-    tiles: Query<&Obstacle>,
-) {
-    let Some(pos) = event.get_tile_pos() else {
-        return;
-    };
-
-    let entity = event
-        .get_tile_entity()
-        .unwrap_or(event.entity);
-
-    if tiles.get(entity).is_err() {
-        return;
+impl InteriorAssets {
+    pub fn collision_entries(&self) -> [(crate::stats::EnclosureId, Handle<TiledMapAsset>); 2] {
+        use crate::stats::EnclosureId;
+        [
+            (EnclosureId::NutritionHousePlaypen, self.nutrition_house.clone()),
+            (EnclosureId::PushPopEnclosure, self.push_pop_enclosure.clone()),
+        ]
     }
-
-    commands.entity(entity).insert(TilePosition { x: pos.x, y: pos.y });
 }
 
 /// A system that spawns the main level.

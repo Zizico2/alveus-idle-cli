@@ -16,6 +16,7 @@ pub mod stats;
 pub mod content;
 pub mod interaction;
 pub mod animals;
+pub mod collision;
 pub mod hud;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
@@ -63,7 +64,15 @@ impl Plugin for AppPlugin {
             .register_type::<components::TileGroup>()
             .register_type::<components::RectangleTileGroup>()
             .register_type::<components::TilePosition>()
-            .register_type::<components::Obstacle>();
+            .register_type::<components::Obstacle>()
+            .register_type::<components::DynamicObstacle>()
+            .register_type::<components::InEnclosure>()
+            .register_type::<components::PersistedDynamicObstacle>()
+            .register_type::<content::RoomObjectId>()
+            .register_type::<content::ItemId>()
+            .register_type::<interaction::Interactable>()
+            .register_type::<interaction::GiveItem>()
+            .register_type::<interaction::FeedAnimal>();
 
         app.add_plugins((
             asset_tracking::plugin,
@@ -76,6 +85,7 @@ impl Plugin for AppPlugin {
             theme::plugin,
             bevy_tweening::TweeningPlugin,
             stats::StatsPlugin,
+            collision::CollisionPlugin,
             interaction::InteractionPlugin,
             animals::AnimalsPlugin,
             hud::HudPlugin,

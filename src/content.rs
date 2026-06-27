@@ -1,9 +1,9 @@
 //! Hardcoded game content synced with `design/data/*.json` and `design/rooms/*.json`.
-//! Do not load these files at runtime.
+//! Placement for room objects and animals comes from Tiled maps; interaction rules live here.
 
 use bevy::prelude::*;
 use crate::components::TilePosition;
-use crate::stats::{AnimalId, AnimalStat};
+use crate::stats::{AnimalId, EnclosureId};
 
 // ---------------------------------------------------------
 // Items (sync with design/data/items.json)
@@ -52,79 +52,27 @@ pub fn item_display_name(item_id: ItemId) -> &'static str {
 // Room objects & interactions (sync with design/rooms/*.json)
 // ---------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+/// Identifies an interactable room object. Authored on interior tiles via Tiled custom properties.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
+#[reflect(Component, Default)]
 pub enum RoomObjectId {
+    #[default]
     DietFridge,
     SeedChest,
     PushPopFeedingDish,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub enum InteractionKind {
-    GiveItem {
-        item_id: ItemId,
-        prompt: &'static str,
-    },
-    FeedAnimal {
-        animal_id: AnimalId,
-        required_item: ItemId,
-        stat: AnimalStat,
-        delta: u32,
-        prompt: &'static str,
-    },
+pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
+    match object_id {
+        RoomObjectId::DietFridge => "Diet Fridge",
+        RoomObjectId::SeedChest => "Seed Chest",
+        RoomObjectId::PushPopFeedingDish => "Push Pop's Feeding Dish",
+    }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RoomObjectDef {
-    pub object_id: RoomObjectId,
-    pub display_name: &'static str,
-    pub position: TilePosition,
-    pub is_obstacle: bool,
-    pub interaction: Option<InteractionKind>,
-    pub color: Color,
-}
-
-/// Sync with design/rooms/nutrition_house.json objects (MVP subset).
-pub const NUTRITION_HOUSE_OBJECTS: &[RoomObjectDef] = &[
-    RoomObjectDef {
-        object_id: RoomObjectId::DietFridge,
-        display_name: "Diet Fridge",
-        position: TilePosition { x: 2, y: 8 },
-        is_obstacle: true,
-        interaction: Some(InteractionKind::GiveItem {
-            item_id: ItemId::TortoiseLeafyGreens,
-            prompt: "Scoop tortoise leafy greens",
-        }),
-        color: Color::srgb(0.75, 0.78, 0.80),
-    },
-    RoomObjectDef {
-        object_id: RoomObjectId::SeedChest,
-        display_name: "Seed Chest",
-        position: TilePosition { x: 2, y: 5 },
-        is_obstacle: true,
-        interaction: Some(InteractionKind::GiveItem {
-            item_id: ItemId::ChickenGrains,
-            prompt: "Scoop chicken grains",
-        }),
-        color: Color::srgb(0.60, 0.40, 0.10),
-    },
-];
-
-/// Sync with design/rooms/push_pop_enclosure.json objects.
-pub const PUSH_POP_ENCLOSURE_OBJECTS: &[RoomObjectDef] = &[RoomObjectDef {
-    object_id: RoomObjectId::PushPopFeedingDish,
-    display_name: "Push Pop's Feeding Dish",
-    position: TilePosition { x: 8, y: 6 },
-    is_obstacle: true,
-    interaction: Some(InteractionKind::FeedAnimal {
-        animal_id: AnimalId::PushPop,
-        required_item: ItemId::TortoiseLeafyGreens,
-        stat: AnimalStat::Hunger,
-        delta: 1000,
-        prompt: "Place leafy greens for Push Pop",
-    }),
-    color: Color::srgb(0.55, 0.45, 0.30),
-}];
+// ---------------------------------------------------------
+// Animal placement (runtime; positions change over time)
+// ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub struct TileBounds {
@@ -139,7 +87,19 @@ pub struct AnimalPlacementDef {
     pub wander_bounds: TileBounds,
 }
 
+/// Sync with design/rooms/nutrition_house.json animals[0].
+/// `home_position` is the default tile for new saves only — not the runtime spawn point.
+pub const POLLY_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
+    animal_id: AnimalId::Polly,
+    home_position: TilePosition { x: 8, y: 4 },
+    wander_bounds: TileBounds {
+        bottom_left: TilePosition { x: 7, y: 1 },
+        top_right: TilePosition { x: 9, y: 5 },
+    },
+};
+
 /// Sync with design/rooms/push_pop_enclosure.json animals[0].
+/// `home_position` is the default tile for new saves only — not the runtime spawn point.
 pub const PUSH_POP_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
     animal_id: AnimalId::PushPop,
     home_position: TilePosition { x: 8, y: 4 },
@@ -148,6 +108,27 @@ pub const PUSH_POP_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
         top_right: TilePosition { x: 10, y: 8 },
     },
 };
+
+pub fn animal_default_placement(animal_id: AnimalId) -> Option<&'static AnimalPlacementDef> {
+    match animal_id {
+        AnimalId::Polly => Some(&POLLY_PLACEMENT),
+        AnimalId::PushPop => Some(&PUSH_POP_PLACEMENT),
+        _ => None,
+    }
+}
+
+pub fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
+    match animal_id {
+        AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
+        AnimalId::PushPop => EnclosureId::PushPopEnclosure,
+        AnimalId::Stompy => EnclosureId::Pasture,
+        AnimalId::Georgie | AnimalId::Siren => EnclosureId::ReptileEnclosure,
+    }
+}
+
+pub fn default_tile_position(animal_id: AnimalId) -> Option<TilePosition> {
+    animal_default_placement(animal_id).map(|placement| placement.home_position)
+}
 
 /// Returns true when the player tile is on or orthogonally adjacent to the object tile.
 pub fn can_interact(player: TilePosition, object: TilePosition) -> bool {
@@ -162,3 +143,27 @@ pub fn tile_in_bounds(tile: TilePosition, bounds: TileBounds) -> bool {
         && tile.y >= bounds.bottom_left.y
         && tile.y <= bounds.top_right.y
 }
+
+pub fn adjacent_tiles(tile: TilePosition) -> [TilePosition; 4] {
+    [
+        TilePosition {
+            x: tile.x.saturating_sub(1),
+            y: tile.y,
+        },
+        TilePosition {
+            x: tile.x + 1,
+            y: tile.y,
+        },
+        TilePosition {
+            x: tile.x,
+            y: tile.y.saturating_sub(1),
+        },
+        TilePosition {
+            x: tile.x,
+            y: tile.y + 1,
+        },
+    ]
+}
+
+/// Rough idle wander rate used for offline catch-up (steps per hour).
+pub const OFFLINE_WANDER_STEPS_PER_HOUR: f32 = 30.0;

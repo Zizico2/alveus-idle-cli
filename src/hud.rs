@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use crate::content::{item_display_name, InteractionKind};
+use crate::content::item_display_name;
 use crate::interaction::{
-    ActiveInteractionTarget, Interactable, LastPickupMessage, PlayerSatchel,
+    ActiveInteractionTarget, FeedAnimal, GiveItem, LastPickupMessage, PlayerSatchel,
 };
 use crate::screens::{InRoom, Screen};
 use crate::stats::{AnimalId, AnimalStats, SanctuaryUpkeep, AnimalStat};
@@ -595,7 +595,8 @@ fn update_room_feedback_hud_system(
     satchel: Res<PlayerSatchel>,
     pickup_message: Res<LastPickupMessage>,
     active: Res<ActiveInteractionTarget>,
-    interactable_query: Query<&Interactable>,
+    give_query: Query<&GiveItem>,
+    feed_query: Query<&FeedAnimal>,
     mut interaction_root: Query<
         &mut Node,
         (
@@ -640,13 +641,13 @@ fn update_room_feedback_hud_system(
 
     let prompt_message = if in_interactive_room {
         active.interactable.and_then(|entity| {
-            interactable_query.get(entity).ok().map(|interactable| {
-                let action = match interactable.interaction {
-                    InteractionKind::GiveItem { prompt, .. }
-                    | InteractionKind::FeedAnimal { prompt, .. } => prompt,
-                };
-                format!("Press [Space] to {action}")
-            })
+            if let Ok(give) = give_query.get(entity) {
+                return Some(format!("Press [Space] to {}", give.prompt));
+            }
+            if let Ok(feed) = feed_query.get(entity) {
+                return Some(format!("Press [Space] to {}", feed.prompt));
+            }
+            None
         })
     } else {
         None

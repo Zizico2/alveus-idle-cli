@@ -2,15 +2,14 @@ use bevy::prelude::*;
 use bevy::state::state::FreelyMutableState;
 use bevy_ecs_tiled::prelude::*;
 use crate::animals::spawn_push_pop_npc;
-use crate::components::{CurrentTilePosition, DesiredTilePosition, Obstacle, TilePosition, BuildingEntrance};
-use crate::content::{
-    PUSH_POP_ENCLOSURE_OBJECTS, PUSH_POP_PLACEMENT, NUTRITION_HOUSE_OBJECTS, RoomObjectDef,
-};
+use crate::collision::{resolve_spawn_tile, CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem};
+use crate::components::{BuildingEntrance, CurrentTilePosition, DesiredTilePosition, TilePosition};
+use crate::content::{animal_default_placement, default_tile_position};
 use crate::demo::level::{InteriorAssets, TILE_SIZE};
 use crate::demo::player::{player, Player, PlayerAssets};
 use crate::demo::toast::despawn_active_toast;
-use crate::interaction::Interactable;
 use crate::screens::{Screen, InRoom};
+use crate::stats::{AnimalId, AnimalTilePosition, EnclosureId};
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct PlayerSpawnPoint {
@@ -30,11 +29,12 @@ pub struct RoomConfig<S: States + FreelyMutableState> {
     pub room_state: S,
     pub gameplay_state: S,
     pub entrance: BuildingEntrance,
+    pub enclosure_id: EnclosureId,
     pub room_spawn: TilePosition,
     pub exit_spawn: TilePosition,
     pub exit_door: TilePosition,
     pub get_interior_map: fn(&InteriorAssets) -> Handle<TiledMapAsset>,
-    pub spawn_extras_fn: fn(&mut ChildSpawnerCommands, &mut Assets<Mesh>, &mut Assets<ColorMaterial>),
+    pub spawn_extras_fn: fn(&mut ChildSpawnerCommands, &mut Assets<Mesh>, &mut Assets<ColorMaterial>, TilePosition),
     pub room_title: String,
 }
 
@@ -44,6 +44,7 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
     let room_state = config.room_state.clone();
     let gameplay_state = config.gameplay_state.clone();
     let entrance = config.entrance;
+    let enclosure_id = config.enclosure_id;
     let room_spawn = config.room_spawn;
     let exit_spawn = config.exit_spawn;
     let exit_door = config.exit_door;
@@ -66,17 +67,32 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
             move |mut commands: Commands,
                   player_assets: Res<PlayerAssets>,
                   interior_assets: Res<InteriorAssets>,
+                  masks: Res<CollisionMasks>,
+                  persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+                  live_obstacles: Query<LiveObstacleItem<'_>>,
                   mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
                   mut meshes: ResMut<Assets<Mesh>>,
-                  mut materials: ResMut<Assets<ColorMaterial>>| {
-                
+                  mut materials: ResMut<Assets<ColorMaterial>>,
+                  animal_positions: Query<(&AnimalId, &AnimalTilePosition)>| {
+                let collision_key = CollisionMapKey::Enclosure(enclosure_id);
+
+                let push_pop_preferred = animal_positions
+                    .iter()
+                    .find(|(id, _)| **id == AnimalId::PushPop)
+                    .map(|(_, pos)| pos.0)
+                    .or_else(|| default_tile_position(AnimalId::PushPop))
+                    .expect("Push Pop must have a saved or default tile position");
+
+                let wander_bounds = animal_default_placement(AnimalId::PushPop)
+                    .expect("Push Pop must have placement config")
+                    .wander_bounds;
+
                 commands.spawn((
                     Name::new(format!("{} Room", room_title_for_spawner)),
                     Transform::default(),
                     Visibility::default(),
                     DespawnOnExit(enter_state_for_spawner.clone()),
                 )).with_children(|parent| {
-                    // Spawn Player
                     parent.spawn((
                         player(
                             400.0,
@@ -90,12 +106,21 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                         DesiredTilePosition(room_spawn),
                     ));
 
+                    let push_pop_tile = resolve_spawn_tile(
+                        push_pop_preferred,
+                        wander_bounds,
+                        collision_key,
+                        &masks,
+                        &persisted_obstacles,
+                        &live_obstacles,
+                        None,
+                    );
+
                     let map_handle = get_interior_map(&interior_assets);
                     spawn_interior_map(parent, map_handle);
-                    spawn_extras_fn(parent, &mut meshes, &mut materials);
+                    spawn_extras_fn(parent, &mut meshes, &mut materials, push_pop_tile);
                 });
             },
-            // Spawn Room UI overlay
             move |mut commands: Commands| {
                 commands.spawn((
                     Name::new("Room UI Root"),
@@ -125,7 +150,6 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
         )
     );
 
-    // Update enter transitions
     let enter_state = room_state.clone();
     let gp_state = gameplay_state.clone();
     app.add_systems(
@@ -141,7 +165,6 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
         .run_if(in_state(gp_state)),
     );
 
-    // Update exit transitions
     let enter_state = room_state.clone();
     let gp_state = gameplay_state.clone();
     app.add_systems(
@@ -191,9 +214,22 @@ fn push_pop_enclosure_map(assets: &InteriorAssets) -> Handle<TiledMapAsset> {
     assets.push_pop_enclosure.clone()
 }
 
-// ============================================
-// Nutrition House Room Specific Implementation
-// ============================================
+fn spawn_no_extras(
+    _parent: &mut ChildSpawnerCommands,
+    _meshes: &mut Assets<Mesh>,
+    _materials: &mut Assets<ColorMaterial>,
+    _tile: TilePosition,
+) {
+}
+
+fn spawn_push_pop_extras(
+    parent: &mut ChildSpawnerCommands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    tile: TilePosition,
+) {
+    spawn_push_pop_npc(parent, meshes, materials, tile);
+}
 
 pub struct NutritionHousePlugin;
 
@@ -203,11 +239,12 @@ impl Plugin for NutritionHousePlugin {
             room_state: Screen::InRoom(InRoom::NutritionHouse),
             gameplay_state: Screen::Gameplay,
             entrance: BuildingEntrance::NutritionHouse,
+            enclosure_id: EnclosureId::NutritionHousePlaypen,
             room_spawn: TilePosition { x: 5, y: 2 },
             exit_spawn: TilePosition { x: 33, y: 12 },
             exit_door: TilePosition { x: 5, y: 0 },
             get_interior_map: nutrition_house_map,
-            spawn_extras_fn: spawn_nutrition_house_extras,
+            spawn_extras_fn: spawn_no_extras,
             room_title: "Nutrition House".to_string(),
         });
     }
@@ -221,61 +258,13 @@ impl Plugin for PushPopEnclosurePlugin {
             room_state: Screen::InRoom(InRoom::PushPopEnclosure),
             gameplay_state: Screen::Gameplay,
             entrance: BuildingEntrance::PushPopEnclosure,
+            enclosure_id: EnclosureId::PushPopEnclosure,
             room_spawn: TilePosition { x: 6, y: 2 },
             exit_spawn: TilePosition { x: 40, y: 33 },
             exit_door: TilePosition { x: 6, y: 0 },
             get_interior_map: push_pop_enclosure_map,
-            spawn_extras_fn: spawn_push_pop_enclosure_extras,
+            spawn_extras_fn: spawn_push_pop_extras,
             room_title: "Push Pop Enclosure".to_string(),
         });
     }
-}
-
-fn spawn_room_object(parent: &mut ChildSpawnerCommands, object: &RoomObjectDef) {
-    let mut entity = parent.spawn((
-        Name::new(object.display_name),
-        TilePosition {
-            x: object.position.x,
-            y: object.position.y,
-        },
-    ));
-
-    if object.is_obstacle {
-        entity.insert(Obstacle);
-    }
-
-    if let Some(interaction) = object.interaction {
-        entity.insert(Interactable {
-            object_id: object.object_id,
-            position: object.position,
-            interaction,
-        });
-    }
-}
-
-fn spawn_nutrition_house_extras(
-    parent: &mut ChildSpawnerCommands,
-    _meshes: &mut Assets<Mesh>,
-    _materials: &mut Assets<ColorMaterial>,
-) {
-    for object in NUTRITION_HOUSE_OBJECTS {
-        spawn_room_object(parent, object);
-    }
-}
-
-fn spawn_push_pop_enclosure_extras(
-    parent: &mut ChildSpawnerCommands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<ColorMaterial>,
-) {
-    for object in PUSH_POP_ENCLOSURE_OBJECTS {
-        spawn_room_object(parent, object);
-    }
-
-    spawn_push_pop_npc(
-        parent,
-        meshes,
-        materials,
-        PUSH_POP_PLACEMENT.home_position,
-    );
 }

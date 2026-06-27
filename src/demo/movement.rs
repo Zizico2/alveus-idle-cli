@@ -17,8 +17,11 @@ use bevy::prelude::*;
 
 use crate::{
     AppSystems, PausableSystems,
-    components::{CurrentTilePosition, DesiredTilePosition, Obstacle, TilePosition},
+    collision::{is_walkable, CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem},
+    components::{CurrentTilePosition, DesiredTilePosition, DynamicObstacle},
     demo::level::TILE_SIZE,
+    screens::Screen,
+    stats::EnclosureId,
 };
 
 pub(super) fn plugin(app: &mut App) {
@@ -65,17 +68,25 @@ pub struct MovementDuration(pub Timer);
 
 
 fn update_desired_position(
+    screen_state: Res<State<Screen>>,
+    masks: Res<CollisionMasks>,
+    persisted_obstacles: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    live_obstacles: Query<LiveObstacleItem<'_>>,
     mut movement_query: Query<(
+        Entity,
         &mut MovementController,
         &mut DesiredTilePosition,
         &CurrentTilePosition,
+        Option<&DynamicObstacle>,
     )>,
-    obstacle_query: Query<&TilePosition, With<Obstacle>>,
 ) {
-    for (mut controller, mut desired, current) in &mut movement_query {
+    let collision_key = CollisionMapKey::for_screen(screen_state.get());
+    if !masks.contains(collision_key) {
+        return;
+    }
+
+    for (entity, mut controller, mut desired, current, dynamic_obstacle) in &mut movement_query {
         if *desired != *current {
-            // If the player is already trying to move, we don't want to change their desired position.
-            // reset the intent since the movement was rejected
             controller.intent = None;
             continue;
         }
@@ -88,13 +99,18 @@ fn update_desired_position(
                 MovementIntent::Right => next_pos.x = next_pos.x.saturating_add(1),
             }
 
-            // Check if next_pos collides with any obstacle
-            let is_blocked = obstacle_query.iter().any(|pos| *pos == next_pos);
-            if !is_blocked {
+            let ignore = dynamic_obstacle.is_some().then_some(entity);
+            if is_walkable(
+                &masks,
+                &persisted_obstacles,
+                &live_obstacles,
+                collision_key,
+                next_pos,
+                ignore,
+            ) {
                 desired.0 = next_pos;
             }
 
-            // reset the intent since we've processed it
             controller.intent = None;
         }
     }
