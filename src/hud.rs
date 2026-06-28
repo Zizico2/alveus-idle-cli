@@ -141,10 +141,7 @@ fn spawn_hud_system(
                 Visibility::Hidden,
                 children![(
                     Text::new("⚠️ SANCTUARY NEGLECTED – PROGRESS HALTED!"),
-                    TextFont {
-                        font_size: 20.0,
-                        ..default()
-                    },
+                    TextFont::from_font_size(20.0),
                     TextColor(Color::WHITE),
                 )],
             ));
@@ -179,21 +176,15 @@ fn spawn_hud_system(
                 )).with_children(|upkeep_card| {
                     upkeep_card.spawn((
                         Text::new("SANCTUARY UPKEEP"),
-                        TextFont {
-                            font_size: 14.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(14.0),
                         TextColor(Color::srgb(0.5, 0.8, 0.7)),
                     ));
 
                     upkeep_card.spawn((
                         Text::new("100%"),
-                        TextFont {
-                            font_size: 36.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(36.0),
                         TextColor(Color::srgb(0.2, 0.9, 0.6)), // Radiant teal/green
-                        TextLayout::new_with_no_wrap(),
+                        TextLayout::no_wrap(),
                         UpkeepText,
                     ));
 
@@ -239,20 +230,14 @@ fn spawn_hud_system(
                 )).with_children(|card| {
                     card.spawn((
                         Text::new("SATCHEL"),
-                        TextFont {
-                            font_size: 11.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(11.0),
                         TextColor(Color::srgb(0.5, 0.8, 0.7)),
                     ));
                     card.spawn((
                         Text::new("Empty"),
-                        TextFont {
-                            font_size: 14.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(14.0),
                         TextColor(Color::WHITE),
-                        TextLayout::new_with_no_wrap(),
+                        TextLayout::no_wrap(),
                         SatchelBodyText,
                     ));
                 });
@@ -291,18 +276,12 @@ fn spawn_hud_system(
                 )).with_children(|debug_card| {
                     debug_card.spawn((
                         Text::new("DEBUG CARE SHORTCUTS"),
-                        TextFont {
-                            font_size: 11.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(11.0),
                         TextColor(Color::srgb(0.8, 0.8, 0.4)),
                     ));
                     debug_card.spawn((
                         Text::new("1-3: Polly (Feed/Clean/Enrich)\n4-6: Stompy (Feed/Clean/Enrich)\n7-9: Georgie (Feed/Clean/Enrich)\n0/I/O: Siren (Feed/Clean/Enrich)\nU/J/Y: Push Pop (Feed/Clean/Enrich)\nNote: Georgie & Siren share Reptile Enclosure!\n- (or M): Worsen stats  = (or L): Fast-forward"),
-                        TextFont {
-                            font_size: 10.0,
-                            ..default()
-                        },
+                        TextFont::from_font_size(10.0),
                         TextColor(Color::srgb(0.7, 0.7, 0.7)),
                     ));
                 });
@@ -330,12 +309,9 @@ fn spawn_hud_system(
             )).with_children(|card| {
                 card.spawn((
                     Text::new(" "),
-                    TextFont {
-                        font_size: 16.0,
-                        ..default()
-                    },
+                    TextFont::from_font_size(16.0),
                     TextColor(Color::WHITE),
-                    TextLayout::new_with_no_wrap(),
+                    TextLayout::no_wrap(),
                     InteractionPromptText,
                 ));
             });
@@ -380,27 +356,18 @@ fn spawn_animal_card(
             ).with_children(|left| {
                 left.spawn((
                     Text::new(name),
-                    TextFont {
-                        font_size: 16.0,
-                        ..default()
-                    },
+                    TextFont::from_font_size(16.0),
                     TextColor(Color::WHITE),
                 ));
                 left.spawn((
                     Text::new(format!("[{}]", enclosure_name)),
-                    TextFont {
-                        font_size: 10.0,
-                        ..default()
-                    },
+                    TextFont::from_font_size(10.0),
                     TextColor(Color::srgb(0.5, 0.8, 0.9)), // Sleek cyan-blue
                 ));
             });
             header.spawn((
                 Text::new(species),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
+                TextFont::from_font_size(11.0),
                 TextColor(Color::srgb(0.6, 0.6, 0.6)),
             ));
         });
@@ -436,21 +403,15 @@ fn spawn_stat_row(
         )).with_children(|labels| {
             labels.spawn((
                 Text::new(label_text),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
+                TextFont::from_font_size(11.0),
                 TextColor(Color::srgb(0.8, 0.8, 0.8)),
             ));
 
             labels.spawn((
                 Text::new("100%"),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
+                TextFont::from_font_size(11.0),
                 TextColor(Color::WHITE),
-                TextLayout::new_with_no_wrap(),
+                TextLayout::no_wrap(),
                 AnimalStatText {
                     animal_id,
                     stat,

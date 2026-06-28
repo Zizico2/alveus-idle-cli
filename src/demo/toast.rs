@@ -147,10 +147,7 @@ fn toast_trigger_observer(
         // Spawn new toast UI
         let text_entity = commands.spawn((
             Text::new(event.message.clone()),
-            TextFont {
-                font_size: TOAST_FONT_SIZE,
-                ..default()
-            },
+            TextFont::from_font_size(TOAST_FONT_SIZE),
             TextColor(Color::WHITE),
         )).id();
         

@@ -9,6 +9,7 @@ pub fn minimal_stats_app(save_path: &str) -> App {
     app.add_plugins(StatesPlugin);
     app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
     app.add_plugins((StatsPlugin, CommandPlugin));

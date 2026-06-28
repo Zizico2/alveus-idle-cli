@@ -1,87 +1,7 @@
 (
   resources: {},
   entities: {
-    4294967057: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": PushPop,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 930,
-          happiness: 0,
-        ),
-        "alveus_idle_cli::stats::AnimalTilePosition": ((
-          x: 5,
-          y: 4,
-        )),
-      },
-    ),
-    4294967058: (
-      components: {
-        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
-        "alveus_idle_cli::stats::EnclosureId": PushPopEnclosure,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 0,
-        ),
-      },
-    ),
-    4294967059: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Siren,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 0,
-          happiness: 0,
-        ),
-      },
-    ),
-    4294967060: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Georgie,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 0,
-          happiness: 0,
-        ),
-      },
-    ),
-    4294967061: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Stompy,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 0,
-          happiness: 0,
-        ),
-      },
-    ),
-    4294967062: (
-      components: {
-        "alveus_idle_cli::stats::AnimalId": Polly,
-        "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 0,
-          happiness: 0,
-        ),
-        "alveus_idle_cli::stats::AnimalTilePosition": ((
-          x: 7,
-          y: 5,
-        )),
-      },
-    ),
-    4294967063: (
-      components: {
-        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
-        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 0,
-        ),
-      },
-    ),
-    4294967064: (
-      components: {
-        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
-        "alveus_idle_cli::stats::EnclosureId": Pasture,
-        "alveus_idle_cli::stats::EnclosureStats": (
-          cleanliness: 0,
-        ),
-      },
-    ),
-    4294967065: (
+    4294966650: (
       components: {
         "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
         "alveus_idle_cli::stats::EnclosureId": NutritionHousePlaypen,
@@ -90,10 +10,90 @@
         ),
       },
     ),
-    5480378269271: (
+    4294966651: (
+      components: {
+        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
+        "alveus_idle_cli::stats::EnclosureId": Pasture,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 0,
+        ),
+      },
+    ),
+    4294966652: (
+      components: {
+        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
+        "alveus_idle_cli::stats::EnclosureId": ReptileEnclosure,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 0,
+        ),
+      },
+    ),
+    4294966653: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Polly,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+        "alveus_idle_cli::stats::AnimalTilePosition": ((
+          x: 8,
+          y: 4,
+        )),
+      },
+    ),
+    4294966654: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Stompy,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294966655: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Georgie,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294966656: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": Siren,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 0,
+          happiness: 0,
+        ),
+      },
+    ),
+    4294966657: (
+      components: {
+        "alveus_idle_cli::collision::DynamicObstacleTiles": ([]),
+        "alveus_idle_cli::stats::EnclosureId": PushPopEnclosure,
+        "alveus_idle_cli::stats::EnclosureStats": (
+          cleanliness: 0,
+        ),
+      },
+    ),
+    4294966658: (
+      components: {
+        "alveus_idle_cli::stats::AnimalId": PushPop,
+        "alveus_idle_cli::stats::AnimalStats": (
+          hunger: 1000,
+          happiness: 0,
+        ),
+        "alveus_idle_cli::stats::AnimalTilePosition": ((
+          x: 10,
+          y: 7,
+        )),
+      },
+    ),
+    12884898909: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1782670827,
+          value: 1782673180,
         ),
       },
     ),

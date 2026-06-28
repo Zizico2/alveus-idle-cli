@@ -83,6 +83,21 @@ fn process_line(value: Value, request_sender: &Sender<BrpMessage>) -> BrpRespons
 fn process_single_request(request: Value, request_sender: &Sender<BrpMessage>) -> BrpResponse {
     let id = request.as_object().and_then(|map| map.get("id")).cloned();
 
+    let jsonrpc = request
+        .as_object()
+        .and_then(|map| map.get("jsonrpc"))
+        .and_then(|value| value.as_str());
+    if jsonrpc != Some("2.0") {
+        return BrpResponse::new(
+            id,
+            Err(BrpError {
+                code: error_codes::INVALID_REQUEST,
+                message: String::from("JSON-RPC request requires `\"jsonrpc\": \"2.0\"`"),
+                data: None,
+            }),
+        );
+    }
+
     let request: BrpRequest = match serde_json::from_value(request) {
         Ok(v) => v,
         Err(err) => {
@@ -96,17 +111,6 @@ fn process_single_request(request: Value, request_sender: &Sender<BrpMessage>) -
             );
         }
     };
-
-    if request.jsonrpc != "2.0" {
-        return BrpResponse::new(
-            id,
-            Err(BrpError {
-                code: error_codes::INVALID_REQUEST,
-                message: String::from("JSON-RPC request requires `\"jsonrpc\": \"2.0\"`"),
-                data: None,
-            }),
-        );
-    }
 
     if request.method.contains("+watch") {
         return BrpResponse::new(

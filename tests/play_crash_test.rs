@@ -38,6 +38,7 @@ fn test_play_crash_on_invalid_save() {
     app.add_plugins(StatesPlugin);
     app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
@@ -68,6 +69,7 @@ fn test_save_exclude_and_hydration() {
     app.add_plugins(StatesPlugin);
     app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
@@ -115,7 +117,7 @@ fn test_save_exclude_and_hydration() {
 
     // Trigger SaveWorld with allowlist
     let mut save = SaveWorld::default_into_file(test_save_path);
-    save.components = bevy::scene::SceneFilter::deny_all()
+    save.components = bevy::world_serialization::WorldFilter::deny_all()
         .allow::<alveus_idle_cli::stats::SaveTimestamp>()
         .allow::<alveus_idle_cli::stats::AnimalId>()
         .allow::<alveus_idle_cli::stats::AnimalStats>()
@@ -178,6 +180,7 @@ fn test_play_without_save() {
     app.add_plugins(StatesPlugin);
     app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath("nonexistent_play_without_save.ron".to_string()));

@@ -5,14 +5,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.18.1", features = ["pan_camera", "debug", "dynamic_linking"] }
-bevy_ecs_tiled = {version = "0.12.0", features = ["user_properties"]}
-bevy_tweening = "0.15"
+bevy = { version = "0.19", features = ["pan_camera", "debug", "dynamic_linking"] }
+bevy_ecs_tiled = { git = "https://github.com/taboky-dev/bevy_ecs_tiled", branch = "main", features = ["user_properties"] }
+bevy_tweening = { git = "https://github.com/djeedai/bevy_tweening", branch = "main" }
 rand = "0.10.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.150"
 ron = "0.12.1"
-moonshine-save = "0.6.1"
+moonshine-save = "0.7"
 async-channel = { version = "2", optional = true }
 
 [dev-dependencies]

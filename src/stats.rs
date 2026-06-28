@@ -1042,7 +1042,7 @@ fn save_stats_periodically_system(
 
         info!("Autosaving stats via moonshine-save...");
         let mut save = SaveWorld::default_into_file(&save_path.0);
-        save.components = bevy::scene::SceneFilter::deny_all()
+        save.components = bevy::world_serialization::WorldFilter::deny_all()
             .allow::<SaveTimestamp>()
             .allow::<AnimalId>()
             .allow::<AnimalStats>()
