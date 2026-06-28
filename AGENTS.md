@@ -152,6 +152,8 @@ makes lives in that file. This keeps sessions reproducible and inspectable.
   print it on request.
 - Do **not** drive the game by issuing many separate shell/`curl` calls. One
   script, run once.
+- **Stop the headless server** when the session ends (see §6 gotchas). A forgotten
+  background instance will keep mutating `save.ron`.
 
 ### Navigation: count tiles to plan, query position to confirm
 The player spawns at a known tile and the overview map layout is static, so
@@ -299,6 +301,12 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 - **`--features headless` is required** for `--headless` to do anything; without
   it the runtime flag panics by design.
 - Screenshots are written asynchronously — wait ~2 frames before reading the PNG.
+- **Stop the headless server when you're done.** A background `cargo run --features
+  headless -- …` keeps simulating in realtime and **autosaves to `save.ron` every
+  ~5 seconds** (default [`SavePath`] in `src/stats.rs`). Kill the process after
+  your driver script finishes — do not leave it running in a background terminal.
+  Verify with `pgrep -af alveus-idle-cli` (no matches) or that `save.ron`'s mtime
+  is no longer changing.
 
 ---
 
@@ -336,6 +344,8 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
       captured in a Rust test (§5), and the script is saved under `scripts/`.
 - [ ] No new custom BRP methods, no bespoke observation struct, no key-injection
       hatch, no auto-navigation verbs.
+- [ ] Any headless `cargo run` started for manual/BRP playtesting was stopped
+      afterward (no stray process still autosaving `save.ron`).
 
 ---
 

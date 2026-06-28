@@ -5,12 +5,12 @@
       components: {
         "alveus_idle_cli::stats::AnimalId": PushPop,
         "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 932,
+          hunger: 930,
           happiness: 0,
         ),
         "alveus_idle_cli::stats::AnimalTilePosition": ((
-          x: 9,
-          y: 7,
+          x: 5,
+          y: 4,
         )),
       },
     ),
@@ -90,10 +90,10 @@
         ),
       },
     ),
-    5312874544727: (
+    5480378269271: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1782670632,
+          value: 1782670827,
         ),
       },
     ),
