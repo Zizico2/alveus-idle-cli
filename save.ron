@@ -5,12 +5,12 @@
       components: {
         "alveus_idle_cli::stats::AnimalId": PushPop,
         "alveus_idle_cli::stats::AnimalStats": (
-          hunger: 943,
+          hunger: 933,
           happiness: 0,
         ),
         "alveus_idle_cli::stats::AnimalTilePosition": ((
-          x: 7,
-          y: 5,
+          x: 9,
+          y: 3,
         )),
       },
     ),
@@ -58,8 +58,8 @@
           happiness: 0,
         ),
         "alveus_idle_cli::stats::AnimalTilePosition": ((
-          x: 8,
-          y: 4,
+          x: 7,
+          y: 5,
         )),
       },
     ),
@@ -90,10 +90,10 @@
         ),
       },
     ),
-    34359735954: (
+    5265629904471: (
       components: {
         "alveus_idle_cli::stats::SaveTimestamp": (
-          value: 1782529888,
+          value: 1782670577,
         ),
       },
     ),

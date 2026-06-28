@@ -37,6 +37,13 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
    are **examples as of when this file was written**. They can change at any time.
    Before relying on a value, **read it from the codebase** (or derive it at
    runtime via BRP/logs). See §4 for where to look.
+7. **Verify position after every move.** After each `Move`/`MoveStop` cycle,
+   query `CurrentTilePosition` via `world.query` and use the returned tile as
+   ground truth. A `Move` command does **not** guarantee the player advanced —
+   static obstacles, room walls, and **dynamic obstacles** (wandering animals,
+   spawned manure piles, etc.) can block the intended tile. Tile-counting is
+   useful for planning routes; it is never a substitute for reading position
+   back from the ECS.
 
 ---
 
@@ -108,6 +115,14 @@ Use queries as the source of truth for **game logic** (stats, screen state, tile
 position). Use screenshots for **presentation** and as a sanity check when
 debugging hard flows. Both together are fine.
 
+**Player tile is mandatory after locomotion.** `CurrentTilePosition` is
+`#[reflect(Component)]` and queryable at
+`alveus_idle_cli::components::CurrentTilePosition` (filter with `Player`). After
+every step, read it before deciding the next direction or whether a navigation
+goal was reached. If the tile did not change, the step was blocked — pick another
+direction or query dynamic obstacle positions rather than blindly repeating the
+same move.
+
 ---
 
 ## 4. The preferred workflow: a Python driver script
@@ -120,8 +135,9 @@ makes lives in that file. This keeps sessions reproducible and inspectable.
 ### Why
 - The user can ask "show me exactly what you did" and the agent outputs the
   script verbatim.
-- Tile-counting navigation is deterministic and easy to reason about *in code*
-  (loops, named constants), but error-prone as scattered shell invocations.
+- Tile-counting plus per-step `CurrentTilePosition` reads keeps navigation
+  deterministic and easy to reason about *in code*, but error-prone as scattered
+  shell invocations.
 - A script is trivially promotable into a Rust e2e test later.
 
 ### Rules
@@ -130,21 +146,30 @@ makes lives in that file. This keeps sessions reproducible and inspectable.
   required for the Python side. `scripts/headless_nutrition_house_demo.py` is one
   example driver; treat its constants the same way as the table above.
 - Track everything the agent cares about (current tile, target tile, expected
-  screen) as variables/constants in the script, not in your head.
+  screen) as variables in the script, not in your head — and refresh `current
+  tile` from `player_tile()` after every step, never from step count alone.
 - The agent should retain this script in its context/artifacts and be able to
   print it on request.
 - Do **not** drive the game by issuing many separate shell/`curl` calls. One
   script, run once.
 
-### Blind tile counting is expected and correct
-The player spawns at a known tile and the map is static, so counting tiles works
-reliably. Don't reach for pathfinding — count steps.
+### Navigation: count tiles to plan, query position to confirm
+The player spawns at a known tile and the overview map layout is static, so
+counting steps is a fine way to *plan* a route. Don't reach for pathfinding.
+But **always query `CurrentTilePosition` after each step** — this is required,
+not optional. A held `Move` may end with the player still on the same tile when
+blocked by a wall or obstacle. Dynamic obstacles are especially unpredictable:
+animals wander inside enclosures, and tiles can become blocked at runtime without
+any change to the map file. Your driver script must treat the queried tile as
+the only authoritative position; update your tracked `(x, y)` from that read
+every time.
 
 **The table below is an illustrative snapshot, not a guarantee.** Values *and*
 the file paths / symbol names cited for finding them can change without this doc
 being updated — search the repo (grep, `registry.schema`, map assets, runtime
 logs) if a pointer is stale. Re-derive coordinates whenever behaviour doesn't
-match.
+match — **by reading `CurrentTilePosition`**, not by assuming the step count was
+correct.
 
 | Fact (example) | Value (at time of writing) | Likely source in repo (verify — may move) |
 |----------------|----------------------------|-------------------------------------------|
@@ -154,10 +179,6 @@ match.
 | Nutrition House exit spawn (overview) | `(33, 12)` | `NutritionHousePlugin` `RoomConfig` in `src/demo/room.rs` |
 | Push Pop exit spawn (overview) | `(40, 33)` | `PushPopEnclosurePlugin` `RoomConfig` in `src/demo/room.rs` |
 | One tile step (sim time) | ~0.25s | `MovementDuration` in `src/demo/player.rs` |
-
-At runtime you can also read `CurrentTilePosition` via `world.query` after each
-move (once the component is Reflect-registered), or watch movement-related log
-lines (search for `Starting movement` if the module path has moved).
 
 ### Minimal script skeleton
 
@@ -180,14 +201,25 @@ def rpc(method, params=None):
 def trigger(value):           # send a GameCommand
     rpc("world.trigger_event", {"event": EVENT, "value": value})
 
-def step(direction, hold=0.35):  # one tile in a direction
-    trigger({"Move": direction}); time.sleep(hold); trigger("MoveStop"); time.sleep(0.05)
-
-def player_tile():            # observe via raw BRP
+def player_tile():            # authoritative position — call after every step
     res = rpc("world.query", {"data": {
-        "components": ["alveus_idle_cli::components::CurrentTilePosition"], "has": []},
+        "components": ["alveus_idle_cli::components::CurrentTilePosition"],
+        "has": []},
         "filter": {"with": ["alveus_idle_cli::demo::player::Player"]}})
-    # ... parse res ...
+    row = (res or [None])[0]
+    if not row:
+        return None
+    pos = row["components"]["alveus_idle_cli::components::CurrentTilePosition"]
+    inner = pos["0"] if isinstance(pos, dict) and "0" in pos else pos
+    return int(inner["x"]), int(inner["y"])
+
+def step(direction, hold=0.35):
+    before = player_tile()
+    trigger({"Move": direction}); time.sleep(hold); trigger("MoveStop"); time.sleep(0.05)
+    after = player_tile()
+    if after == before:
+        print(f"blocked: still at {after} after Move {direction}")
+    return after
 ```
 
 ---
@@ -312,7 +344,7 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 | Need | Use |
 |------|-----|
 | Do something in the game | `world.trigger_event` → `GameCommand` |
-| Read player position | `world.query` `CurrentTilePosition` with `Player` filter |
+| Read player position (after every move) | `world.query` `CurrentTilePosition` with `Player` filter |
 | Read current screen/menu/pause | `world.get_resources` `State<Screen>` etc. |
 | Discover types / verb shapes | `registry.schema`, `rpc.discover` |
 | Visual check / visual bugs | `GameCommand::Screenshot { path }`, then inspect PNG |
