@@ -11,6 +11,7 @@ use crate::demo::level::TILE_SIZE;
 use crate::{
     AppSystems, PausableSystems,
     asset_tracking::LoadResource,
+    headless::GameCommand,
     demo::{
         animation::PlayerAnimation,
         movement::{
@@ -107,10 +108,8 @@ impl PartialEq<DesiredTilePosition> for CurrentTilePosition {
 
 fn record_player_directional_input(
     input: Res<ButtonInput<KeyCode>>,
-    mut controller_query: Single<&mut MovementController, With<Player>>,
+    mut commands: Commands,
 ) {
-    // Collect directional input.
-
     let intent = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
         Some(MovementIntent::Up)
     } else if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {
@@ -123,8 +122,11 @@ fn record_player_directional_input(
         None
     };
 
-    // Apply movement intent to controller.
-    controller_query.intent = intent;
+    if let Some(intent) = intent {
+        commands.trigger(GameCommand::Move(intent));
+    } else {
+        commands.trigger(GameCommand::MoveStop);
+    }
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]

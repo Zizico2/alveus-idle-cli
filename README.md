@@ -78,3 +78,105 @@ To compile a highly-optimized release build:
 ```bash
 cargo build --release
 ```
+
+---
+
+## 🤖 Headless / Remote Control (BRP)
+
+The game can run **windowless** and be driven entirely by external clients (LLMs, scripts, CI) over **Bevy Remote Protocol (BRP)** — JSON-RPC 2.0 — with **no custom methods** and **no bespoke observation snapshot**. Commands are semantic verbs on the reflected `GameCommand` event; observation uses built-in `world.query`, `world.get_resources`, and `registry.schema`.
+
+### Build & run
+
+```bash
+# Compile with headless support (remote HTTP + stdio BRP)
+cargo run --features headless -- --headless
+
+# Deterministic frame stepping (blocks until client sends AdvanceFrames)
+cargo run --features headless -- --headless --step
+
+# Options
+cargo run --features headless -- --headless --port 15702 --resolution 1280x720 --no-stdio
+```
+
+| Flag | Description |
+|------|-------------|
+| `--headless` | Windowless mode: offscreen render target, BRP HTTP, stdio pipe |
+| `--step` | Manual step loop (`GameCommand::AdvanceFrames`) |
+| `--realtime` | Real-time metronome (default when `--step` omitted) |
+| `--port N` | BRP HTTP port (default `15702`) |
+| `--resolution WxH` | Offscreen camera / screenshot size (default `1280x720`) |
+| `--no-stdio` | Disable stdin/stdout JSON-RPC carrier |
+
+### Transports (one protocol, two carriers)
+
+1. **HTTP** — `RemoteHttpPlugin` on `--port` (default `15702`).
+2. **Stdio** — one JSON-RPC object per line on stdin; responses on stdout (same methods as HTTP).
+
+### Commands (`world.trigger_event`)
+
+Trigger the registered event `alveus_idle_cli::headless::command::GameCommand`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "world.trigger_event",
+  "id": 1,
+  "params": {
+    "event": "alveus_idle_cli::headless::command::GameCommand",
+    "value": "SkipSplash"
+  }
+}
+```
+
+**Verb variants** (semantic only — no key injection):
+
+| Category | Variants |
+|----------|----------|
+| Locomotion | `Move` / `MoveStop` |
+| Interaction | `Interact`, `DropItem` |
+| Buildings | `EnterBuilding`, `ExitRoom` |
+| Flow | `PauseToggle`, `Play`, `Back`, `SkipSplash`, `OpenSettings`, `OpenCredits`, `Continue`, `QuitToTitle` |
+| Stats / time | `ImproveStat { target, amount }`, `WorsenStat { … }`, `AdvanceTime { hours }` |
+| Settings | `AdjustVolume { delta }` |
+| Capture | `Screenshot { path }` |
+| Frame control | `AdvanceFrames(n)` (step mode) |
+
+Use `registry.schema` / `rpc.discover` to introspect exact Reflect shapes for struct variants.
+
+### Observation (built-in BRP only)
+
+- `world.get_resources` — e.g. `State<Screen>`, `State<Menu>`, `Pause`, `PlayerSatchel`, `ActiveInteractionTarget`, `SanctuaryUpkeep`
+- `world.query` — player position, animals, enclosures, interactables
+- `registry.schema` — full type system for clients
+
+Derived facts (adjacency, cleanliness joins, etc.) are computed **client-side** from query results.
+
+### Screenshots
+
+Offscreen mode renders to an `Image` render target (no display server, no Xvfb). Capture via:
+
+```json
+{
+  "method": "world.trigger_event",
+  "params": {
+    "event": "alveus_idle_cli::headless::command::GameCommand",
+    "value": { "Screenshot": { "path": "/tmp/frame.png" } }
+  }
+}
+```
+
+### Tests
+
+```bash
+cargo test --profile ci
+cargo test --features headless --profile ci
+```
+
+Headless integration tests cover `GameCommand` dispatch, BRP in-process round-trips, stdio-equivalent JSON-RPC, and reflect registry presence. Render/screenshot tests require a **wgpu device** (GPU runner or software Vulkan/lavapipe); the app itself is windowless.
+
+### Module layout
+
+* `src/headless/command.rs` — `GameCommand` enum + dispatcher
+* `src/headless/camera.rs` — offscreen `Camera2d` → `RenderTarget::Image`
+* `src/headless/stdio.rs` — stdin/stdout BRP carrier
+* `src/headless/reflect.rs` — `register_headless_types()` for BRP introspection

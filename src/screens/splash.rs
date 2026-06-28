@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{AppSystems, screens::Screen, theme::prelude::*};
+use crate::{AppSystems, headless::GameCommand, screens::Screen, theme::prelude::*};
 
 pub(super) fn plugin(app: &mut App) {
     // Spawn splash screen.
@@ -38,9 +38,13 @@ pub(super) fn plugin(app: &mut App) {
     // Exit the splash screen early if the player hits escape.
     app.add_systems(
         Update,
-        enter_title_screen
+        skip_splash_from_keyboard
             .run_if(input_just_pressed(KeyCode::Escape).and(in_state(Screen::Splash))),
     );
+}
+
+fn skip_splash_from_keyboard(mut commands: Commands) {
+    commands.trigger(GameCommand::SkipSplash);
 }
 
 const SPLASH_BACKGROUND_COLOR: Color = Color::srgb(0.157, 0.157, 0.157);
@@ -140,6 +144,3 @@ fn check_splash_timer(timer: ResMut<SplashTimer>, mut next_screen: ResMut<NextSt
     }
 }
 
-fn enter_title_screen(mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Title);
-}

@@ -103,7 +103,7 @@
     ]
   },
   {
-    "id": 31,
+    "id": 37,
     "name": "alveus_idle_cli::content::ItemId",
     "type": "class",
     "useAs": [
@@ -121,7 +121,7 @@
     ]
   },
   {
-    "id": 30,
+    "id": 36,
     "name": "alveus_idle_cli::content::ItemId:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -163,6 +163,23 @@
   },
   {
     "id": 10,
+    "name": "alveus_idle_cli::interaction::ActiveInteractionTarget",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "interactable",
+        "type": "object",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 11,
     "name": "alveus_idle_cli::interaction::FeedAnimal",
     "type": "class",
     "useAs": [
@@ -202,7 +219,7 @@
     ]
   },
   {
-    "id": 11,
+    "id": 12,
     "name": "alveus_idle_cli::interaction::GiveItem",
     "type": "class",
     "useAs": [
@@ -225,7 +242,7 @@
     ]
   },
   {
-    "id": 12,
+    "id": 13,
     "name": "alveus_idle_cli::interaction::Interactable",
     "type": "class",
     "useAs": [
@@ -236,7 +253,7 @@
     "members": []
   },
   {
-    "id": 13,
+    "id": 15,
     "name": "alveus_idle_cli::interaction::PlayerSatchel",
     "type": "class",
     "useAs": [
@@ -254,7 +271,7 @@
     ]
   },
   {
-    "id": 14,
+    "id": 16,
     "name": "alveus_idle_cli::stats::AnimalDecayAccumulators",
     "type": "class",
     "useAs": [
@@ -276,7 +293,7 @@
     ]
   },
   {
-    "id": 15,
+    "id": 17,
     "name": "alveus_idle_cli::stats::AnimalDecayRates",
     "type": "class",
     "useAs": [
@@ -298,7 +315,7 @@
     ]
   },
   {
-    "id": 16,
+    "id": 18,
     "name": "alveus_idle_cli::stats::AnimalEnclosure",
     "type": "class",
     "useAs": [
@@ -316,7 +333,7 @@
     ]
   },
   {
-    "id": 18,
+    "id": 20,
     "name": "alveus_idle_cli::stats::AnimalId",
     "type": "class",
     "useAs": [
@@ -334,7 +351,7 @@
     ]
   },
   {
-    "id": 17,
+    "id": 19,
     "name": "alveus_idle_cli::stats::AnimalId:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -348,7 +365,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 19,
+    "id": 21,
     "name": "alveus_idle_cli::stats::AnimalName",
     "type": "class",
     "useAs": [
@@ -365,7 +382,7 @@
     ]
   },
   {
-    "id": 33,
+    "id": 39,
     "name": "alveus_idle_cli::stats::AnimalStat",
     "type": "class",
     "useAs": [
@@ -383,7 +400,7 @@
     ]
   },
   {
-    "id": 32,
+    "id": 38,
     "name": "alveus_idle_cli::stats::AnimalStat:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -395,7 +412,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 20,
+    "id": 22,
     "name": "alveus_idle_cli::stats::AnimalStats",
     "type": "class",
     "useAs": [
@@ -417,7 +434,7 @@
     ]
   },
   {
-    "id": 21,
+    "id": 23,
     "name": "alveus_idle_cli::stats::AnimalTilePosition",
     "type": "class",
     "useAs": [
@@ -435,7 +452,7 @@
     ]
   },
   {
-    "id": 22,
+    "id": 24,
     "name": "alveus_idle_cli::stats::EnclosureDecayAccumulators",
     "type": "class",
     "useAs": [
@@ -452,7 +469,7 @@
     ]
   },
   {
-    "id": 23,
+    "id": 25,
     "name": "alveus_idle_cli::stats::EnclosureDecayRates",
     "type": "class",
     "useAs": [
@@ -469,7 +486,7 @@
     ]
   },
   {
-    "id": 25,
+    "id": 27,
     "name": "alveus_idle_cli::stats::EnclosureId",
     "type": "class",
     "useAs": [
@@ -487,7 +504,7 @@
     ]
   },
   {
-    "id": 24,
+    "id": 26,
     "name": "alveus_idle_cli::stats::EnclosureId:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -500,7 +517,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 26,
+    "id": 28,
     "name": "alveus_idle_cli::stats::EnclosureName",
     "type": "class",
     "useAs": [
@@ -517,7 +534,7 @@
     ]
   },
   {
-    "id": 27,
+    "id": 29,
     "name": "alveus_idle_cli::stats::EnclosureStats",
     "type": "class",
     "useAs": [
@@ -534,7 +551,7 @@
     ]
   },
   {
-    "id": 28,
+    "id": 30,
     "name": "alveus_idle_cli::stats::SanctuaryUpkeep",
     "type": "class",
     "useAs": [
@@ -566,7 +583,24 @@
     ]
   },
   {
-    "id": 29,
+    "id": 31,
+    "name": "alveus_idle_cli::stats::SavePath",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 32,
     "name": "alveus_idle_cli::stats::SaveTimestamp",
     "type": "class",
     "useAs": [
@@ -583,7 +617,88 @@
     ]
   },
   {
-    "id": 36,
+    "id": 46,
+    "name": "bevy_time::timer::TimerMode",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "bevy_time::timer::TimerMode:::Variant",
+        "type": "class",
+        "value": "Once"
+      }
+    ]
+  },
+  {
+    "id": 45,
+    "name": "bevy_time::timer::TimerMode:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "Once",
+      "Repeating"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 42,
+    "name": "core::option::Option<alloc::string::String>",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "core::option::Option<alloc::string::String>:::Variant",
+        "type": "class",
+        "value": "None"
+      },
+      {
+        "name": "Some",
+        "propertyType": "core::option::Option<alloc::string::String>::Some",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 40,
+    "name": "core::option::Option<alloc::string::String>:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "None",
+      "Some"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 41,
+    "name": "core::option::Option<alloc::string::String>::Some",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 49,
     "name": "core::option::Option<alveus_idle_cli::content::ItemId>",
     "type": "class",
     "useAs": [
@@ -607,7 +722,7 @@
     ]
   },
   {
-    "id": 34,
+    "id": 47,
     "name": "core::option::Option<alveus_idle_cli::content::ItemId>:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -618,7 +733,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 35,
+    "id": 48,
     "name": "core::option::Option<alveus_idle_cli::content::ItemId>::Some",
     "type": "class",
     "useAs": [
@@ -631,6 +746,58 @@
         "name": "0",
         "propertyType": "alveus_idle_cli::content::ItemId",
         "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 35,
+    "name": "core::option::Option<bevy_ecs::entity::Entity>",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "core::option::Option<bevy_ecs::entity::Entity>:::Variant",
+        "type": "class",
+        "value": "None"
+      },
+      {
+        "name": "Some",
+        "propertyType": "core::option::Option<bevy_ecs::entity::Entity>::Some",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 33,
+    "name": "core::option::Option<bevy_ecs::entity::Entity>:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "None",
+      "Some"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 34,
+    "name": "core::option::Option<bevy_ecs::entity::Entity>::Some",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "type": "object",
         "value": null
       }
     ]

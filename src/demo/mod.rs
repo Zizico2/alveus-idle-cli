@@ -6,12 +6,12 @@
 use bevy::prelude::*;
 
 mod animation;
-mod camera;
+pub mod camera;
 pub mod level;
-mod movement;
+pub mod movement;
 pub mod player;
 pub mod toast;
-mod entrance;
+pub mod entrance;
 pub mod interiors;
 pub mod room;
 

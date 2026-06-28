@@ -21,12 +21,14 @@ impl Plugin for EntrancePlugin {
     }
 }
 
-#[derive(Event, Debug, Clone, Copy)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct PlayerEnteredBuildingEvent {
     pub entrance: BuildingEntrance,
 }
 
-#[derive(Event, Debug, Clone, Copy)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct PlayerExitedBuildingEvent {
     pub entrance: BuildingEntrance,
 }

@@ -13,6 +13,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.150"
 ron = "0.12.1"
 moonshine-save = "0.6.1"
+async-channel = { version = "2", optional = true }
+
+[dev-dependencies]
+async-channel = "2"
 # Compile out low-severity logs to improve performance.
 # Remove these features if you want to profile your game with tracy.
 # (see <https://github.com/bevyengine/bevy/blob/main/docs/profiling.md#tracy-profiler>)
@@ -27,6 +31,9 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 [features]
 # Default to a native dev build.
 default = ["dev_native"]
+remote = ["bevy/bevy_remote"]
+cli = ["dep:async-channel"]
+headless = ["remote", "cli"]
 dev = [
     # Improve compile times for dev builds by linking Bevy as a dynamic library.
     "bevy/dynamic_linking",

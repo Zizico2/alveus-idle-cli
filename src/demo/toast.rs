@@ -34,7 +34,8 @@ impl Plugin for ToastPlugin {
     }
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Event, Debug, Clone, Reflect)]
+#[reflect(Event)]
 pub struct TriggerToastEvent {
     pub message: String,
     pub duration: Option<std::time::Duration>,
@@ -58,7 +59,8 @@ impl TriggerToastEvent {
     }
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct DismissToastEvent;
 
 #[derive(Component)]

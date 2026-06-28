@@ -9,6 +9,7 @@ pub mod audio;
 pub mod demo;
 #[cfg(feature = "dev")]
 pub mod dev_tools;
+pub mod headless;
 pub mod menus;
 pub mod screens;
 pub mod theme;
@@ -19,125 +20,257 @@ pub mod animals;
 pub mod collision;
 pub mod hud;
 
+use std::thread;
+use std::time::Duration;
+
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-pub fn run() -> AppExit {
-    App::new().add_plugins(AppPlugin).run()
+use headless::{CommandPlugin, StepRequest, DEFAULT_HEADLESS_RESOLUTION};
+#[cfg(feature = "headless")]
+use headless::HeadlessPlugin;
+
+/// How the application is run.
+#[derive(Debug, Clone)]
+pub enum RunMode {
+    Windowed,
+    Headless(HeadlessConfig),
 }
 
-pub struct AppPlugin;
+/// Configuration for windowless headless play with BRP transports.
+#[derive(Debug, Clone)]
+pub struct HeadlessConfig {
+    pub port: u16,
+    pub resolution: (u32, u32),
+    pub step_mode: bool,
+    pub enable_stdio: bool,
+}
 
-impl Plugin for AppPlugin {
-    fn build(&self, app: &mut App) {
-        // Add Bevy plugins.
-        app.add_plugins(
-            DefaultPlugins
-                .set(AssetPlugin {
-                    // Wasm builds will check for meta files (that don't exist) if this isn't set.
-                    // This causes errors and even panics on web build on itch.
-                    // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
-                    meta_check: AssetMetaCheck::Never,
-                    ..default()
-                })
-                .set(WindowPlugin {
-                    primary_window: Window {
-                        title: "Alveus Idle Cli".to_string(),
-                        fit_canvas_to_parent: true,
-                        // Force an integer scale factor so UI glyphs stay pixel-aligned.
-                        // On fractional HiDPI scale factors, Bevy 0.18's tightly-packed
-                        // font atlas + DynamicTextureAtlasBuilder padding bug (bevy #22716 /
-                        // #23091, fixed only on 0.19+) corrupts glyphs as new ones are added
-                        // at runtime, garbling text across the whole UI. Pixel-aligned text
-                        // avoids the trigger entirely.
-                        // TODO: Remove this once Bevy 0.19 is released.
-                        // TODO: troubleshooting
-                        resolution: bevy::window::WindowResolution::default()
-                            .with_scale_factor_override(1.0),
-                        ..default()
+impl Default for HeadlessConfig {
+    fn default() -> Self {
+        Self {
+            port: headless::DEFAULT_BRP_PORT,
+            resolution: DEFAULT_HEADLESS_RESOLUTION,
+            step_mode: false,
+            enable_stdio: cfg!(feature = "cli"),
+        }
+    }
+}
+
+pub fn run() -> AppExit {
+    run_with_args(std::env::args().skip(1).collect())
+}
+
+pub fn run_with_args(args: Vec<String>) -> AppExit {
+    run_with_mode(parse_run_mode(args))
+}
+
+pub fn run_with_mode(mode: RunMode) -> AppExit {
+    let step_mode = match &mode {
+        RunMode::Headless(cfg) => cfg.step_mode,
+        RunMode::Windowed => false,
+    };
+    let mut app = build_app(mode);
+    if step_mode {
+        run_headless_loop(&mut app)
+    } else {
+        app.run()
+    }
+}
+
+fn parse_run_mode(args: Vec<String>) -> RunMode {
+    let mut headless = false;
+    let mut port = HeadlessConfig::default().port;
+    let mut resolution = DEFAULT_HEADLESS_RESOLUTION;
+    let mut step_mode = false;
+    let mut enable_stdio = cfg!(feature = "cli");
+    let mut no_stdio = false;
+
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--headless" => headless = true,
+            "--step" => step_mode = true,
+            "--realtime" => step_mode = false,
+            "--no-stdio" => no_stdio = true,
+            "--port" => {
+                if let Some(value) = iter.next() {
+                    port = value.parse().unwrap_or(port);
+                }
+            }
+            "--resolution" => {
+                if let Some(value) = iter.next() {
+                    if let Some((w, h)) = value.split_once('x') {
+                        if let (Ok(w), Ok(h)) = (w.parse(), h.parse()) {
+                            resolution = (w, h);
+                        }
                     }
-                    .into(),
-                    ..default()
-                }),
-        );
+                }
+            }
+            _ => {}
+        }
+    }
 
-        app.register_type::<components::BuildingEntrance>()
-            .register_type::<components::TileGroup>()
-            .register_type::<components::RectangleTileGroup>()
-            .register_type::<components::TilePosition>()
-            .register_type::<components::Obstacle>()
-            .register_type::<components::DynamicObstacle>()
-            .register_type::<components::InEnclosure>()
-            .register_type::<components::PersistedDynamicObstacle>()
-            .register_type::<content::RoomObjectId>()
-            .register_type::<content::ItemId>()
-            .register_type::<interaction::Interactable>()
-            .register_type::<interaction::GiveItem>()
-            .register_type::<interaction::FeedAnimal>();
+    if no_stdio {
+        enable_stdio = false;
+    }
 
-        app.add_plugins((
-            asset_tracking::plugin,
-            audio::plugin,
-            demo::plugin,
-            #[cfg(feature = "dev")]
-            dev_tools::plugin,
-            menus::plugin,
-            screens::plugin,
-            theme::plugin,
-            bevy_tweening::TweeningPlugin,
-            stats::StatsPlugin,
-            collision::CollisionPlugin,
-            interaction::InteractionPlugin,
-            animals::AnimalsPlugin,
-            hud::HudPlugin,
-        ));
+    if headless {
+        RunMode::Headless(HeadlessConfig {
+            port,
+            resolution,
+            step_mode,
+            enable_stdio,
+        })
+    } else {
+        RunMode::Windowed
+    }
+}
 
-        // Order new `AppSystems` variants by adding them here:
-        app.configure_sets(
-            Update,
-            (
-                AppSystems::TickTimers,
-                AppSystems::RecordInput,
-                AppSystems::DecayCalculation,
-                AppSystems::UpkeepCalculation,
-                AppSystems::UiUpdate,
-                AppSystems::SaveSystem,
-                AppSystems::Update,
-            )
-                .chain(),
-        );
+pub fn build_app(mode: RunMode) -> App {
+    let mut app = App::new();
+    let headless = matches!(mode, RunMode::Headless(_));
 
-        // Set up the `Pause` state.
-        app.init_state::<Pause>();
-        app.configure_sets(Update, PausableSystems.run_if(in_state(Pause(false))));
+    let window_plugin = match mode {
+        RunMode::Windowed => WindowPlugin {
+            primary_window: Window {
+                title: "Alveus Idle Cli".to_string(),
+                fit_canvas_to_parent: true,
+                resolution: bevy::window::WindowResolution::default()
+                    .with_scale_factor_override(1.0),
+                ..default()
+            }
+            .into(),
+            ..default()
+        },
+        RunMode::Headless(_) => WindowPlugin {
+            primary_window: None,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            ..default()
+        },
+    };
 
-        // Spawn the main camera.
+    app.add_plugins(
+        DefaultPlugins
+            .set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            })
+            .set(window_plugin),
+    );
+
+    app.register_type::<components::BuildingEntrance>()
+        .register_type::<components::TileGroup>()
+        .register_type::<components::RectangleTileGroup>()
+        .register_type::<components::TilePosition>()
+        .register_type::<components::Obstacle>()
+        .register_type::<components::DynamicObstacle>()
+        .register_type::<components::InEnclosure>()
+        .register_type::<components::PersistedDynamicObstacle>()
+        .register_type::<content::RoomObjectId>()
+        .register_type::<content::ItemId>()
+        .register_type::<interaction::Interactable>()
+        .register_type::<interaction::GiveItem>()
+        .register_type::<interaction::FeedAnimal>();
+
+    app.add_plugins((
+        asset_tracking::plugin,
+        audio::plugin,
+        demo::plugin,
+        #[cfg(feature = "dev")]
+        dev_tools::plugin,
+        menus::plugin,
+        screens::plugin,
+        theme::plugin,
+        bevy_tweening::TweeningPlugin,
+        stats::StatsPlugin,
+        collision::CollisionPlugin,
+        interaction::InteractionPlugin,
+        animals::AnimalsPlugin,
+        hud::HudPlugin,
+        CommandPlugin,
+    ));
+
+    if headless {
+        #[cfg(feature = "headless")]
+        {
+            let HeadlessConfig {
+                port,
+                resolution,
+                step_mode: _,
+                enable_stdio,
+            } = match mode {
+                RunMode::Headless(cfg) => cfg,
+                RunMode::Windowed => unreachable!(),
+            };
+
+            app.add_plugins(HeadlessPlugin {
+                http_port: port,
+                resolution,
+                enable_stdio,
+            });
+        }
+        #[cfg(not(feature = "headless"))]
+        {
+            panic!("Rebuild with `--features headless` to use --headless mode");
+        }
+    } else {
+        headless::reflect::register_headless_types(&mut app);
         app.add_systems(Startup, spawn_camera);
+    }
+
+    app.configure_sets(
+        Update,
+        (
+            AppSystems::TickTimers,
+            AppSystems::RecordInput,
+            AppSystems::DecayCalculation,
+            AppSystems::UpkeepCalculation,
+            AppSystems::UiUpdate,
+            AppSystems::SaveSystem,
+            AppSystems::Update,
+        )
+            .chain(),
+    );
+
+    app.init_state::<Pause>();
+    app.configure_sets(Update, PausableSystems.run_if(in_state(Pause(false))));
+
+    app
+}
+
+fn run_headless_loop(app: &mut App) -> AppExit {
+    loop {
+        while app.world().resource::<StepRequest>().pending == 0 {
+            if app.should_exit().is_some() {
+                return AppExit::Success;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let frames = app.world_mut().resource_mut::<StepRequest>().take_all();
+        for _ in 0..frames {
+            app.update();
+            if let Some(exit) = app.should_exit() {
+                return exit;
+            }
+        }
     }
 }
 
 /// High-level groupings of systems for the app in the `Update` schedule.
-/// When adding a new variant, make sure to order it in the `configure_sets`
-/// call above.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum AppSystems {
-    /// Tick timers.
     TickTimers,
-    /// Record player input.
     RecordInput,
-    /// Systems that run decay logic.
     DecayCalculation,
-    /// Systems that update global upkeep.
     UpkeepCalculation,
-    /// Systems that update HUD / UI text/bars.
     UiUpdate,
-    /// Systems that periodically save/autosave state.
     SaveSystem,
-    /// Do everything else.
     Update,
 }
 
 /// Whether or not the game is paused.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
 pub struct Pause(pub bool);
 
 /// A system set for systems that shouldn't run while the game is paused.

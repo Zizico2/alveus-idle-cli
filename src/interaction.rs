@@ -76,12 +76,14 @@ pub struct PlayerSatchel {
     pub item: Option<ItemId>,
 }
 
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Debug, Default, Reflect)]
+#[reflect(Resource)]
 pub struct ActiveInteractionTarget {
     pub interactable: Option<Entity>,
 }
 
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Debug, Default, Reflect)]
+#[reflect(Resource)]
 pub struct LastPickupMessage {
     pub text: Option<String>,
     pub timer: Timer,
@@ -89,7 +91,8 @@ pub struct LastPickupMessage {
 
 /// Emitted when the player successfully feeds an animal at a dish.
 /// Item consumption, stat changes, and UI feedback are handled by observers.
-#[derive(Event, Debug, Clone, Copy)]
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct AnimalFedEvent {
     pub animal_id: AnimalId,
     pub required_item: ItemId,
@@ -126,15 +129,17 @@ fn handle_drop_input(
     mut satchel: ResMut<PlayerSatchel>,
     mut commands: Commands,
 ) {
-    if !input.just_pressed(KeyCode::KeyK) {
-        return;
+    if input.just_pressed(KeyCode::KeyK) {
+        perform_drop(&mut satchel, &mut commands);
     }
+}
 
+pub fn perform_drop(satchel: &mut PlayerSatchel, commands: &mut Commands) {
     let Some(item) = satchel.item else {
         return;
     };
 
-    if let Err(message) = try_drop_item(&mut satchel) {
+    if let Err(message) = try_drop_item(satchel) {
         commands.insert_resource(LastPickupMessage {
             text: Some(message.to_string()),
             timer: Timer::from_seconds(2.5, TimerMode::Once),
@@ -146,6 +151,36 @@ fn handle_drop_input(
         text: Some(format!("Dropped {}", item_display_name(item))),
         timer: Timer::from_seconds(2.5, TimerMode::Once),
     });
+}
+
+pub fn perform_drop_in_world(world: &mut World) {
+    let drop_result = {
+        let mut satchel = world.resource_mut::<PlayerSatchel>();
+        let Some(item) = satchel.item else {
+            return;
+        };
+        if let Err(message) = try_drop_item(&mut satchel) {
+            Err(message.to_string())
+        } else {
+            Ok(item)
+        }
+    };
+
+    let mut commands = world.commands();
+    match drop_result {
+        Ok(item) => {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(format!("Dropped {}", item_display_name(item))),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+        }
+        Err(message) => {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(message),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+        }
+    }
 }
 
 fn decay_pickup_message(time: Res<Time>, mut message: ResMut<LastPickupMessage>) {
@@ -167,16 +202,32 @@ fn handle_interaction_input(
     mut satchel: ResMut<PlayerSatchel>,
     mut commands: Commands,
 ) {
-    if !input.just_pressed(KeyCode::Space) {
-        return;
+    if input.just_pressed(KeyCode::Space) {
+        perform_interact(
+            &active,
+            &tile_query,
+            &give_query,
+            &feed_query,
+            &mut satchel,
+            &mut commands,
+        );
     }
+}
 
+pub fn perform_interact(
+    active: &ActiveInteractionTarget,
+    tile_query: &Query<&TilePosition>,
+    give_query: &Query<&GiveItem>,
+    feed_query: &Query<&FeedAnimal>,
+    satchel: &mut PlayerSatchel,
+    commands: &mut Commands,
+) {
     let Some(entity) = active.interactable else {
         return;
     };
 
     if let Ok(give) = give_query.get(entity) {
-        if let Err(message) = try_give_item(&mut satchel, give.item_id) {
+        if let Err(message) = try_give_item(satchel, give.item_id) {
             commands.insert_resource(LastPickupMessage {
                 text: Some(message.to_string()),
                 timer: Timer::from_seconds(2.5, TimerMode::Once),
@@ -191,7 +242,7 @@ fn handle_interaction_input(
     }
 
     if let Ok(feed) = feed_query.get(entity) {
-        if let Err(message) = validate_feed_animal(&satchel, feed.required_item) {
+        if let Err(message) = validate_feed_animal(satchel, feed.required_item) {
             commands.insert_resource(LastPickupMessage {
                 text: Some(message.to_string()),
                 timer: Timer::from_seconds(2.5, TimerMode::Once),
@@ -209,6 +260,51 @@ fn handle_interaction_input(
             stat: feed.stat,
             delta: feed.delta,
             dish_position: *tile_pos,
+        });
+    }
+}
+
+pub fn perform_interact_in_world(world: &mut World) {
+    let entity = match world.resource::<ActiveInteractionTarget>().interactable {
+        Some(entity) => entity,
+        None => return,
+    };
+
+    if let Some(give) = world.get::<GiveItem>(entity).cloned() {
+        let pickup_message = {
+            let mut satchel = world.resource_mut::<PlayerSatchel>();
+            match try_give_item(&mut satchel, give.item_id) {
+                Ok(()) => format!("Picked up {}", item_display_name(give.item_id)),
+                Err(message) => message.to_string(),
+            }
+        };
+        world.commands().insert_resource(LastPickupMessage {
+            text: Some(pickup_message),
+            timer: Timer::from_seconds(2.5, TimerMode::Once),
+        });
+        return;
+    }
+
+    if let Some(feed) = world.get::<FeedAnimal>(entity).cloned() {
+        let satchel = world.resource::<PlayerSatchel>();
+        if let Err(message) = validate_feed_animal(&satchel, feed.required_item) {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+
+        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
+            return;
+        };
+
+        world.trigger(AnimalFedEvent {
+            animal_id: feed.animal_id,
+            required_item: feed.required_item,
+            stat: feed.stat,
+            delta: feed.delta,
+            dish_position: tile_pos,
         });
     }
 }

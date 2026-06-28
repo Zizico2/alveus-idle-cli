@@ -1,6 +1,6 @@
 //! The game's main screen states and transitions between them.
 
-mod gameplay;
+pub mod gameplay;
 mod loading;
 mod splash;
 mod title;
@@ -18,14 +18,14 @@ pub fn plugin(app: &mut App) {
     ));
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Reflect)]
 pub enum InRoom {
     NutritionHouse,
     PushPopEnclosure,
 }
 
 /// The game's main screen states.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
 pub enum Screen {
     #[default]
     Splash,

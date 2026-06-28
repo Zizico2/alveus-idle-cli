@@ -11,7 +11,8 @@ use crate::demo::toast::despawn_active_toast;
 use crate::screens::{Screen, InRoom};
 use crate::stats::{AnimalId, AnimalTilePosition, EnclosureId};
 
-#[derive(Resource, Debug, Clone, Copy)]
+#[derive(Resource, Debug, Clone, Copy, Reflect)]
+#[reflect(Resource)]
 pub struct PlayerSpawnPoint {
     pub position: TilePosition,
 }
@@ -22,6 +23,43 @@ impl Default for PlayerSpawnPoint {
             // Default starting position when entering the game
             position: TilePosition { x: 0, y: 0 },
         }
+    }
+}
+
+pub fn try_enter_room<S: States + FreelyMutableState>(
+    player_entrance: &BuildingEntrance,
+    required_entrance: BuildingEntrance,
+    room_state: S,
+    next_screen: &mut NextState<S>,
+) -> bool {
+    if *player_entrance == required_entrance {
+        info!("Entering room interior state!");
+        next_screen.set(room_state);
+        true
+    } else {
+        false
+    }
+}
+
+pub fn try_exit_room<S: States + FreelyMutableState>(
+    player_pos: TilePosition,
+    exit_door: TilePosition,
+    exit_spawn: TilePosition,
+    gameplay_state: S,
+    spawn_point: &mut PlayerSpawnPoint,
+    next_screen: &mut NextState<S>,
+    force: bool,
+) -> bool {
+    let should_exit =
+        force || (player_pos.x == exit_door.x && player_pos.y == exit_door.y);
+
+    if should_exit {
+        info!("Exiting room interior!");
+        spawn_point.position = exit_spawn;
+        next_screen.set(gameplay_state);
+        true
+    } else {
+        false
     }
 }
 
@@ -157,9 +195,8 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
         (move |input: Res<ButtonInput<KeyCode>>,
               player_query: Single<&BuildingEntrance, With<Player>>,
               mut next_screen: ResMut<NextState<S>>| {
-            if input.just_pressed(KeyCode::Enter) && *player_query == &entrance {
-                info!("Entering room interior state!");
-                next_screen.set(enter_state.clone());
+            if input.just_pressed(KeyCode::Enter) {
+                try_enter_room(&*player_query, entrance, enter_state.clone(), &mut next_screen);
             }
         })
         .run_if(in_state(gp_state)),
@@ -173,21 +210,16 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
               player_query: Single<&CurrentTilePosition, With<Player>>,
               mut next_screen: ResMut<NextState<S>>,
               mut spawn_point: ResMut<PlayerSpawnPoint>| {
-            let mut should_exit = false;
-
-            if input.just_pressed(KeyCode::Backspace) {
-                should_exit = true;
-            }
-
-            if player_query.0.x == exit_door.x && player_query.0.y == exit_door.y {
-                should_exit = true;
-            }
-
-            if should_exit {
-                info!("Exiting room interior!");
-                spawn_point.position = exit_spawn;
-                next_screen.set(gp_state.clone());
-            }
+            let force = input.just_pressed(KeyCode::Backspace);
+            try_exit_room(
+                player_query.0,
+                exit_door,
+                exit_spawn,
+                gp_state.clone(),
+                &mut spawn_point,
+                &mut next_screen,
+                force,
+            );
         })
         .run_if(in_state(enter_state)),
     );

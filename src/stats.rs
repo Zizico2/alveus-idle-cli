@@ -172,12 +172,14 @@ pub enum StatTarget {
 }
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct ImproveStatEvent {
     pub target: StatTarget,
     pub amount: u32,
 }
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
 pub struct WorsenStatEvent {
     pub target: StatTarget,
     pub amount: u32,
@@ -276,7 +278,8 @@ const ENCLOSURE_MAPPINGS: &[(EnclosureId, &str, f32)] = &[
 // Plugin
 // ---------------------------------------------------------
 
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub struct SavePath(pub String);
 
 impl Default for SavePath {
@@ -1051,6 +1054,95 @@ fn save_stats_periodically_system(
     }
 }
 
+/// Fast-forward simulated decay by the given number of hours.
+pub fn advance_simulated_hours(
+    commands: &mut Commands,
+    hours: f32,
+    animal_query: &Query<(&AnimalId, &AnimalDecayRates)>,
+    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates)>,
+) {
+    advance_simulated_hours_queries(commands, hours, animal_query, enclosure_query);
+}
+
+/// Fast-forward simulated decay using a mutable world (command queue / headless dispatch).
+pub fn advance_simulated_hours_world(world: &mut World, hours: f32) {
+    let mut animal_query = world.query::<(&AnimalId, &AnimalDecayRates)>();
+    let mut enclosure_query = world.query::<(&EnclosureId, &EnclosureDecayRates)>();
+    let animal_decays: Vec<(AnimalId, AnimalDecayRates)> = animal_query
+        .iter(world)
+        .map(|(id, rates)| (*id, rates.clone()))
+        .collect();
+    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates)> = enclosure_query
+        .iter(world)
+        .map(|(id, rates)| (*id, rates.clone()))
+        .collect();
+
+    let mut commands = world.commands();
+    for (id, decay_rates) in animal_decays {
+        trigger_animal_decay(&mut commands, id, &decay_rates, hours);
+    }
+    for (id, decay_rates) in enclosure_decays {
+        trigger_enclosure_decay(&mut commands, id, &decay_rates, hours);
+    }
+}
+
+fn advance_simulated_hours_queries(
+    commands: &mut Commands,
+    hours: f32,
+    animal_query: &Query<(&AnimalId, &AnimalDecayRates)>,
+    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates)>,
+) {
+    info!("Advancing simulated time by {hours} hours");
+    for (id, decay_rates) in animal_query {
+        trigger_animal_decay(commands, *id, decay_rates, hours);
+    }
+    for (id, decay_rates) in enclosure_query {
+        trigger_enclosure_decay(commands, *id, decay_rates, hours);
+    }
+}
+
+fn trigger_animal_decay(
+    commands: &mut Commands,
+    id: AnimalId,
+    decay_rates: &AnimalDecayRates,
+    hours: f32,
+) {
+    let hunger_decay = (decay_rates.hunger_rate * hours).round() as u32;
+    let happiness_decay = (decay_rates.happiness_rate * hours).round() as u32;
+
+    commands.trigger(WorsenStatEvent {
+        target: StatTarget::Animal {
+            id,
+            stat: AnimalStat::Hunger,
+        },
+        amount: hunger_decay,
+    });
+    commands.trigger(WorsenStatEvent {
+        target: StatTarget::Animal {
+            id,
+            stat: AnimalStat::Happiness,
+        },
+        amount: happiness_decay,
+    });
+}
+
+fn trigger_enclosure_decay(
+    commands: &mut Commands,
+    id: EnclosureId,
+    decay_rates: &EnclosureDecayRates,
+    hours: f32,
+) {
+    let cleanliness_decay = (decay_rates.cleanliness_rate * hours).round() as u32;
+
+    commands.trigger(WorsenStatEvent {
+        target: StatTarget::Enclosure {
+            id,
+            stat: EnclosureStat::Cleanliness,
+        },
+        amount: cleanliness_decay,
+    });
+}
+
 /// Debug stats control via keyboard inputs.
 fn debug_stats_control_system(
     mut commands: Commands,
@@ -1241,37 +1333,7 @@ fn debug_stats_control_system(
         || input.just_pressed(KeyCode::NumpadAdd)
         || input.just_pressed(KeyCode::KeyL)
     {
-        info!("Debug: Fast-forwarding time by 4 hours!");
-        for (id, decay_rates) in &animal_query {
-            let hunger_decay = (decay_rates.hunger_rate * 4.0).round() as u32;
-            let happiness_decay = (decay_rates.happiness_rate * 4.0).round() as u32;
-
-            commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal {
-                    id: *id,
-                    stat: AnimalStat::Hunger,
-                },
-                amount: hunger_decay,
-            });
-            commands.trigger(WorsenStatEvent {
-                target: StatTarget::Animal {
-                    id: *id,
-                    stat: AnimalStat::Happiness,
-                },
-                amount: happiness_decay,
-            });
-        }
-        for (id, decay_rates) in &enclosure_query {
-            let cleanliness_decay = (decay_rates.cleanliness_rate * 4.0).round() as u32;
-
-            commands.trigger(WorsenStatEvent {
-                target: StatTarget::Enclosure {
-                    id: *id,
-                    stat: EnclosureStat::Cleanliness,
-                },
-                amount: cleanliness_decay,
-            });
-        }
+        advance_simulated_hours_queries(&mut commands, 4.0, &animal_query, &enclosure_query);
     }
 }
 

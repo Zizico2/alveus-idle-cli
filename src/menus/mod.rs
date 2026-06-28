@@ -19,7 +19,7 @@ pub fn plugin(app: &mut App) {
     ));
 }
 
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
 pub enum Menu {
     #[default]
     None,

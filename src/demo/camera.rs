@@ -16,7 +16,7 @@ impl Plugin for CameraControllerPlugin {
 
 pub const CAMERA_FOLLOW_SPEED: f32 = 4.0;
 
-fn camera_follow(
+pub(crate) fn camera_follow(
     time: Res<Time>,
     player_transform: Single<&Transform, With<Player>>,
     mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
