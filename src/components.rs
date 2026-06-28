@@ -8,6 +8,7 @@ pub struct TilePosition {
 }
 
 #[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
 pub struct CurrentTilePosition(pub TilePosition);
 
 #[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq, Reflect)]
