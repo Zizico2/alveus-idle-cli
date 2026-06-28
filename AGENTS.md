@@ -78,7 +78,7 @@ Triggering a verb over BRP:
 
 Unit-variant verbs serialize as a bare string (`"SkipSplash"`, `"MoveStop"`).
 Data-carrying verbs serialize as a tagged object (`{ "Move": "Up" }`,
-`{ "Screenshot": { "path": "/tmp/x.png" } }`). Use `registry.schema` to confirm
+`{ "Screenshot": { "path": "/abs/path/to/repo/screenshots/frame.png" } }`). Use `registry.schema` to confirm
 the exact Reflect shape of struct-like variants rather than guessing.
 
 Commands are **buffered and applied once per frame**, then state transitions run.
@@ -107,8 +107,11 @@ verb, advance/await a frame, then read state back.
   expect on screen? is the HUD/toast visible?).
 
 Workflow: trigger `Screenshot`, wait ~2 frames, then read/analyze the PNG at
-`path`. In a Python driver, write to a known path under the repo (or `/tmp/`) and
-inspect the image in your session; attach it when reporting to the user. This
+`path`. In a Python driver, write under the repo's **`screenshots/`** directory
+(e.g. `screenshots/playtest_overview.png` — use an absolute path when triggering
+the verb). Create `screenshots/` if needed (`mkdir -p screenshots`). Do not
+scatter captures in the repo root or `/tmp/` unless you have a specific reason.
+Inspect the image in your session and attach it when reporting to the user. This
 rides the normal verb set — no custom BRP observation method.
 
 Use queries as the source of truth for **game logic** (stats, screen state, tile
@@ -142,6 +145,7 @@ makes lives in that file. This keeps sessions reproducible and inspectable.
 
 ### Rules
 - Keep the driver in `scripts/` (e.g. `scripts/headless_<scenario>_demo.py`).
+- Write screenshot output to `screenshots/` at the repo root (see §3).
 - Use only the stdlib (`urllib.request`, `json`, `time`) — no third-party deps
   required for the Python side. `scripts/headless_nutrition_house_demo.py` is one
   example driver; treat its constants the same way as the table above.
@@ -357,7 +361,7 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 | Read player position (after every move) | `world.query` `CurrentTilePosition` with `Player` filter |
 | Read current screen/menu/pause | `world.get_resources` `State<Screen>` etc. |
 | Discover types / verb shapes | `registry.schema`, `rpc.discover` |
-| Visual check / visual bugs | `GameCommand::Screenshot { path }`, then inspect PNG |
+| Visual check / visual bugs | `GameCommand::Screenshot { path }` → `screenshots/*.png`, then inspect |
 | Fast, logic-only test | `MinimalPlugins` unit test (`tests/common`) |
 | Protocol-level test | in-process `BrpSender` e2e (`tests/brp_tests.rs`) |
 | Live exploration/debugging | Python driver in `scripts/` against `--realtime` |

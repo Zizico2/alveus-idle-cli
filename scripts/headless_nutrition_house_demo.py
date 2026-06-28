@@ -8,11 +8,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 PORT = 15702
 BASE = f"http://127.0.0.1:{PORT}/"
 EVENT = "alveus_idle_cli::headless::command::GameCommand"
-SCREENSHOT = "/home/bernardo/Projects/alveus-idle-cli/nutrition_house_screenshot.png"
+SCREENSHOTS = Path(__file__).resolve().parent.parent / "screenshots"
+SCREENSHOT = SCREENSHOTS / "nutrition_house_screenshot.png"
 # Example constants — verify in src/ before relying on these (map/room config can change).
 # Nutrition House entrance: see AGENTS.md §4 table; derived from map + entrance.rs logs.
 NAV_RIGHT = 33
@@ -88,7 +90,8 @@ def main() -> int:
     time.sleep(3.0)
 
     print(f"Taking screenshot → {SCREENSHOT}", flush=True)
-    trigger({"Screenshot": {"path": SCREENSHOT}})
+    SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
+    trigger({"Screenshot": {"path": str(SCREENSHOT)}})
     time.sleep(2.0)
 
     print("Done.", flush=True)
