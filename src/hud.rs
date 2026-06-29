@@ -1,4 +1,5 @@
 use crate::AppSystems;
+use crate::cleaning::{PoopDump, PoopPile, PoopWheelbarrow, WHEELBARROW_CAPACITY};
 use crate::content::item_display_name;
 use crate::interaction::{
     ActiveInteractionTarget, FeedAnimal, GiveItem, LastPickupMessage, PlayerSatchel,
@@ -46,6 +47,12 @@ struct SatchelHudRoot;
 
 #[derive(Component)]
 struct SatchelBodyText;
+
+#[derive(Component)]
+struct WheelbarrowHudRoot;
+
+#[derive(Component)]
+struct WheelbarrowBodyText;
 
 // ---------------------------------------------------------
 // Plugin
@@ -224,6 +231,37 @@ fn spawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi
                         TextColor(Color::WHITE),
                         TextLayout::no_wrap(),
                         SatchelBodyText,
+                    ));
+                });
+
+                // B2. Wheelbarrow Card
+                panel.spawn((
+                    Name::new("Wheelbarrow Card"),
+                    WheelbarrowHudRoot,
+                    Node {
+                        width: Val::Percent(100.0),
+                        padding: UiRect::all(Val::Px(12.0)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(6.0),
+                        border_radius: BorderRadius::all(Val::Px(10.0)),
+                        border: UiRect::all(Val::Px(1.0)),
+                        display: Display::None,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.12, 0.10, 0.08, 0.75)),
+                    BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.05)),
+                )).with_children(|card| {
+                    card.spawn((
+                        Text::new("WHEELBARROW"),
+                        TextFont::from_font_size(11.0),
+                        TextColor(Color::srgb(0.8, 0.65, 0.45)),
+                    ));
+                    card.spawn((
+                        Text::new("Empty"),
+                        TextFont::from_font_size(14.0),
+                        TextColor(Color::WHITE),
+                        TextLayout::no_wrap(),
+                        WheelbarrowBodyText,
                     ));
                 });
 
@@ -549,15 +587,19 @@ fn update_hud_system(
 fn update_room_feedback_hud_system(
     screen: Res<State<Screen>>,
     satchel: Res<PlayerSatchel>,
+    wheelbarrow: Res<PoopWheelbarrow>,
     pickup_message: Res<LastPickupMessage>,
     active: Res<ActiveInteractionTarget>,
     give_query: Query<&GiveItem>,
     feed_query: Query<&FeedAnimal>,
+    poop_query: Query<&PoopPile>,
+    dump_query: Query<&PoopDump>,
     mut interaction_root: Query<
         &mut Node,
         (
             With<InteractionPromptRoot>,
             Without<SatchelHudRoot>,
+            Without<WheelbarrowHudRoot>,
             Without<UpkeepBarFill>,
             Without<AnimalStatBarFill>,
         ),
@@ -569,6 +611,7 @@ fn update_room_feedback_hud_system(
             Without<UpkeepText>,
             Without<AnimalStatText>,
             Without<SatchelBodyText>,
+            Without<WheelbarrowBodyText>,
         ),
     >,
     mut satchel_root: Query<
@@ -576,6 +619,7 @@ fn update_room_feedback_hud_system(
         (
             With<SatchelHudRoot>,
             Without<InteractionPromptRoot>,
+            Without<WheelbarrowHudRoot>,
             Without<UpkeepBarFill>,
             Without<AnimalStatBarFill>,
         ),
@@ -587,21 +631,57 @@ fn update_room_feedback_hud_system(
             Without<UpkeepText>,
             Without<AnimalStatText>,
             Without<InteractionPromptText>,
+            Without<WheelbarrowBodyText>,
+        ),
+    >,
+    mut wheelbarrow_root: Query<
+        &mut Node,
+        (
+            With<WheelbarrowHudRoot>,
+            Without<InteractionPromptRoot>,
+            Without<SatchelHudRoot>,
+            Without<UpkeepBarFill>,
+            Without<AnimalStatBarFill>,
+        ),
+    >,
+    mut wheelbarrow_body: Query<
+        &mut Text,
+        (
+            With<WheelbarrowBodyText>,
+            Without<UpkeepText>,
+            Without<AnimalStatText>,
+            Without<InteractionPromptText>,
+            Without<SatchelBodyText>,
         ),
     >,
 ) {
-    let in_interactive_room = matches!(
+    let allows_tile_interaction = matches!(
         screen.get(),
-        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
+        Screen::Gameplay | Screen::InRoom(_)
+    );
+    let in_cleaning_room = matches!(
+        screen.get(),
+        Screen::InRoom(InRoom::PushPopEnclosure)
     );
 
-    let prompt_message = if in_interactive_room {
+    let prompt_message = if allows_tile_interaction {
         active.interactable.and_then(|entity| {
             if let Ok(give) = give_query.get(entity) {
                 return Some(format!("Press [Space] to {}", give.prompt));
             }
             if let Ok(feed) = feed_query.get(entity) {
                 return Some(format!("Press [Space] to {}", feed.prompt));
+            }
+            if poop_query.get(entity).is_ok() {
+                return Some("Press [Space] to Pick up poop".to_string());
+            }
+            if let Ok(dump) = dump_query.get(entity) {
+                return Some(format!(
+                    "Press [Space] to {} ({}/{})",
+                    dump.prompt,
+                    wheelbarrow.count(),
+                    WHEELBARROW_CAPACITY
+                ));
             }
             None
         })
@@ -629,6 +709,10 @@ fn update_room_feedback_hud_system(
         }
     }
 
+    let in_interactive_room = matches!(
+        screen.get(),
+        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
+    );
     let on_overview_with_item = matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some();
     let show_satchel = in_interactive_room || on_overview_with_item;
     let satchel_display = if show_satchel {
@@ -647,6 +731,29 @@ fn update_room_feedback_hud_system(
     for mut txt in &mut satchel_body {
         if txt.as_str() != body_label {
             txt.0 = body_label.clone();
+        }
+    }
+
+    let show_wheelbarrow = in_cleaning_room || wheelbarrow.count() > 0;
+    let wheelbarrow_display = if show_wheelbarrow {
+        Display::Flex
+    } else {
+        Display::None
+    };
+
+    for mut node in &mut wheelbarrow_root {
+        if node.display != wheelbarrow_display {
+            node.display = wheelbarrow_display;
+        }
+    }
+
+    let wheelbarrow_label = format!(
+        "Wheelbarrow: {}/{}",
+        wheelbarrow.count(), WHEELBARROW_CAPACITY
+    );
+    for mut txt in &mut wheelbarrow_body {
+        if txt.as_str() != wheelbarrow_label {
+            txt.0 = wheelbarrow_label.clone();
         }
     }
 }
