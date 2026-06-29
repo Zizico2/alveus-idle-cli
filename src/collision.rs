@@ -94,6 +94,10 @@ impl CollisionMasks {
         self.static_blocked.contains_key(&key)
     }
 
+    pub fn set_static_mask(&mut self, key: CollisionMapKey, blocked: HashSet<TilePosition>) {
+        self.static_blocked.insert(key, blocked);
+    }
+
     pub fn is_statically_walkable(&self, key: CollisionMapKey, tile: TilePosition) -> bool {
         match self.static_blocked.get(&key) {
             Some(blocked) => !blocked.contains(&tile),
