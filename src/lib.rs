@@ -18,6 +18,7 @@ pub mod content;
 pub mod interaction;
 pub mod animals;
 pub mod collision;
+pub mod cleaning;
 pub mod hud;
 
 use std::thread;
@@ -170,7 +171,9 @@ pub fn build_app(mode: RunMode) -> App {
         .register_type::<content::ItemId>()
         .register_type::<interaction::Interactable>()
         .register_type::<interaction::GiveItem>()
-        .register_type::<interaction::FeedAnimal>();
+        .register_type::<interaction::FeedAnimal>()
+        .register_type::<cleaning::PoopPile>()
+        .register_type::<cleaning::PoopDump>();
 
     app.add_plugins((
         asset_tracking::plugin,
@@ -185,6 +188,7 @@ pub fn build_app(mode: RunMode) -> App {
         stats::StatsPlugin,
         collision::CollisionPlugin,
         interaction::InteractionPlugin,
+        cleaning::CleaningPlugin,
         animals::AnimalsPlugin,
         hud::HudPlugin,
         CommandPlugin,

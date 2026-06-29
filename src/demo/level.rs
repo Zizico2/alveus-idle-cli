@@ -34,6 +34,7 @@ pub(super) fn plugin(app: &mut App) {
                 r"^alveus_idle_cli::components::.*",
                 r"^alveus_idle_cli::content::.*",
                 r"^alveus_idle_cli::interaction::.*",
+                r"^alveus_idle_cli::cleaning::.*",
                 r"^alveus_idle_cli::stats::.*",
             ])
             .unwrap(),

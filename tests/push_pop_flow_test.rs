@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 use alveus_idle_cli::components::TilePosition;
 use alveus_idle_cli::content::ItemId;
+use alveus_idle_cli::cleaning::CleaningPlugin;
 use alveus_idle_cli::interaction::{
     try_give_item, AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel,
 };
@@ -21,7 +22,7 @@ fn test_push_pop_feed_restores_hunger() {
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((StatsPlugin, InteractionPlugin));
+    app.add_plugins((StatsPlugin, CleaningPlugin, InteractionPlugin));
 
     app.insert_resource(NextState::Pending(Screen::Gameplay));
     app.update();

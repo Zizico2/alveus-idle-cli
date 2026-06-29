@@ -6,6 +6,9 @@ use crate::components::{
     BuildingEntrance, CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure,
     Obstacle, PersistedDynamicObstacle, TilePosition,
 };
+use crate::cleaning::{
+    PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow,
+};
 use crate::content::{ItemId, RoomObjectId};
 use crate::demo::movement::{MovementController, MovementIntent};
 use crate::demo::player::Player;
@@ -46,6 +49,9 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<Interactable>()
         .register_type::<GiveItem>()
         .register_type::<FeedAnimal>()
+        .register_type::<PoopPile>()
+        .register_type::<PoopDump>()
+        .register_type::<PoopWheelbarrow>()
         .register_type::<RoomObjectId>()
         .register_type::<ItemId>()
         .register_type::<AnimalId>()
@@ -69,6 +75,8 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<GameCommand>()
         .register_type::<PlayClickEvent>()
         .register_type::<AnimalFedEvent>()
+        .register_type::<PoopPickedUpEvent>()
+        .register_type::<PoopDumpedEvent>()
         .register_type::<ImproveStatEvent>()
         .register_type::<WorsenStatEvent>()
         .register_type::<PlayerEnteredBuildingEvent>()
