@@ -25,6 +25,7 @@ pub enum RoomObjectId {
     DietFridge,
     SeedChest,
     PushPopFeedingDish,
+    CompostBin,
 }
 
 pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
@@ -32,6 +33,7 @@ pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
         RoomObjectId::DietFridge => "Diet Fridge",
         RoomObjectId::SeedChest => "Seed Chest",
         RoomObjectId::PushPopFeedingDish => "Push Pop's Feeding Dish",
+        RoomObjectId::CompostBin => "Compost Bin",
     }
 }
 
