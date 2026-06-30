@@ -4,13 +4,15 @@ use std::collections::{HashMap, HashSet};
 use std::borrow::Borrow;
 
 use bevy::prelude::*;
+use bevy::reflect::TypePath;
 use bevy_ecs_tiled::prelude::*;
 use moonshine_save::prelude::{Save, Unload};
 use rand::prelude::*;
-use tiled::LayerType;
+use tiled::{LayerType, PropertyValue};
 
 use crate::components::{
-    CurrentTilePosition, DynamicObstacle, InEnclosure, PersistedDynamicObstacle, TilePosition,
+    CurrentTilePosition, DynamicObstacle, InEnclosure, Obstacle, PersistedDynamicObstacle,
+    TilePosition,
 };
 use crate::content::{adjacent_tiles, animal_default_placement, enclosure_for_animal, tile_in_bounds, TileBounds};
 use crate::demo::level::{InteriorAssets, LevelAssets};
@@ -366,6 +368,16 @@ fn key_for_asset_id(
     None
 }
 
+/// Whether a tileset tile carries a Tiled class property for `T` (`propertytype` in `.tsx`).
+fn tile_has_tiled_component<T: TypePath>(tile: &tiled::Tile) -> bool {
+    tile.properties.values().any(|property| {
+        matches!(
+            property,
+            PropertyValue::ClassValue { property_type, .. } if property_type == T::type_path()
+        )
+    })
+}
+
 pub fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
     let mut obstacles = HashSet::new();
 
@@ -377,7 +389,7 @@ pub fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
         asset.for_each_tile(&tile_layer, |layer_tile, _data, tile_pos, _idx| {
             if layer_tile
                 .get_tile()
-                .is_some_and(|t| t.properties.contains_key("obstacle"))
+                .is_some_and(|t| tile_has_tiled_component::<Obstacle>(&t))
             {
                 obstacles.insert(TilePosition {
                     x: tile_pos.x,
