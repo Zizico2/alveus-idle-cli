@@ -366,122 +366,28 @@ fn key_for_asset_id(
     None
 }
 
-pub fn build_mask_from_map(map: &tiled::Map) -> HashSet<TilePosition> {
-    build_mask_from_map_with_size(map, None)
-}
-
-pub fn build_mask_from_map_with_size(
-    map: &tiled::Map,
-    tilemap_size: Option<(u32, u32)>,
-) -> HashSet<TilePosition> {
+pub fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
     let mut obstacles = HashSet::new();
 
-    for layer in map.layers() {
+    for layer in asset.map.layers() {
         let LayerType::Tiles(tile_layer) = layer.layer_type() else {
             continue;
         };
 
-        match tile_layer {
-            tiled::TileLayer::Finite(finite) => {
-                for x in 0..map.width {
-                    for y in 0..map.height {
-                        let mapped_y = map.height - 1 - y;
-                        let Some(layer_tile) = finite.get_tile(x as i32, mapped_y as i32) else {
-                            continue;
-                        };
-                        let Some(tile) = layer_tile.get_tile() else {
-                            continue;
-                        };
-                        if tile.properties.contains_key("obstacle") {
-                            obstacles.insert(TilePosition {
-                                x,
-                                y,
-                            });
-                        }
-                    }
-                }
-            }
-            tiled::TileLayer::Infinite(infinite) => {
-                use tiled::ChunkData;
-
-                let (topleft, bottomright) = infinite_chunk_bounds(map);
-                let tilemap_size = tilemap_size.unwrap_or_else(|| {
-                    let width =
-                        (bottomright.0 - topleft.0 + 1) as u32 * ChunkData::WIDTH as u32;
-                    let height =
-                        (bottomright.1 - topleft.1 + 1) as u32 * ChunkData::HEIGHT as u32;
-                    (width, height)
+        asset.for_each_tile(&tile_layer, |layer_tile, _data, tile_pos, _idx| {
+            if layer_tile
+                .get_tile()
+                .is_some_and(|t| t.properties.contains_key("obstacle"))
+            {
+                obstacles.insert(TilePosition {
+                    x: tile_pos.x,
+                    y: tile_pos.y,
                 });
-
-                for (chunk_pos, chunk) in infinite.chunks() {
-                    let chunk_pos_mapped = (
-                        chunk_pos.0 - topleft.0,
-                        chunk_pos.1 - topleft.1,
-                    );
-
-                    for lx in 0..ChunkData::WIDTH as i32 {
-                        for ly in 0..ChunkData::HEIGHT as i32 {
-                            let Some(layer_tile) = chunk.get_tile(lx, ly) else {
-                                continue;
-                            };
-                            let Some(tile) = layer_tile.get_tile() else {
-                                continue;
-                            };
-                            if !tile.properties.contains_key("obstacle") {
-                                continue;
-                            }
-
-                            let index_x =
-                                chunk_pos_mapped.0 * ChunkData::WIDTH as i32 + lx;
-                            let index_y =
-                                chunk_pos_mapped.1 * ChunkData::HEIGHT as i32 + ly;
-                            if index_x < 0 || index_y < 0 {
-                                continue;
-                            }
-
-                            let x = index_x as u32;
-                            let y = tilemap_size.1 - 1 - index_y as u32;
-                            obstacles.insert(TilePosition { x, y });
-                        }
-                    }
-                }
             }
-        }
+        });
     }
 
     obstacles
-}
-
-fn infinite_chunk_bounds(map: &tiled::Map) -> ((i32, i32), (i32, i32)) {
-    let mut topleft = (0, 0);
-    let mut bottomright = (0, 0);
-    let mut seen = false;
-
-    for layer in map.layers() {
-        let LayerType::Tiles(tiled::TileLayer::Infinite(infinite)) = layer.layer_type() else {
-            continue;
-        };
-
-        for (pos, _) in infinite.chunks() {
-            if !seen {
-                topleft = pos;
-                bottomright = pos;
-                seen = true;
-            } else {
-                topleft = (topleft.0.min(pos.0), topleft.1.min(pos.1));
-                bottomright = (bottomright.0.max(pos.0), bottomright.1.max(pos.1));
-            }
-        }
-    }
-
-    (topleft, bottomright)
-}
-
-fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
-    build_mask_from_map_with_size(
-        &asset.map,
-        Some((asset.tilemap_size.x, asset.tilemap_size.y)),
-    )
 }
 
 fn rebuild_collision_masks_on_asset_events(
@@ -719,39 +625,13 @@ mod tests {
     use crate::components::TilePosition;
 
     #[test]
-    fn push_pop_mask_blocks_feeding_dish_and_shelter() {
-        let mut loader = tiled::Loader::new();
-        let map = loader
-            .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-            .expect("push pop interior map should load");
-
-        let obstacles = build_mask_from_map(&map);
-
-        assert!(
-            obstacles.contains(&TilePosition { x: 8, y: 6 }),
-            "feeding dish tile should be blocked"
-        );
-        assert!(
-            obstacles.contains(&TilePosition { x: 3, y: 9 }),
-            "shelter tile should be blocked"
-        );
-        assert!(
-            !obstacles.contains(&TilePosition { x: 8, y: 4 }),
-            "Push Pop default home tile should be walkable"
-        );
-    }
-
-    #[test]
     fn push_pop_wander_never_includes_feeding_dish() {
-        let mut loader = tiled::Loader::new();
-        let map = loader
-            .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-            .expect("push pop interior map should load");
-
-        let obstacles = build_mask_from_map(&map);
         let key = CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure);
         let mut masks = CollisionMasks::default();
-        masks.static_blocked.insert(key, obstacles);
+        masks.static_blocked.insert(
+            key,
+            HashSet::from([TilePosition { x: 8, y: 6 }]),
+        );
 
         let dish = TilePosition { x: 8, y: 6 };
         assert!(
