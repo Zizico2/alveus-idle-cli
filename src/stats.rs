@@ -6,8 +6,8 @@ use std::path::Path;
 use std::time::SystemTime;
 use crate::components::TilePosition;
 use crate::collision::{
-    apply_daily_dynamic_spawns, random_wander_step, CollisionMapKey, CollisionMasks,
-    DynamicObstacleTiles, LiveObstacleItem, OFFLINE_DAY_HOURS,
+    random_wander_step, CollisionMapKey, CollisionMasks, DynamicObstacleTiles,
+    LiveObstacleItem,
 };
 use crate::content::{
     default_tile_position, enclosure_for_animal, OFFLINE_WANDER_STEPS_PER_HOUR,
@@ -768,11 +768,9 @@ fn ensure_dynamic_obstacle_tiles(
 
 fn apply_offline_decay_system(
     mut commands: Commands,
-    masks: Option<Res<CollisionMasks>>,
     timestamp_query: Query<(Entity, &SaveTimestamp)>,
     animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
     enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates)>,
-    dynamic_enclosure_query: Query<(&EnclosureId, &mut DynamicObstacleTiles)>,
 ) {
     let Ok((timestamp_entity, timestamp)) = timestamp_query.single() else {
         return;
@@ -844,11 +842,6 @@ fn apply_offline_decay_system(
                 steps: wander_steps,
             });
         }
-
-        if hours_elapsed >= OFFLINE_DAY_HOURS
-            && let Some(masks) = masks.as_ref() {
-                apply_daily_dynamic_spawns(masks, dynamic_enclosure_query);
-            }
     }
 
     commands.entity(timestamp_entity).despawn();
