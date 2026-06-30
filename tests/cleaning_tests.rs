@@ -6,7 +6,7 @@ use alveus_idle_cli::cleaning::{
     cleanliness_after_threshold_decay, cleanliness_decay_with_poops, poop_config_for,
     target_poop_count, try_dump_poop, try_pickup_poop,
 };
-use alveus_idle_cli::collision::{build_mask_from_map, CollisionMasks, DynamicObstacleTiles};
+use alveus_idle_cli::collision::{CollisionMasks, DynamicObstacleTiles};
 use alveus_idle_cli::components::TilePosition;
 use alveus_idle_cli::stats::{
     advance_simulated_hours_world, EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp,
@@ -335,11 +335,6 @@ fn test_threshold_poop_spawn_on_cleanliness() {
     app.init_resource::<CollisionMasks>();
     app.add_plugins(CleaningPlugin);
 
-    let mut loader = bevy_ecs_tiled::prelude::tiled::Loader::new();
-    let map = loader
-        .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-        .expect("push pop interior map should load");
-    let obstacles = build_mask_from_map(&map);
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
@@ -354,7 +349,7 @@ fn test_threshold_poop_spawn_on_cleanliness() {
         );
         masks.set_static_mask(
             alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
-            obstacles,
+            HashSet::new(),
         );
     }
 
@@ -415,11 +410,6 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
     app.init_resource::<CollisionMasks>();
     app.add_plugins(CleaningPlugin);
 
-    let mut loader = bevy_ecs_tiled::prelude::tiled::Loader::new();
-    let map = loader
-        .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-        .expect("push pop interior map should load");
-    let obstacles = build_mask_from_map(&map);
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
@@ -434,7 +424,7 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
         );
         masks.set_static_mask(
             alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
-            obstacles,
+            HashSet::new(),
         );
     }
     app.update();
@@ -471,11 +461,6 @@ fn test_offline_decay_from_full_spawns_three_poops() {
     app.init_resource::<CollisionMasks>();
     app.add_plugins(CleaningPlugin);
 
-    let mut loader = bevy_ecs_tiled::prelude::tiled::Loader::new();
-    let map = loader
-        .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-        .expect("push pop interior map should load");
-    let obstacles = build_mask_from_map(&map);
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
@@ -490,7 +475,7 @@ fn test_offline_decay_from_full_spawns_three_poops() {
         );
         masks.set_static_mask(
             alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
-            obstacles,
+            HashSet::new(),
         );
     }
 
@@ -555,11 +540,6 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
     app.init_resource::<CollisionMasks>();
     app.add_plugins(CleaningPlugin);
 
-    let mut loader = bevy_ecs_tiled::prelude::tiled::Loader::new();
-    let map = loader
-        .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-        .expect("push pop interior map should load");
-    let obstacles = build_mask_from_map(&map);
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
@@ -574,7 +554,7 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
         );
         masks.set_static_mask(
             alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
-            obstacles,
+            HashSet::new(),
         );
     }
 
