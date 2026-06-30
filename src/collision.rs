@@ -54,7 +54,7 @@ pub struct CollisionMasks {
     static_blocked: HashMap<CollisionMapKey, HashSet<TilePosition>>,
 }
 
-/// Save-backed dynamic blocked tiles for an enclosure (manure piles, movable obstacles).
+/// Save-backed dynamic blocked tiles for an enclosure (e.g. poop piles in Push Pop).
 #[derive(Component, Debug, Clone, Reflect, Default)]
 #[reflect(Component)]
 #[require(Save, Unload)]
@@ -235,11 +235,7 @@ impl Plugin for CollisionPlugin {
             .register_type::<PersistedDynamicObstacle>()
             .add_systems(
                 OnEnter(Screen::Gameplay),
-                (
-                    build_collision_masks_on_gameplay_enter,
-                    seed_initial_dynamic_spawns,
-                )
-                    .chain(),
+                build_collision_masks_on_gameplay_enter,
             )
             .add_systems(
                 Update,
@@ -531,105 +527,6 @@ fn cleanup_dynamic_obstacle_tiles(
         }
     }
 }
-
-/// Sync with design/rooms/pasture.json dynamic_spawns[0].
-pub struct HeadlessDynamicSpawnDef {
-    pub enclosure_id: EnclosureId,
-    pub count_min: u32,
-    pub count_max: u32,
-    pub spawn_bounds: TileBounds,
-}
-
-pub const HEADLESS_DYNAMIC_SPAWNS: &[HeadlessDynamicSpawnDef] = &[HeadlessDynamicSpawnDef {
-    enclosure_id: EnclosureId::Pasture,
-    count_min: 2,
-    count_max: 4,
-    spawn_bounds: TileBounds {
-        bottom_left: TilePosition { x: 2, y: 2 },
-        top_right: TilePosition { x: 19, y: 19 },
-    },
-}];
-
-/// Picks random walkable tiles and writes them to the enclosure's [`DynamicObstacleTiles`].
-pub fn apply_headless_dynamic_spawns(
-    static_masks: &CollisionMasks,
-    mut enclosure_query: Query<(&EnclosureId, &mut DynamicObstacleTiles)>,
-    rng: &mut impl Rng,
-) {
-    for def in HEADLESS_DYNAMIC_SPAWNS {
-        let key = CollisionMapKey::Enclosure(def.enclosure_id);
-        if !static_masks.contains(key) {
-            continue;
-        }
-
-        let Some((_, mut tiles)) = enclosure_query
-            .iter_mut()
-            .find(|(id, _)| **id == def.enclosure_id)
-        else {
-            continue;
-        };
-
-        tiles.clear();
-
-        let mut candidates = Vec::new();
-        for x in def.spawn_bounds.bottom_left.x..=def.spawn_bounds.top_right.x {
-            for y in def.spawn_bounds.bottom_left.y..=def.spawn_bounds.top_right.y {
-                let tile = TilePosition { x, y };
-                if static_masks.is_statically_walkable(key, tile) {
-                    candidates.push(tile);
-                }
-            }
-        }
-
-        let count = rng.random_range(def.count_min..=def.count_max);
-        candidates.shuffle(rng);
-        for tile in candidates.into_iter().take(count as usize) {
-            tiles.insert(tile);
-        }
-
-        info!(
-            "Headless dynamic spawn for {:?}: {} tiles",
-            def.enclosure_id,
-            tiles.0.len()
-        );
-    }
-}
-
-fn seed_initial_dynamic_spawns(
-    masks: Res<CollisionMasks>,
-    enclosure_query: Query<(&EnclosureId, &mut DynamicObstacleTiles)>,
-) {
-    if !collision_ready(&masks) {
-        return;
-    }
-
-    let pasture_unseeded = enclosure_query
-        .iter()
-        .find(|(id, _)| **id == EnclosureId::Pasture)
-        .is_some_and(|(_, tiles)| tiles.0.is_empty());
-
-    if !pasture_unseeded {
-        return;
-    }
-
-    let mut rng = rand::rng();
-    apply_headless_dynamic_spawns(&masks, enclosure_query, &mut rng);
-}
-
-/// Re-roll dynamic obstacles after a full day of offline time.
-pub fn apply_daily_dynamic_spawns(
-    static_masks: &CollisionMasks,
-    enclosure_query: Query<(&EnclosureId, &mut DynamicObstacleTiles)>,
-) {
-    if !collision_ready(static_masks) {
-        return;
-    }
-    let mut rng = rand::rng();
-    apply_headless_dynamic_spawns(static_masks, enclosure_query, &mut rng);
-}
-
-/// Re-roll headless dynamic obstacles when a full day of offline time passes.
-pub const OFFLINE_DAY_HOURS: f32 = 24.0;
 
 #[cfg(test)]
 mod tests {

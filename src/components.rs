@@ -53,7 +53,7 @@ pub struct DynamicObstacle;
 pub struct InEnclosure(pub crate::stats::EnclosureId);
 
 /// Save-backed dynamic tile synced to [`crate::collision::DynamicObstacleTiles`]
-/// while the entity is loaded (e.g. manure piles spawned in-room).
+/// while the entity is loaded (e.g. poop piles in Push Pop).
 #[derive(Component, Debug, Reflect, Default, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component, Default)]
 pub struct PersistedDynamicObstacle;

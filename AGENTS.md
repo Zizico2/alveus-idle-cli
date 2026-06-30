@@ -41,7 +41,7 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
    query `CurrentTilePosition` via `world.query` and use the returned tile as
    ground truth. A `Move` command does **not** guarantee the player advanced —
    static obstacles, room walls, and **dynamic obstacles** (wandering animals,
-   spawned manure piles, etc.) can block the intended tile. Tile-counting is
+   spawned poop piles, etc.) can block the intended tile. Tile-counting is
    useful for planning routes; it is never a substitute for reading position
    back from the ECS.
 
