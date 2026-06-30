@@ -611,19 +611,3 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
     common::cleanup_save(save_path);
 }
 
-#[test]
-fn test_overview_compost_bin_blocks_tile() {
-    use bevy_ecs_tiled::prelude::tiled::Loader;
-
-    let mut loader = Loader::new();
-    let map = loader
-        .load_tmx_map("assets/maps/overview/map.tmx")
-        .expect("overview map should load");
-
-    let obstacles = build_mask_from_map(&map);
-    assert!(
-        obstacles.contains(&TilePosition { x: 3, y: 0 }),
-        "overview compost bin at (3,0) should be blocked, got {obstacles:?}"
-    );
-}
-

@@ -38,3 +38,18 @@ fn interior_collision_masks_from_tiled_assets() {
         "Push Pop default home tile should be walkable"
     );
 }
+
+#[test]
+fn overview_compost_bin_blocked_in_collision_mask() {
+    let mut app = common::headless_tiled_test_app();
+
+    let overview = common::load_tiled_map(&mut app, "maps/overview/map.tmx");
+    let assets = app.world().resource::<Assets<TiledMapAsset>>();
+    let overview_asset = assets.get(&overview).expect("overview map asset");
+
+    let obstacles = build_mask_for_asset(overview_asset);
+    assert!(
+        obstacles.contains(&TilePosition { x: 3, y: 0 }),
+        "overview compost bin at (3,0) should be blocked"
+    );
+}
