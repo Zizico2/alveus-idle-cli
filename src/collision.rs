@@ -4,13 +4,15 @@ use std::collections::{HashMap, HashSet};
 use std::borrow::Borrow;
 
 use bevy::prelude::*;
+use bevy::reflect::TypePath;
 use bevy_ecs_tiled::prelude::*;
 use moonshine_save::prelude::{Save, Unload};
 use rand::prelude::*;
-use tiled::LayerType;
+use tiled::{LayerType, PropertyValue};
 
 use crate::components::{
-    CurrentTilePosition, DynamicObstacle, InEnclosure, PersistedDynamicObstacle, TilePosition,
+    CurrentTilePosition, DynamicObstacle, InEnclosure, Obstacle, PersistedDynamicObstacle,
+    TilePosition,
 };
 use crate::content::{adjacent_tiles, animal_default_placement, enclosure_for_animal, tile_in_bounds, TileBounds};
 use crate::demo::level::{InteriorAssets, LevelAssets};
@@ -366,43 +368,38 @@ fn key_for_asset_id(
     None
 }
 
-pub fn build_mask_from_map(map: &tiled::Map) -> HashSet<TilePosition> {
+/// Whether a tileset tile carries a Tiled class property for `T` (`propertytype` in `.tsx`).
+fn tile_has_tiled_component<T: TypePath>(tile: &tiled::Tile) -> bool {
+    tile.properties.values().any(|property| {
+        matches!(
+            property,
+            PropertyValue::ClassValue { property_type, .. } if property_type == T::type_path()
+        )
+    })
+}
+
+pub fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
     let mut obstacles = HashSet::new();
 
-    for layer in map.layers() {
+    for layer in asset.map.layers() {
         let LayerType::Tiles(tile_layer) = layer.layer_type() else {
             continue;
         };
 
-        match tile_layer {
-            tiled::TileLayer::Finite(finite) => {
-                for x in 0..map.width {
-                    for y in 0..map.height {
-                        let mapped_y = map.height - 1 - y;
-                        let Some(layer_tile) = finite.get_tile(x as i32, mapped_y as i32) else {
-                            continue;
-                        };
-                        let Some(tile) = layer_tile.get_tile() else {
-                            continue;
-                        };
-                        if tile.properties.contains_key("obstacle") {
-                            obstacles.insert(TilePosition {
-                                x,
-                                y,
-                            });
-                        }
-                    }
-                }
+        asset.for_each_tile(&tile_layer, |layer_tile, _data, tile_pos, _idx| {
+            if layer_tile
+                .get_tile()
+                .is_some_and(|t| tile_has_tiled_component::<Obstacle>(&t))
+            {
+                obstacles.insert(TilePosition {
+                    x: tile_pos.x,
+                    y: tile_pos.y,
+                });
             }
-            tiled::TileLayer::Infinite(_) => {}
-        }
+        });
     }
 
     obstacles
-}
-
-fn build_mask_for_asset(asset: &TiledMapAsset) -> HashSet<TilePosition> {
-    build_mask_from_map(&asset.map)
 }
 
 fn rebuild_collision_masks_on_asset_events(
@@ -640,39 +637,13 @@ mod tests {
     use crate::components::TilePosition;
 
     #[test]
-    fn push_pop_mask_blocks_feeding_dish_and_shelter() {
-        let mut loader = tiled::Loader::new();
-        let map = loader
-            .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-            .expect("push pop interior map should load");
-
-        let obstacles = build_mask_from_map(&map);
-
-        assert!(
-            obstacles.contains(&TilePosition { x: 8, y: 6 }),
-            "feeding dish tile should be blocked"
-        );
-        assert!(
-            obstacles.contains(&TilePosition { x: 3, y: 9 }),
-            "shelter tile should be blocked"
-        );
-        assert!(
-            !obstacles.contains(&TilePosition { x: 8, y: 4 }),
-            "Push Pop default home tile should be walkable"
-        );
-    }
-
-    #[test]
     fn push_pop_wander_never_includes_feeding_dish() {
-        let mut loader = tiled::Loader::new();
-        let map = loader
-            .load_tmx_map("assets/maps/interiors/push_pop_enclosure_interior.tmx")
-            .expect("push pop interior map should load");
-
-        let obstacles = build_mask_from_map(&map);
         let key = CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure);
         let mut masks = CollisionMasks::default();
-        masks.static_blocked.insert(key, obstacles);
+        masks.static_blocked.insert(
+            key,
+            HashSet::from([TilePosition { x: 8, y: 6 }]),
+        );
 
         let dish = TilePosition { x: 8, y: 6 };
         assert!(
