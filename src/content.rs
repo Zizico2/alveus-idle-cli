@@ -1,52 +1,17 @@
 //! Hardcoded game content synced with `design/data/*.json` and `design/rooms/*.json`.
 //! Placement for room objects and animals comes from Tiled maps; interaction rules live here.
+//!
+//! Static data tables (items, animal placements) live in [`alveus_configs`] and
+//! are re-exported here so existing `crate::content::*` paths keep resolving.
 
 use bevy::prelude::*;
-use crate::components::TilePosition;
 use crate::stats::{AnimalId, EnclosureId};
 
-// ---------------------------------------------------------
-// Items (sync with design/data/items.json)
-// ---------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub enum ItemId {
-    TortoiseLeafyGreens,
-    ChickenGrains,
-}
-
-impl ItemId {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ItemId::TortoiseLeafyGreens => "tortoise_leafy_greens",
-            ItemId::ChickenGrains => "chicken_grains",
-        }
-    }
-}
-
-pub struct ItemStaticData {
-    pub item_id: ItemId,
-    pub display_name: &'static str,
-}
-
-pub const ITEMS_DATA: &[ItemStaticData] = &[
-    ItemStaticData {
-        item_id: ItemId::TortoiseLeafyGreens,
-        display_name: "Tortoise Leafy Greens",
-    },
-    ItemStaticData {
-        item_id: ItemId::ChickenGrains,
-        display_name: "Chicken Grains",
-    },
-];
-
-pub fn item_display_name(item_id: ItemId) -> &'static str {
-    ITEMS_DATA
-        .iter()
-        .find(|i| i.item_id == item_id)
-        .map(|i| i.display_name)
-        .unwrap_or("Unknown Item")
-}
+pub use alveus_types::{ItemId, TileBounds, TilePosition};
+pub use alveus_configs::{
+    animal_default_placement, item_display_name, AnimalPlacementDef, ItemStaticData,
+    ITEMS_DATA, OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT, PUSH_POP_PLACEMENT,
+};
 
 // ---------------------------------------------------------
 // Room objects & interactions (sync with design/rooms/*.json)
@@ -71,51 +36,8 @@ pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
 }
 
 // ---------------------------------------------------------
-// Animal placement (runtime; positions change over time)
+// Derived lookups over the shared placement tables
 // ---------------------------------------------------------
-
-#[derive(Debug, Clone, Copy)]
-pub struct TileBounds {
-    pub bottom_left: TilePosition,
-    pub top_right: TilePosition,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct AnimalPlacementDef {
-    pub animal_id: AnimalId,
-    pub home_position: TilePosition,
-    pub wander_bounds: TileBounds,
-}
-
-/// Sync with design/rooms/nutrition_house.json animals[0].
-/// `home_position` is the default tile for new saves only — not the runtime spawn point.
-pub const POLLY_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
-    animal_id: AnimalId::Polly,
-    home_position: TilePosition { x: 8, y: 4 },
-    wander_bounds: TileBounds {
-        bottom_left: TilePosition { x: 7, y: 1 },
-        top_right: TilePosition { x: 9, y: 5 },
-    },
-};
-
-/// Sync with design/rooms/push_pop_enclosure.json animals[0].
-/// `home_position` is the default tile for new saves only — not the runtime spawn point.
-pub const PUSH_POP_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
-    animal_id: AnimalId::PushPop,
-    home_position: TilePosition { x: 8, y: 4 },
-    wander_bounds: TileBounds {
-        bottom_left: TilePosition { x: 5, y: 3 },
-        top_right: TilePosition { x: 10, y: 8 },
-    },
-};
-
-pub fn animal_default_placement(animal_id: AnimalId) -> Option<&'static AnimalPlacementDef> {
-    match animal_id {
-        AnimalId::Polly => Some(&POLLY_PLACEMENT),
-        AnimalId::PushPop => Some(&PUSH_POP_PLACEMENT),
-        _ => None,
-    }
-}
 
 pub fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
     match animal_id {
@@ -164,6 +86,3 @@ pub fn adjacent_tiles(tile: TilePosition) -> [TilePosition; 4] {
         },
     ]
 }
-
-/// Rough idle wander rate used for offline catch-up (steps per hour).
-pub const OFFLINE_WANDER_STEPS_PER_HOUR: f32 = 30.0;

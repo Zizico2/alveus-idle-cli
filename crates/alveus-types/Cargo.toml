@@ -1,0 +1,11 @@
+[package]
+name = "alveus-types"
+version = "0.1.0"
+edition = "2024"
+description = "Shared game identifiers and lookup-key types for alveus-idle"
+
+[dependencies]
+bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
+bevy_reflect = "0.19"
+moonshine-save = "0.7"
+phf_shared = "0.11"

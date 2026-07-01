@@ -91,17 +91,17 @@ def animal_stats() -> list[tuple[str, int, int]]:
     res = rpc("world.query", {
         "data": {
             "components": [
-                "alveus_idle_cli::stats::AnimalId",
+                "alveus_types::AnimalId",
                 "alveus_idle_cli::stats::AnimalStats",
             ],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::stats::AnimalId"]},
+        "filter": {"with": ["alveus_types::AnimalId"]},
     })
     out = []
     for row in res or []:
         comps = row.get("components", {})
-        aid = comps.get("alveus_idle_cli::stats::AnimalId", "?")
+        aid = comps.get("alveus_types::AnimalId", "?")
         stats = comps.get("alveus_idle_cli::stats::AnimalStats", {})
         out.append((str(aid), int(stats.get("hunger", -1)), int(stats.get("happiness", -1))))
     return out

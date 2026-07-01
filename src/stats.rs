@@ -13,6 +13,7 @@ use crate::content::{
     default_tile_position, enclosure_for_animal, OFFLINE_WANDER_STEPS_PER_HOUR,
 };
 use crate::AppSystems;
+pub use alveus_types::{AnimalId, EnclosureId};
 
 // ---------------------------------------------------------
 // Components
@@ -24,31 +25,6 @@ use crate::AppSystems;
 pub struct SaveTimestamp {
     pub value: u64,
 }
-
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
-#[reflect(Component)]
-#[require(Save, Unload)]
-pub enum AnimalId {
-    #[default]
-    Polly,
-    PushPop,
-    Stompy,
-    Georgie,
-    Siren,
-}
-
-impl AnimalId {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            AnimalId::Polly => "polly",
-            AnimalId::PushPop => "push_pop",
-            AnimalId::Stompy => "stompy",
-            AnimalId::Georgie => "georgie",
-            AnimalId::Siren => "siren",
-        }
-    }
-}
-
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
@@ -95,28 +71,6 @@ impl AnimalBackgroundWander {
         Self {
             bounds,
             idle_timer: Timer::from_seconds(2.0, TimerMode::Repeating),
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
-#[reflect(Component)]
-#[require(Save, Unload)]
-pub enum EnclosureId {
-    #[default]
-    NutritionHousePlaypen,
-    PushPopEnclosure,
-    Pasture,
-    ReptileEnclosure,
-}
-
-impl EnclosureId {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            EnclosureId::NutritionHousePlaypen => "nutrition_house_playpen",
-            EnclosureId::PushPopEnclosure => "push_pop_enclosure",
-            EnclosureId::Pasture => "pasture",
-            EnclosureId::ReptileEnclosure => "reptile_enclosure",
         }
     }
 }

@@ -31,7 +31,7 @@ def enum_variant_prop(name: str, type_path: str, variant: str) -> str:
 def give_item_prop(item_id: str, prompt: str) -> str:
     return f"""    <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
      <properties>
-{enum_variant_prop("item_id", "alveus_idle_cli::content::ItemId", item_id)}
+{enum_variant_prop("item_id", "alveus_types::ItemId", item_id)}
       <property name="prompt" type="string" value="{prompt}"/>
      </properties>
     </property>"""
@@ -46,8 +46,8 @@ def feed_animal_prop(
 ) -> str:
     return f"""    <property name="feed_animal" type="class" propertytype="alveus_idle_cli::interaction::FeedAnimal">
      <properties>
-{enum_variant_prop("animal_id", "alveus_idle_cli::stats::AnimalId", animal_id)}
-{enum_variant_prop("required_item", "alveus_idle_cli::content::ItemId", required_item)}
+{enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
+{enum_variant_prop("required_item", "alveus_types::ItemId", required_item)}
 {enum_variant_prop("stat", "alveus_idle_cli::stats::AnimalStat", stat)}
       <property name="delta" type="int" value="{delta}"/>
       <property name="prompt" type="string" value="{prompt}"/>

@@ -181,16 +181,16 @@ def animal_hunger(animal: str = "PushPop") -> int | None:
     res = rpc("world.query", {
         "data": {
             "components": [
-                "alveus_idle_cli::stats::AnimalId",
+                "alveus_types::AnimalId",
                 "alveus_idle_cli::stats::AnimalStats",
             ],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::stats::AnimalId"]},
+        "filter": {"with": ["alveus_types::AnimalId"]},
     })
     for row in res or []:
         comps = row.get("components", {})
-        aid = comps.get("alveus_idle_cli::stats::AnimalId")
+        aid = comps.get("alveus_types::AnimalId")
         if str(aid) == animal:
             stats = comps.get("alveus_idle_cli::stats::AnimalStats", {})
             return int(stats.get("hunger", -1))

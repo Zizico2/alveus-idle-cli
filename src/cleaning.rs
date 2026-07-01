@@ -4,42 +4,16 @@ use bevy::prelude::*;
 
 use crate::collision::DynamicObstacleTiles;
 use crate::components::TilePosition;
-use crate::content::{TileBounds, PUSH_POP_PLACEMENT};
 use crate::interaction::{Interactable, LastPickupMessage};
 use crate::screens::InRoom;
 use crate::stats::{
-    EnclosureId, EnclosureStat, ImproveStatEvent, StatTarget,
+    EnclosureStat, ImproveStatEvent, StatTarget,
 };
+use alveus_types::EnclosureId;
 
-// ---------------------------------------------------------
-// Config (sync with design/rooms/*.json dynamic_spawns — not loaded at boot)
-// ---------------------------------------------------------
-
-pub struct PoopConfig {
-    pub enclosure_id: EnclosureId,
-    /// Cleanliness at or below each threshold (0–1000 scale) adds one poop on the floor.
-    pub spawn_thresholds: &'static [u32],
-    /// Extra cleanliness units lost per hour per poop on the floor (0–1000 scale).
-    pub poop_decay_rate: f32,
-    /// Cleanliness restored when a poop is picked up (not when the wheelbarrow is emptied).
-    pub cleanliness_restore_per_poop: u32,
-    pub spawn_bounds: TileBounds,
-}
-
-/// WARNING: Keep in sync with design docs. Runtime values are authoritative here.
-pub const POOP_CONFIG: &[PoopConfig] = &[PoopConfig {
-    enclosure_id: EnclosureId::PushPopEnclosure,
-    spawn_thresholds: &[800, 500, 200],
-    poop_decay_rate: 20.0,
-    cleanliness_restore_per_poop: 350,
-    spawn_bounds: PUSH_POP_PLACEMENT.wander_bounds,
-}];
-
-pub const WHEELBARROW_CAPACITY: u8 = 10;
-
-pub fn poop_config_for(id: EnclosureId) -> Option<&'static PoopConfig> {
-    POOP_CONFIG.iter().find(|c| c.enclosure_id == id)
-}
+// Poop config data + the PHF lookup table live in `alveus-configs`; re-export so
+// `crate::cleaning::*` paths keep resolving for the decay math and tests below.
+pub use alveus_configs::{poop_config_for, PoopConfig, POOP_CONFIG, WHEELBARROW_CAPACITY};
 
 pub fn room_for_enclosure(id: EnclosureId) -> Option<InRoom> {
     match id {

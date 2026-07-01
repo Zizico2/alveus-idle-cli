@@ -1,7 +1,7 @@
 use alveus_idle_cli::cleaning::{
     cleanliness_after_threshold_decay, cleanliness_decay_with_poops, target_poop_count,
     try_dump_poop, try_pickup_poop, PoopDumpedEvent, PoopPickedUpEvent, PoopWheelbarrow,
-    WHEELBARROW_CAPACITY, POOP_CONFIG, CleaningPlugin,
+    poop_config_for, WHEELBARROW_CAPACITY, CleaningPlugin,
 };
 use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
 use alveus_idle_cli::collision::{CollisionMasks, DynamicObstacleTiles};
@@ -241,10 +241,7 @@ fn test_poop_pickup_removes_tile() {
 
 #[test]
 fn test_cleanliness_after_threshold_decay_24h_from_full() {
-    let config = POOP_CONFIG
-        .iter()
-        .find(|c| c.enclosure_id == EnclosureId::PushPopEnclosure)
-        .expect("Push Pop poop config");
+    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop poop config");
     assert_eq!(
         cleanliness_after_threshold_decay(1000, 24.0, 30.0, config),
         0,
@@ -290,10 +287,7 @@ fn test_wheelbarrow_persists_in_save() {
 
 #[test]
 fn push_pop_poop_config_matches_design_intent() {
-    let config = POOP_CONFIG
-        .iter()
-        .find(|c| c.enclosure_id == EnclosureId::PushPopEnclosure)
-        .expect("Push Pop poop config");
+    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop poop config");
     assert_eq!(config.spawn_thresholds, &[800, 500, 200]);
     assert_eq!(config.cleanliness_restore_per_poop, 350);
 }

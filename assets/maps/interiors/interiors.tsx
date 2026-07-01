@@ -39,9 +39,9 @@
     </property>
     <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
      <properties>
-    <property name="item_id" type="class" propertytype="alveus_idle_cli::content::ItemId">
+    <property name="item_id" type="class" propertytype="alveus_types::ItemId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::ItemId:::Variant" value="TortoiseLeafyGreens"/>
+      <property name=":variant" propertytype="alveus_types::ItemId:::Variant" value="TortoiseLeafyGreens"/>
      </properties>
     </property>
       <property name="prompt" type="string" value="Scoop tortoise leafy greens"/>
@@ -61,9 +61,9 @@
     </property>
     <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
      <properties>
-    <property name="item_id" type="class" propertytype="alveus_idle_cli::content::ItemId">
+    <property name="item_id" type="class" propertytype="alveus_types::ItemId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::ItemId:::Variant" value="ChickenGrains"/>
+      <property name=":variant" propertytype="alveus_types::ItemId:::Variant" value="ChickenGrains"/>
      </properties>
     </property>
       <property name="prompt" type="string" value="Scoop chicken grains"/>
@@ -108,14 +108,14 @@
     </property>
     <property name="feed_animal" type="class" propertytype="alveus_idle_cli::interaction::FeedAnimal">
      <properties>
-    <property name="animal_id" type="class" propertytype="alveus_idle_cli::stats::AnimalId">
+    <property name="animal_id" type="class" propertytype="alveus_types::AnimalId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::stats::AnimalId:::Variant" value="PushPop"/>
+      <property name=":variant" propertytype="alveus_types::AnimalId:::Variant" value="PushPop"/>
      </properties>
     </property>
-    <property name="required_item" type="class" propertytype="alveus_idle_cli::content::ItemId">
+    <property name="required_item" type="class" propertytype="alveus_types::ItemId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::ItemId:::Variant" value="TortoiseLeafyGreens"/>
+      <property name=":variant" propertytype="alveus_types::ItemId:::Variant" value="TortoiseLeafyGreens"/>
      </properties>
     </property>
     <property name="stat" type="class" propertytype="alveus_idle_cli::stats::AnimalStat">
