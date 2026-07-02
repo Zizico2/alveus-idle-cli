@@ -22,11 +22,12 @@ use alveus_types::EnclosureId;
 // `crate::cleaning::*` paths keep resolving for the decay math and tests below.
 pub use alveus_configs::{PoopConfig, WHEELBARROW_CAPACITY, poop_config_for};
 
-pub fn room_for_enclosure(id: EnclosureId) -> Option<InRoom> {
+pub fn room_for_enclosure(id: EnclosureId) -> InRoom {
     match id {
-        EnclosureId::PushPopEnclosure => Some(InRoom::PushPopEnclosure),
-        EnclosureId::NutritionHousePlaypen => Some(InRoom::NutritionHouse),
-        _ => None,
+        EnclosureId::PushPopEnclosure => InRoom::PushPopEnclosure,
+        EnclosureId::NutritionHousePlaypen => InRoom::NutritionHouse,
+        EnclosureId::Pasture => InRoom::Pasture,
+        EnclosureId::ReptileEnclosure => InRoom::ReptileEnclosure,
     }
 }
 
@@ -403,7 +404,6 @@ fn sync_threshold_poop_spawn_system(
         );
 
         if in_room
-            && let Some(room) = room
             && let (Some(meshes), Some(materials)) = (meshes.as_deref_mut(), materials.as_deref_mut())
         {
             for tile in spawned {

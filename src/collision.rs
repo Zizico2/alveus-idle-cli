@@ -47,6 +47,8 @@ pub fn enclosure_for_room(room: InRoom) -> EnclosureId {
     match room {
         InRoom::NutritionHouse => EnclosureId::NutritionHousePlaypen,
         InRoom::PushPopEnclosure => EnclosureId::PushPopEnclosure,
+        InRoom::Pasture => EnclosureId::Pasture,
+        InRoom::ReptileEnclosure => EnclosureId::ReptileEnclosure,
     }
 }
 
