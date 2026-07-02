@@ -1,7 +1,9 @@
+use crate::components::{
+    BuildingEntrance, CurrentTilePosition, RectangleTileGroup, TileGroup, TilePosition,
+};
+use crate::demo::player::Player;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
-use crate::components::{CurrentTilePosition, TileGroup, RectangleTileGroup, TilePosition, BuildingEntrance};
-use crate::demo::player::Player;
 
 // Grid Snapping bounds
 pub const TILE_SIZE: f32 = 32.0;
@@ -136,7 +138,9 @@ fn check_player_entrance_transitions(
     } else {
         if let Some(prev_entrance) = current_entrance {
             info!("Player exited building entrance: {:?}", prev_entrance);
-            commands.trigger(PlayerExitedBuildingEvent { entrance: *prev_entrance });
+            commands.trigger(PlayerExitedBuildingEvent {
+                entrance: *prev_entrance,
+            });
             commands.entity(player_entity).remove::<BuildingEntrance>();
         }
     }

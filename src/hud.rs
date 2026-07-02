@@ -1,11 +1,11 @@
-use bevy::prelude::*;
+use crate::AppSystems;
 use crate::content::item_display_name;
 use crate::interaction::{
     ActiveInteractionTarget, FeedAnimal, GiveItem, LastPickupMessage, PlayerSatchel,
 };
 use crate::screens::{InRoom, Screen};
-use crate::stats::{AnimalId, AnimalStats, SanctuaryUpkeep, AnimalStat};
-use crate::AppSystems;
+use crate::stats::{AnimalId, AnimalStat, AnimalStats, SanctuaryUpkeep};
+use bevy::prelude::*;
 
 // ---------------------------------------------------------
 // Component Markers
@@ -59,18 +59,9 @@ impl Plugin for HudPlugin {
         app.add_systems(OnEnter(Screen::Gameplay), spawn_hud_system);
 
         // Despawn HUD when returning to non-gameplay screens
-        app.add_systems(
-            OnEnter(Screen::Title),
-            despawn_hud_system,
-        );
-        app.add_systems(
-            OnEnter(Screen::Splash),
-            despawn_hud_system,
-        );
-        app.add_systems(
-            OnEnter(Screen::Loading),
-            despawn_hud_system,
-        );
+        app.add_systems(OnEnter(Screen::Title), despawn_hud_system);
+        app.add_systems(OnEnter(Screen::Splash), despawn_hud_system);
+        app.add_systems(OnEnter(Screen::Loading), despawn_hud_system);
 
         // Update systems run when player is actively playing
         app.add_systems(
@@ -87,20 +78,14 @@ impl Plugin for HudPlugin {
 }
 
 fn in_gameplay_or_room(screen_state: Res<State<Screen>>) -> bool {
-    matches!(
-        screen_state.get(),
-        Screen::Gameplay | Screen::InRoom(_)
-    )
+    matches!(screen_state.get(), Screen::Gameplay | Screen::InRoom(_))
 }
 
 // ---------------------------------------------------------
 // Spawning HUD UI
 // ---------------------------------------------------------
 
-fn spawn_hud_system(
-    mut commands: Commands,
-    query: Query<Entity, With<StatsHudUi>>,
-) {
+fn spawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi>>) {
     // Avoid double-spawning if HUD already exists
     if !query.is_empty() {
         return;
@@ -325,58 +310,77 @@ fn spawn_animal_card(
     species: &str,
     enclosure_name: &str,
 ) {
-    parent.spawn((
-        Name::new(format!("Animal Card - {}", name)),
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::all(Val::Px(12.0)),
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(6.0),
-            border_radius: BorderRadius::all(Val::Px(10.0)),
-            border: UiRect::all(Val::Px(1.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.1, 0.1, 0.12, 0.75)), // Glassmorphic charcoal
-        BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.05)),
-    )).with_children(|card| {
-        // Name and Species/Enclosure info
-        card.spawn((
+    parent
+        .spawn((
+            Name::new(format!("Animal Card - {}", name)),
             Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::all(Val::Px(12.0)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
+                border_radius: BorderRadius::all(Val::Px(10.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.12, 0.75)), // Glassmorphic charcoal
+            BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.05)),
+        ))
+        .with_children(|card| {
+            // Name and Species/Enclosure info
+            card.spawn((Node {
                 flex_direction: FlexDirection::Row,
                 justify_content: JustifyContent::SpaceBetween,
                 align_items: AlignItems::Center,
                 ..default()
-            },
-        )).with_children(|header| {
-            header.spawn(
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    ..default()
-                }
-            ).with_children(|left| {
-                left.spawn((
-                    Text::new(name),
-                    TextFont::from_font_size(16.0),
-                    TextColor(Color::WHITE),
-                ));
-                left.spawn((
-                    Text::new(format!("[{}]", enclosure_name)),
-                    TextFont::from_font_size(10.0),
-                    TextColor(Color::srgb(0.5, 0.8, 0.9)), // Sleek cyan-blue
-                ));
-            });
-            header.spawn((
-                Text::new(species),
-                TextFont::from_font_size(11.0),
-                TextColor(Color::srgb(0.6, 0.6, 0.6)),
-            ));
-        });
+            },))
+                .with_children(|header| {
+                    header
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            ..default()
+                        })
+                        .with_children(|left| {
+                            left.spawn((
+                                Text::new(name),
+                                TextFont::from_font_size(16.0),
+                                TextColor(Color::WHITE),
+                            ));
+                            left.spawn((
+                                Text::new(format!("[{}]", enclosure_name)),
+                                TextFont::from_font_size(10.0),
+                                TextColor(Color::srgb(0.5, 0.8, 0.9)), // Sleek cyan-blue
+                            ));
+                        });
+                    header.spawn((
+                        Text::new(species),
+                        TextFont::from_font_size(11.0),
+                        TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                    ));
+                });
 
-        // Stats Progress Bars
-        spawn_stat_row(card, animal_id, AnimalStat::Hunger, "Hunger", Color::srgb(0.2, 0.8, 0.3));
-        spawn_stat_row(card, animal_id, AnimalStat::Cleanliness, "Cleanliness", Color::srgb(0.2, 0.6, 0.9));
-        spawn_stat_row(card, animal_id, AnimalStat::Happiness, "Happiness", Color::srgb(0.8, 0.4, 0.9));
-    });
+            // Stats Progress Bars
+            spawn_stat_row(
+                card,
+                animal_id,
+                AnimalStat::Hunger,
+                "Hunger",
+                Color::srgb(0.2, 0.8, 0.3),
+            );
+            spawn_stat_row(
+                card,
+                animal_id,
+                AnimalStat::Cleanliness,
+                "Cleanliness",
+                Color::srgb(0.2, 0.6, 0.9),
+            );
+            spawn_stat_row(
+                card,
+                animal_id,
+                AnimalStat::Happiness,
+                "Happiness",
+                Color::srgb(0.8, 0.4, 0.9),
+            );
+        });
 }
 
 fn spawn_stat_row(
@@ -386,74 +390,65 @@ fn spawn_stat_row(
     label_text: &str,
     bar_color: Color,
 ) {
-    parent.spawn((
-        Node {
+    parent
+        .spawn((Node {
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(2.0),
             ..default()
-        },
-    )).with_children(|row| {
-        // Label & Percentage Text
-        row.spawn((
-            Node {
+        },))
+        .with_children(|row| {
+            // Label & Percentage Text
+            row.spawn((Node {
                 flex_direction: FlexDirection::Row,
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
-            },
-        )).with_children(|labels| {
-            labels.spawn((
-                Text::new(label_text),
-                TextFont::from_font_size(11.0),
-                TextColor(Color::srgb(0.8, 0.8, 0.8)),
-            ));
+            },))
+                .with_children(|labels| {
+                    labels.spawn((
+                        Text::new(label_text),
+                        TextFont::from_font_size(11.0),
+                        TextColor(Color::srgb(0.8, 0.8, 0.8)),
+                    ));
 
-            labels.spawn((
-                Text::new("100%"),
-                TextFont::from_font_size(11.0),
-                TextColor(Color::WHITE),
-                TextLayout::no_wrap(),
-                AnimalStatText {
-                    animal_id,
-                    stat,
-                },
-            ));
-        });
+                    labels.spawn((
+                        Text::new("100%"),
+                        TextFont::from_font_size(11.0),
+                        TextColor(Color::WHITE),
+                        TextLayout::no_wrap(),
+                        AnimalStatText { animal_id, stat },
+                    ));
+                });
 
-        // Progress Bar Track
-        row.spawn((
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(6.0),
-                border_radius: BorderRadius::all(Val::Px(3.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.05)),
-        )).with_children(|track| {
-            track.spawn((
+            // Progress Bar Track
+            row.spawn((
                 Node {
                     width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
+                    height: Val::Px(6.0),
                     border_radius: BorderRadius::all(Val::Px(3.0)),
                     ..default()
                 },
-                BackgroundColor(bar_color),
-                AnimalStatBarFill {
-                    animal_id,
-                    stat,
-                },
-            ));
+                BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.05)),
+            ))
+            .with_children(|track| {
+                track.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        border_radius: BorderRadius::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    BackgroundColor(bar_color),
+                    AnimalStatBarFill { animal_id, stat },
+                ));
+            });
         });
-    });
 }
 
 // ---------------------------------------------------------
 // Despawning HUD UI
 // ---------------------------------------------------------
 
-fn despawn_hud_system(
-    mut commands: Commands,
-    query: Query<Entity, With<StatsHudUi>>,
-) {
+fn despawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi>>) {
     for entity in &query {
         info!("Despawning Stats HUD UI Overlay...");
         // In Bevy 0.18, calling despawn() automatically recursively cleans up child hierarchies
@@ -634,8 +629,7 @@ fn update_room_feedback_hud_system(
         }
     }
 
-    let on_overview_with_item =
-        matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some();
+    let on_overview_with_item = matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some();
     let show_satchel = in_interactive_room || on_overview_with_item;
     let satchel_display = if show_satchel {
         Display::Flex
@@ -663,10 +657,7 @@ fn satchel_body_label(pickup_message: &LastPickupMessage, satchel: &PlayerSatche
     }
 
     if let Some(item) = satchel.item {
-        return format!(
-            "Carrying: {}\nPress [K] to drop",
-            item_display_name(item)
-        );
+        return format!("Carrying: {}\nPress [K] to drop", item_display_name(item));
     }
 
     "Empty".to_string()

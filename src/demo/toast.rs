@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use bevy::prelude::*;
 use crate::components::BuildingEntrance;
+use bevy::prelude::*;
 use bevy_tweening::{lens::UiPositionLens, *};
 
 // Layout coordinates
@@ -78,19 +78,19 @@ fn toast_trigger_observer(
     mut text_query: Query<&mut Text>,
 ) {
     let event = trigger.event();
-    
+
     if let Some((toast_entity, active_toast, node)) = active_toast_query.iter().next() {
         // Update message text
         if let Ok(mut text) = text_query.get_mut(active_toast.text_entity) {
             text.0 = event.message.clone();
         }
-        
+
         // Resolve current bottom position directly from the Val enum to avoid snapping
         let current_bottom = match node.bottom {
             Val::Px(val) => val,
             _ => TOAST_OFFSCREEN_BOTTOM,
         };
-        
+
         let slide_in = Tween::new(
             EaseFunction::CubicOut,
             std::time::Duration::from_millis(TOAST_SLIDE_DURATION_MS),
@@ -130,27 +130,34 @@ fn toast_trigger_observer(
                     },
                 },
             );
-            slide_in.then(delay).then(slide_out.with_cycle_completed_event(true)).into_boxed()
+            slide_in
+                .then(delay)
+                .then(slide_out.with_cycle_completed_event(true))
+                .into_boxed()
         } else {
             slide_in.into_boxed()
         };
-        
+
         let mut entity_cmds = commands.entity(toast_entity);
         entity_cmds.remove::<TweenAnim>();
-        
+
         if event.duration.is_some() {
             entity_cmds.insert((TweenAnim::new(tweenable), ToastDismissalMarker));
         } else {
-            entity_cmds.remove::<ToastDismissalMarker>().insert(TweenAnim::new(tweenable));
+            entity_cmds
+                .remove::<ToastDismissalMarker>()
+                .insert(TweenAnim::new(tweenable));
         }
     } else {
         // Spawn new toast UI
-        let text_entity = commands.spawn((
-            Text::new(event.message.clone()),
-            TextFont::from_font_size(TOAST_FONT_SIZE),
-            TextColor(Color::WHITE),
-        )).id();
-        
+        let text_entity = commands
+            .spawn((
+                Text::new(event.message.clone()),
+                TextFont::from_font_size(TOAST_FONT_SIZE),
+                TextColor(Color::WHITE),
+            ))
+            .id();
+
         let slide_in = Tween::new(
             EaseFunction::CubicOut,
             std::time::Duration::from_millis(TOAST_SLIDE_DURATION_MS),
@@ -190,11 +197,14 @@ fn toast_trigger_observer(
                     },
                 },
             );
-            slide_in.then(delay).then(slide_out.with_cycle_completed_event(true)).into_boxed()
+            slide_in
+                .then(delay)
+                .then(slide_out.with_cycle_completed_event(true))
+                .into_boxed()
         } else {
             slide_in.into_boxed()
         };
-        
+
         let mut entity_cmds = commands.spawn((
             Name::new("Toast Notification"),
             Node {
@@ -213,16 +223,14 @@ fn toast_trigger_observer(
             },
             BorderColor::all(TOAST_BORDER_COLOR), // Accenting left border
             BackgroundColor(TOAST_BACKGROUND_COLOR), // Premium dark glass
-            ActiveToast {
-                text_entity,
-            },
+            ActiveToast { text_entity },
             TweenAnim::new(tweenable),
         ));
-        
+
         if event.duration.is_some() {
             entity_cmds.insert(ToastDismissalMarker);
         }
-        
+
         entity_cmds.add_child(text_entity);
     }
 }
@@ -244,7 +252,7 @@ fn toast_dismiss_observer(
             Val::Px(val) => val,
             _ => TOAST_ONSCREEN_BOTTOM,
         };
-        
+
         let slide_out = Tween::new(
             EaseFunction::CubicIn,
             std::time::Duration::from_millis(TOAST_SLIDE_DURATION_MS),
@@ -262,9 +270,11 @@ fn toast_dismiss_observer(
                     right: Val::Auto,
                 },
             },
-        ).with_cycle_completed_event(true);
-        
-        commands.entity(toast_entity)
+        )
+        .with_cycle_completed_event(true);
+
+        commands
+            .entity(toast_entity)
             .remove::<TweenAnim>()
             .insert((TweenAnim::new(slide_out), ToastDismissalMarker));
     }
@@ -292,7 +302,10 @@ fn player_entered_building_observer(
         BuildingEntrance::PushPopEnclosure => "Push Pop Enclosure",
         _ => "Unknown Area",
     };
-    commands.trigger(TriggerToastEvent::presence(format!("Press [Enter] to enter {}", name)));
+    commands.trigger(TriggerToastEvent::presence(format!(
+        "Press [Enter] to enter {}",
+        name
+    )));
 }
 
 fn player_exited_building_observer(

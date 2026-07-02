@@ -6,7 +6,7 @@ use bevy_ecs_tiled::prelude::TiledMapAsset;
 
 use crate::{
     asset_tracking::ResourceHandles,
-    collision::{build_all_collision_masks, collision_ready, CollisionMasks},
+    collision::{CollisionMasks, build_all_collision_masks, collision_ready},
     demo::level::{InteriorAssets, LevelAssets},
     screens::Screen,
     theme::prelude::*,
@@ -48,18 +48,10 @@ fn build_collision_masks_during_loading(
         return;
     }
 
-    build_all_collision_masks(
-        &mut masks,
-        &map_assets,
-        &level_assets,
-        &interior_assets,
-    );
+    build_all_collision_masks(&mut masks, &map_assets, &level_assets, &interior_assets);
 }
 
-fn loading_complete(
-    resource_handles: Res<ResourceHandles>,
-    masks: Res<CollisionMasks>,
-) -> bool {
+fn loading_complete(resource_handles: Res<ResourceHandles>, masks: Res<CollisionMasks>) -> bool {
     resource_handles.is_all_done() && collision_ready(&masks)
 }
 

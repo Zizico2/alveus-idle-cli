@@ -1,7 +1,7 @@
 //! Collision: static masks from Tiled assets + save-backed dynamic blocked tiles.
 
-use std::collections::{HashMap, HashSet};
 use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
@@ -14,7 +14,9 @@ use crate::components::{
     CurrentTilePosition, DynamicObstacle, InEnclosure, Obstacle, PersistedDynamicObstacle,
     TilePosition,
 };
-use crate::content::{adjacent_tiles, animal_default_placement, enclosure_for_animal, tile_in_bounds, TileBounds};
+use crate::content::{
+    TileBounds, adjacent_tiles, animal_default_placement, enclosure_for_animal, tile_in_bounds,
+};
 use crate::demo::level::{InteriorAssets, LevelAssets};
 use crate::screens::{InRoom, Screen};
 use crate::stats::EnclosureId;
@@ -311,11 +313,7 @@ pub fn build_all_collision_masks(
     level_assets: &LevelAssets,
     interior_assets: &InteriorAssets,
 ) {
-    let handles = std::iter::once((
-        CollisionMapKey::Overview,
-        level_assets.map.clone(),
-    ))
-    .chain(
+    let handles = std::iter::once((CollisionMapKey::Overview, level_assets.map.clone())).chain(
         interior_assets
             .collision_entries()
             .into_iter()
@@ -456,19 +454,15 @@ fn register_dynamic_obstacle_spawn(
     let enc_id = in_enclosure.0;
     let key = CollisionMapKey::Enclosure(enc_id);
     if static_masks.is_statically_walkable(key, tile_pos.0)
-        && let Some((_, mut tiles)) = enclosure_query
-            .iter_mut()
-            .find(|(id, _)| **id == enc_id)
-        {
-            tiles.insert(tile_pos.0);
-        }
+        && let Some((_, mut tiles)) = enclosure_query.iter_mut().find(|(id, _)| **id == enc_id)
+    {
+        tiles.insert(tile_pos.0);
+    }
 
-    commands
-        .entity(entity)
-        .insert(TrackedDynamicObstacle {
-            enclosure_id: enc_id,
-            last_tile: tile_pos.0,
-        });
+    commands.entity(entity).insert(TrackedDynamicObstacle {
+        enclosure_id: enc_id,
+        last_tile: tile_pos.0,
+    });
 }
 
 fn sync_dynamic_obstacle_positions(
@@ -495,10 +489,7 @@ fn sync_dynamic_obstacle_positions(
 
         let enc_id = in_enclosure.0;
         let key = CollisionMapKey::Enclosure(enc_id);
-        if let Some((_, mut tiles)) = enclosure_query
-            .iter_mut()
-            .find(|(id, _)| **id == enc_id)
-        {
+        if let Some((_, mut tiles)) = enclosure_query.iter_mut().find(|(id, _)| **id == enc_id) {
             tiles.remove(tracked.last_tile);
             if static_masks.is_statically_walkable(key, tile_pos.0) {
                 tiles.insert(tile_pos.0);
@@ -537,10 +528,9 @@ mod tests {
     fn push_pop_wander_never_includes_feeding_dish() {
         let key = CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure);
         let mut masks = CollisionMasks::default();
-        masks.static_blocked.insert(
-            key,
-            HashSet::from([TilePosition { x: 8, y: 6 }]),
-        );
+        masks
+            .static_blocked
+            .insert(key, HashSet::from([TilePosition { x: 8, y: 6 }]));
 
         let dish = TilePosition { x: 8, y: 6 };
         assert!(

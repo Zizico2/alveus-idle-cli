@@ -1,14 +1,18 @@
-use bevy::prelude::*;
-use rand::prelude::*;
 use crate::collision::{
-    collision_key_for_animal, walkable_neighbors, CollisionMapKey, CollisionMasks,
-    DynamicObstacleTiles, LiveObstacleItem,
+    CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem,
+    collision_key_for_animal, walkable_neighbors,
 };
-use crate::components::{CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure, TilePosition};
+use crate::components::{
+    CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure, TilePosition,
+};
 use crate::content::animal_default_placement;
 use crate::demo::level::TILE_SIZE;
 use crate::screens::{InRoom, Screen};
-use crate::stats::{AnimalBackgroundWander, AnimalEnclosure, AnimalId, AnimalTilePosition, EnclosureId};
+use crate::stats::{
+    AnimalBackgroundWander, AnimalEnclosure, AnimalId, AnimalTilePosition, EnclosureId,
+};
+use bevy::prelude::*;
+use rand::prelude::*;
 
 pub struct AnimalsPlugin;
 
@@ -61,8 +65,8 @@ pub fn spawn_push_pop_npc(
     materials: &mut Assets<ColorMaterial>,
     tile: TilePosition,
 ) {
-    let placement = animal_default_placement(AnimalId::PushPop)
-        .expect("Push Pop must have placement config");
+    let placement =
+        animal_default_placement(AnimalId::PushPop).expect("Push Pop must have placement config");
     let mesh = meshes.add(Circle::new(14.0));
     let material = materials.add(Color::srgb(0.45, 0.55, 0.30));
 

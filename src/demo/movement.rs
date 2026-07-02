@@ -17,7 +17,9 @@ use bevy::prelude::*;
 
 use crate::{
     AppSystems, PausableSystems,
-    collision::{is_walkable, CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem},
+    collision::{
+        CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, is_walkable,
+    },
     components::{CurrentTilePosition, DesiredTilePosition, DynamicObstacle},
     demo::level::TILE_SIZE,
     screens::Screen,
@@ -64,8 +66,6 @@ pub enum MovementIntent {
 // this should match the animation duration for a single tile step
 #[derive(Component)]
 pub struct MovementDuration(pub Timer);
-
-
 
 fn update_desired_position(
     screen_state: Res<State<Screen>>,
@@ -138,14 +138,12 @@ fn start_movement(
 
 fn apply_movement(
     time: Res<Time>,
-    mut movement_query: Query<
-        (
-            &mut Transform,
-            &mut MovementDuration,
-            &DesiredTilePosition,
-            &mut CurrentTilePosition,
-        ),
-    >,
+    mut movement_query: Query<(
+        &mut Transform,
+        &mut MovementDuration,
+        &DesiredTilePosition,
+        &mut CurrentTilePosition,
+    )>,
 ) {
     for (mut transform, mut duration, desired, mut current) in &mut movement_query {
         if *desired == *current {

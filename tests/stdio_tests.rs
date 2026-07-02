@@ -4,8 +4,8 @@ use alveus_idle_cli::headless::register_headless_types;
 use alveus_idle_cli::screens::Screen;
 use alveus_idle_cli::stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
-use bevy::state::app::StatesPlugin;
 use bevy::remote::{BrpMessage, BrpSender};
+use bevy::state::app::StatesPlugin;
 use serde_json::json;
 
 #[test]
@@ -45,8 +45,14 @@ fn stdio_json_line_triggers_game_command() {
     app.update();
 
     let response = result_receiver.recv_blocking().expect("response");
-    assert!(response.is_ok(), "stdio-equivalent request failed: {response:?}");
-    assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Title);
+    assert!(
+        response.is_ok(),
+        "stdio-equivalent request failed: {response:?}"
+    );
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Title
+    );
 
     let _ = std::fs::remove_file(save_path);
 }

@@ -90,8 +90,14 @@ impl InteriorAssets {
     pub fn collision_entries(&self) -> [(crate::stats::EnclosureId, Handle<TiledMapAsset>); 2] {
         use crate::stats::EnclosureId;
         [
-            (EnclosureId::NutritionHousePlaypen, self.nutrition_house.clone()),
-            (EnclosureId::PushPopEnclosure, self.push_pop_enclosure.clone()),
+            (
+                EnclosureId::NutritionHousePlaypen,
+                self.nutrition_house.clone(),
+            ),
+            (
+                EnclosureId::PushPopEnclosure,
+                self.push_pop_enclosure.clone(),
+            ),
         ]
     }
 }
@@ -114,7 +120,14 @@ pub fn spawn_level(
         DespawnOnExit(Screen::Gameplay),
         children![
             (
-                player(400.0, &player_assets, &mut texture_atlas_layouts, &mut meshes, &mut materials, spawn_pos),
+                player(
+                    400.0,
+                    &player_assets,
+                    &mut texture_atlas_layouts,
+                    &mut meshes,
+                    &mut materials,
+                    spawn_pos
+                ),
                 CurrentTilePosition(spawn_pos),
                 DesiredTilePosition(spawn_pos),
             ),
@@ -126,11 +139,7 @@ pub fn spawn_level(
                 Name::new("Overview Map"),
                 TiledMap(level_assets.map.clone()),
                 TilemapAnchor::BottomLeft,
-                Transform::from_xyz(
-                    -(TILE_SIZE as f32 / 2.0),
-                    -(TILE_SIZE as f32 / 2.0),
-                    0.0,
-                ),
+                Transform::from_xyz(-(TILE_SIZE as f32 / 2.0), -(TILE_SIZE as f32 / 2.0), 0.0,),
             )
         ],
     ));

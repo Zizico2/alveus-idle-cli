@@ -2,21 +2,19 @@
 
 use bevy::audio::Volume;
 use bevy::prelude::*;
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
+use crate::Pause;
 use crate::components::{BuildingEntrance, CurrentTilePosition, TilePosition};
 use crate::demo::movement::{MovementController, MovementIntent};
 use crate::demo::player::Player;
-use crate::demo::room::{try_enter_room, PlayerSpawnPoint};
+use crate::demo::room::{PlayerSpawnPoint, try_enter_room};
 use crate::interaction::{perform_drop_in_world, perform_interact_in_world};
-use crate::menus::{main::PlayClickEvent, Menu};
+use crate::menus::{Menu, main::PlayClickEvent};
 use crate::screens::gameplay::spawn_pause_overlay;
 use crate::screens::{InRoom, Screen};
-use crate::stats::{
-    advance_simulated_hours_world, ImproveStatEvent, WorsenStatEvent,
-};
-use crate::Pause;
+use crate::stats::{ImproveStatEvent, WorsenStatEvent, advance_simulated_hours_world};
 
 use super::camera::HeadlessRenderTarget;
 
@@ -103,19 +101,13 @@ pub enum GameCommand {
     },
     /// Debug: fast-forward simulated decay by `hours` (mirrors the `=`/`L`
     /// fast-forward path).
-    AdvanceTime {
-        hours: f32,
-    },
+    AdvanceTime { hours: f32 },
     /// Debug: nudge the global audio volume by `delta` (clamped to [0.0, 3.0]).
-    AdjustVolume {
-        delta: f32,
-    },
+    AdjustVolume { delta: f32 },
     /// Harness: capture a PNG of the offscreen render target to `path`. With no
     /// headless render target it falls back to the primary window. The write is
     /// asynchronous — wait a couple of frames before reading the file.
-    Screenshot {
-        path: String,
-    },
+    Screenshot { path: String },
     /// Harness: in `--step` mode, request that the headless loop simulate `n`
     /// additional frames. Ignored in `--realtime` mode (frames advance on a
     /// wall-clock metronome there).
@@ -211,8 +203,7 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
                 return;
             }
             let entrance = {
-                let mut entrance_query =
-                    world.query_filtered::<&BuildingEntrance, With<Player>>();
+                let mut entrance_query = world.query_filtered::<&BuildingEntrance, With<Player>>();
                 entrance_query.single(world).ok().copied()
             };
             let Some(entrance) = entrance else {
@@ -240,10 +231,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             }
         }
         GameCommand::ExitRoom => {
-            let screen = world.resource::<State<Screen>>().get().clone();
+            let screen = *world.resource::<State<Screen>>().get();
             let player_pos = {
-                let mut pos_query =
-                    world.query_filtered::<&CurrentTilePosition, With<Player>>();
+                let mut pos_query = world.query_filtered::<&CurrentTilePosition, With<Player>>();
                 pos_query.single(world).ok().map(|pos| pos.0)
             };
             let Some(player_pos) = player_pos else {
@@ -260,8 +250,8 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             }
         }
         GameCommand::PauseToggle => {
-            let screen = world.resource::<State<Screen>>().get().clone();
-            let menu = world.resource::<State<Menu>>().get().clone();
+            let screen = *world.resource::<State<Screen>>().get();
+            let menu = *world.resource::<State<Menu>>().get();
             match (screen, menu) {
                 (Screen::Gameplay, Menu::None) => {
                     world.resource_mut::<NextState<Pause>>().set(Pause(true));
@@ -278,8 +268,8 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             world.trigger(PlayClickEvent);
         }
         GameCommand::Back => {
-            let screen = world.resource::<State<Screen>>().get().clone();
-            let menu = world.resource::<State<Menu>>().get().clone();
+            let screen = *world.resource::<State<Screen>>().get();
+            let menu = *world.resource::<State<Menu>>().get();
             let mut next_menu = world.resource_mut::<NextState<Menu>>();
             go_back_menu(&screen, &menu, &mut next_menu);
         }
@@ -338,7 +328,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
 fn exit_room_world(world: &mut World, _player_pos: TilePosition, exit_spawn: TilePosition) {
     info!("Exiting room interior!");
     world.resource_mut::<PlayerSpawnPoint>().position = exit_spawn;
-    world.resource_mut::<NextState<Screen>>().set(Screen::Gameplay);
+    world
+        .resource_mut::<NextState<Screen>>()
+        .set(Screen::Gameplay);
 }
 
 fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {

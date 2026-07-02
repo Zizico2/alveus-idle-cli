@@ -1,15 +1,13 @@
-use bevy::prelude::*;
-use bevy::state::app::StatesPlugin;
+use alveus_idle_cli::cleaning::CleaningPlugin;
 use alveus_idle_cli::components::TilePosition;
 use alveus_idle_cli::content::ItemId;
-use alveus_idle_cli::cleaning::CleaningPlugin;
 use alveus_idle_cli::interaction::{
-    try_give_item, AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel,
+    AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel, try_give_item,
 };
 use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{
-    AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin,
-};
+use alveus_idle_cli::stats::{AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin};
+use bevy::prelude::*;
+use bevy::state::app::StatesPlugin;
 
 #[test]
 fn test_push_pop_feed_restores_hunger() {
@@ -31,9 +29,7 @@ fn test_push_pop_feed_restores_hunger() {
         .world_mut()
         .query_filtered::<Entity, With<AnimalId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<AnimalId>(e).unwrap() == AnimalId::PushPop
-        })
+        .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::PushPop)
         .expect("Push Pop should exist");
 
     {

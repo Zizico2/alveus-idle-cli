@@ -1,16 +1,16 @@
 use alveus_idle_cli::cleaning::{
-    cleanliness_after_threshold_decay, cleanliness_decay_with_poops, target_poop_count,
-    try_dump_poop, try_pickup_poop, PoopDumpedEvent, PoopPickedUpEvent, PoopWheelbarrow,
-    poop_config_for, WHEELBARROW_CAPACITY, CleaningPlugin,
+    CleaningPlugin, PoopDumpedEvent, PoopPickedUpEvent, PoopWheelbarrow, WHEELBARROW_CAPACITY,
+    cleanliness_after_threshold_decay, cleanliness_decay_with_poops, poop_config_for,
+    target_poop_count, try_dump_poop, try_pickup_poop,
 };
-use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
 use alveus_idle_cli::collision::{CollisionMasks, DynamicObstacleTiles};
 use alveus_idle_cli::components::TilePosition;
 use alveus_idle_cli::stats::{
     EnclosureId, EnclosureStat, EnclosureStats, StatTarget, WorsenStatEvent,
 };
-use moonshine_save::prelude::SaveWorld;
+use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
 use moonshine_save::load::TriggerLoad;
+use moonshine_save::prelude::SaveWorld;
 use moonshine_save::save::TriggerSave;
 
 mod common;
@@ -47,10 +47,7 @@ fn test_try_dump_poop_returns_poops() {
             EnclosureId::PushPopEnclosure,
         ],
     };
-    assert_eq!(
-        try_dump_poop(&wheelbarrow).unwrap(),
-        wheelbarrow.poops
-    );
+    assert_eq!(try_dump_poop(&wheelbarrow).unwrap(), wheelbarrow.poops);
 }
 
 #[test]
@@ -94,9 +91,7 @@ fn test_poop_pickup_restores_cleanliness() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     app.world_mut().trigger(WorsenStatEvent {
@@ -107,7 +102,10 @@ fn test_poop_pickup_restores_cleanliness() {
         amount: 500,
     });
     assert_eq!(
-        app.world().get::<EnclosureStats>(enc_entity).unwrap().cleanliness,
+        app.world()
+            .get::<EnclosureStats>(enc_entity)
+            .unwrap()
+            .cleanliness,
         500
     );
 
@@ -152,9 +150,7 @@ fn test_poop_dump_does_not_restore_cleanliness() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     app.world_mut().trigger(WorsenStatEvent {
@@ -165,7 +161,10 @@ fn test_poop_dump_does_not_restore_cleanliness() {
         amount: 999,
     });
     assert_eq!(
-        app.world().get::<EnclosureStats>(enc_entity).unwrap().cleanliness,
+        app.world()
+            .get::<EnclosureStats>(enc_entity)
+            .unwrap()
+            .cleanliness,
         1
     );
 
@@ -200,9 +199,7 @@ fn test_poop_pickup_removes_tile() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     let tile = TilePosition { x: 7, y: 5 };
@@ -225,10 +222,7 @@ fn test_poop_pickup_removes_tile() {
     });
     app.update();
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert!(!tiles.contains(tile));
     assert!(app.world().get_entity(poop_entity).is_err());
 
@@ -254,15 +248,11 @@ fn test_wheelbarrow_persists_in_save() {
     app.add_plugins(CleaningPlugin);
     {
         let mut wheelbarrow = app.world_mut().resource_mut::<PoopWheelbarrow>();
-        wheelbarrow.poops = vec![
-            EnclosureId::PushPopEnclosure,
-            EnclosureId::PushPopEnclosure,
-        ];
+        wheelbarrow.poops = vec![EnclosureId::PushPopEnclosure, EnclosureId::PushPopEnclosure];
     }
 
     let mut save = SaveWorld::default_into_file(save_path);
-    save.resources = bevy::world_serialization::WorldFilter::deny_all()
-        .allow::<PoopWheelbarrow>();
+    save.resources = bevy::world_serialization::WorldFilter::deny_all().allow::<PoopWheelbarrow>();
     app.world_mut().trigger_save(save);
     app.update();
 
@@ -270,10 +260,16 @@ fn test_wheelbarrow_persists_in_save() {
     assert!(content.contains("PoopWheelbarrow"));
     assert!(content.contains("PushPopEnclosure"));
 
-    app.world_mut().resource_mut::<PoopWheelbarrow>().poops.clear();
+    app.world_mut()
+        .resource_mut::<PoopWheelbarrow>()
+        .poops
+        .clear();
     assert_eq!(app.world().resource::<PoopWheelbarrow>().count(), 0);
 
-    app.world_mut().trigger_load(moonshine_save::prelude::LoadWorld::default_from_file(save_path));
+    app.world_mut()
+        .trigger_load(moonshine_save::prelude::LoadWorld::default_from_file(
+            save_path,
+        ));
     app.update();
 
     assert_eq!(app.world().resource::<PoopWheelbarrow>().count(), 2);

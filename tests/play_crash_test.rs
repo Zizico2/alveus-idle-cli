@@ -1,8 +1,8 @@
+use alveus_idle_cli::menus::PlayClickEvent;
+use alveus_idle_cli::screens::Screen;
+use alveus_idle_cli::stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::menus::PlayClickEvent;
-use alveus_idle_cli::stats::{StatsPlugin, SavePath};
 use moonshine_save::prelude::SaveWorld;
 use moonshine_save::save::TriggerSave;
 
@@ -21,18 +21,29 @@ fn is_valid_save_format(content: &str) -> bool {
 
 #[test]
 fn test_print_ron_parsing() {
-    let invalid_ron = "(timestamp:1780883482,animals:{\"georgie\":(hunger:449,happiness:412)},enclosures:{})";
-    assert!(!is_valid_save_format(invalid_ron), "Invalid format should not be valid");
+    let invalid_ron =
+        "(timestamp:1780883482,animals:{\"georgie\":(hunger:449,happiness:412)},enclosures:{})";
+    assert!(
+        !is_valid_save_format(invalid_ron),
+        "Invalid format should not be valid"
+    );
 
     let mock_valid_ron = "(resources: [], entities: [])";
-    assert!(is_valid_save_format(mock_valid_ron), "Valid format should be valid");
+    assert!(
+        is_valid_save_format(mock_valid_ron),
+        "Valid format should be valid"
+    );
 }
 
 #[test]
 fn test_play_crash_on_invalid_save() {
     let test_save_path = "invalid_test_save.ron";
     let _ = std::fs::remove_file(test_save_path);
-    std::fs::write(test_save_path, "(timestamp:1780883482,animals:{\"georgie\":(hunger:449,happiness:412)},enclosures:{})").unwrap();
+    std::fs::write(
+        test_save_path,
+        "(timestamp:1780883482,animals:{\"georgie\":(hunger:449,happiness:412)},enclosures:{})",
+    )
+    .unwrap();
 
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
@@ -86,20 +97,41 @@ fn test_save_exclude_and_hydration() {
     app.update();
 
     // Verify screen is gameplay
-    assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Gameplay);
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Gameplay
+    );
 
     // Verify that the default entities have static components (e.g. AnimalName, EnclosureName)
-    let polly_entity = app.world_mut().query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
-         .iter(app.world())
-         .find(|&e| *app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap() == alveus_idle_cli::stats::AnimalId::Polly)
-         .expect("Polly should exist");
+    let polly_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world()
+                .get::<alveus_idle_cli::stats::AnimalId>(e)
+                .unwrap()
+                == alveus_idle_cli::stats::AnimalId::Polly
+        })
+        .expect("Polly should exist");
 
-    assert!(app.world().get::<alveus_idle_cli::stats::AnimalName>(polly_entity).is_some());
-    assert!(app.world().get::<alveus_idle_cli::stats::AnimalEnclosure>(polly_entity).is_some());
+    assert!(
+        app.world()
+            .get::<alveus_idle_cli::stats::AnimalName>(polly_entity)
+            .is_some()
+    );
+    assert!(
+        app.world()
+            .get::<alveus_idle_cli::stats::AnimalEnclosure>(polly_entity)
+            .is_some()
+    );
 
     // Modify Polly's hunger stats so we can verify it gets saved and loaded
     {
-        let mut stats = app.world_mut().get_mut::<alveus_idle_cli::stats::AnimalStats>(polly_entity).unwrap();
+        let mut stats = app
+            .world_mut()
+            .get_mut::<alveus_idle_cli::stats::AnimalStats>(polly_entity)
+            .unwrap();
         stats.hunger = 450;
     }
 
@@ -108,7 +140,7 @@ fn test_save_exclude_and_hydration() {
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    
+
     // Spawn the SaveTimestamp entity if not exists
     app.world_mut().spawn((
         Name::new("Save Timestamp"),
@@ -130,15 +162,38 @@ fn test_save_exclude_and_hydration() {
 
     // Now let's read the save file content and verify that it does NOT contain "AnimalName" or "AnimalEnclosure" or "Name"!
     let save_content = std::fs::read_to_string(test_save_path).expect("Save file not written");
-    assert!(!save_content.contains("AnimalName"), "Save file should not contain AnimalName");
-    assert!(!save_content.contains("AnimalEnclosure"), "Save file should not contain AnimalEnclosure");
-    assert!(!save_content.contains("Name"), "Save file should not contain Name component");
-    assert!(save_content.contains("AnimalStats"), "Save file should contain AnimalStats");
-    assert!(save_content.contains("SaveTimestamp"), "Save file should contain SaveTimestamp");
+    assert!(
+        !save_content.contains("AnimalName"),
+        "Save file should not contain AnimalName"
+    );
+    assert!(
+        !save_content.contains("AnimalEnclosure"),
+        "Save file should not contain AnimalEnclosure"
+    );
+    assert!(
+        !save_content.contains("Name"),
+        "Save file should not contain Name component"
+    );
+    assert!(
+        save_content.contains("AnimalStats"),
+        "Save file should contain AnimalStats"
+    );
+    assert!(
+        save_content.contains("SaveTimestamp"),
+        "Save file should contain SaveTimestamp"
+    );
 
     // Clean up current stats entities to simulate starting the game fresh with the save file
     let mut entities_to_despawn = Vec::new();
-    for entity in app.world_mut().query_filtered::<Entity, Or<(With<alveus_idle_cli::stats::SaveTimestamp>, With<alveus_idle_cli::stats::AnimalId>, With<alveus_idle_cli::stats::EnclosureId>)>>().iter(app.world()) {
+    for entity in app
+        .world_mut()
+        .query_filtered::<Entity, Or<(
+            With<alveus_idle_cli::stats::SaveTimestamp>,
+            With<alveus_idle_cli::stats::AnimalId>,
+            With<alveus_idle_cli::stats::EnclosureId>,
+        )>>()
+        .iter(app.world())
+    {
         entities_to_despawn.push(entity);
     }
     for entity in entities_to_despawn {
@@ -152,23 +207,42 @@ fn test_save_exclude_and_hydration() {
     app.update();
     app.update(); // runs hydration and updates
 
-
     // Now, verify that the loaded entity got hydrated with static components!
-    let loaded_polly_entity = app.world_mut().query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
-         .iter(app.world())
-         .find(|&e| *app.world().get::<alveus_idle_cli::stats::AnimalId>(e).unwrap() == alveus_idle_cli::stats::AnimalId::Polly)
-         .expect("Loaded Polly should exist");
+    let loaded_polly_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world()
+                .get::<alveus_idle_cli::stats::AnimalId>(e)
+                .unwrap()
+                == alveus_idle_cli::stats::AnimalId::Polly
+        })
+        .expect("Loaded Polly should exist");
 
     // Check stats are loaded correctly (hunger is 450)
-    let stats = app.world().get::<alveus_idle_cli::stats::AnimalStats>(loaded_polly_entity).expect("Stats missing");
+    let stats = app
+        .world()
+        .get::<alveus_idle_cli::stats::AnimalStats>(loaded_polly_entity)
+        .expect("Stats missing");
     assert_eq!(stats.hunger, 450, "Hunger stat should be restored");
 
     // Check static components are hydrated!
-    let name = app.world().get::<alveus_idle_cli::stats::AnimalName>(loaded_polly_entity).expect("Name not hydrated");
+    let name = app
+        .world()
+        .get::<alveus_idle_cli::stats::AnimalName>(loaded_polly_entity)
+        .expect("Name not hydrated");
     assert_eq!(name.0, "Polly", "Name should be hydrated");
 
-    let enc = app.world().get::<alveus_idle_cli::stats::AnimalEnclosure>(loaded_polly_entity).expect("Enclosure not hydrated");
-    assert_eq!(enc.0, alveus_idle_cli::stats::EnclosureId::NutritionHousePlaypen, "Enclosure should be hydrated");
+    let enc = app
+        .world()
+        .get::<alveus_idle_cli::stats::AnimalEnclosure>(loaded_polly_entity)
+        .expect("Enclosure not hydrated");
+    assert_eq!(
+        enc.0,
+        alveus_idle_cli::stats::EnclosureId::NutritionHousePlaypen,
+        "Enclosure should be hydrated"
+    );
 
     // Cleanup
     let _ = std::fs::remove_file(test_save_path);
@@ -199,8 +273,18 @@ fn test_play_without_save() {
     app.update();
 
     // Assert that the screen state is gameplay and animal entities were spawned
-    assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Gameplay);
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Gameplay
+    );
 
-    let animal_count = app.world_mut().query::<&alveus_idle_cli::stats::AnimalId>().iter(app.world()).count();
-    assert_eq!(animal_count, 5, "Should initialize default 5 animals when save does not exist");
+    let animal_count = app
+        .world_mut()
+        .query::<&alveus_idle_cli::stats::AnimalId>()
+        .iter(app.world())
+        .count();
+    assert_eq!(
+        animal_count, 5,
+        "Should initialize default 5 animals when save does not exist"
+    );
 }

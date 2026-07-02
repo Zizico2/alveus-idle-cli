@@ -5,23 +5,12 @@ use bevy::prelude::*;
 use crate::collision::DynamicObstacleTiles;
 use crate::components::TilePosition;
 use crate::interaction::{Interactable, LastPickupMessage};
-use crate::screens::InRoom;
-use crate::stats::{
-    EnclosureStat, ImproveStatEvent, StatTarget,
-};
+use crate::stats::{EnclosureStat, ImproveStatEvent, StatTarget};
 use alveus_types::EnclosureId;
 
 // Poop config data lives in `alveus-configs`; re-export so
 // `crate::cleaning::*` paths keep resolving for the decay math and tests below.
-pub use alveus_configs::{poop_config_for, PoopConfig, WHEELBARROW_CAPACITY};
-
-pub fn room_for_enclosure(id: EnclosureId) -> Option<InRoom> {
-    match id {
-        EnclosureId::PushPopEnclosure => Some(InRoom::PushPopEnclosure),
-        EnclosureId::NutritionHousePlaypen => Some(InRoom::NutritionHouse),
-        _ => None,
-    }
-}
+pub use alveus_configs::{PoopConfig, WHEELBARROW_CAPACITY, poop_config_for};
 
 /// How many poops should be on the floor given current enclosure cleanliness.
 pub fn target_poop_count(cleanliness: u32, thresholds: &[u32]) -> u32 {
@@ -101,10 +90,7 @@ pub fn enclosure_cleanliness_decay_amount(
     }
     let config = poop_config_for(enclosure_id);
     start.saturating_sub(cleanliness_after_threshold_decay(
-        start,
-        hours,
-        base_rate,
-        config,
+        start, hours, base_rate, config,
     ))
 }
 

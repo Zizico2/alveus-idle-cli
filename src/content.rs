@@ -4,14 +4,14 @@
 //! Static data tables (items, animal placements) live in [`alveus_configs`] and
 //! are re-exported here so existing `crate::content::*` paths keep resolving.
 
-use bevy::prelude::*;
 use crate::stats::{AnimalId, EnclosureId};
+use bevy::prelude::*;
 
-pub use alveus_types::{ItemId, TileBounds, TilePosition};
 pub use alveus_configs::{
-    animal_default_placement, item_data, item_display_name, AnimalPlacementDef, ItemStaticData,
-    OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT, PUSH_POP_PLACEMENT,
+    AnimalPlacementDef, ItemStaticData, OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT,
+    PUSH_POP_PLACEMENT, animal_default_placement, item_data, item_display_name,
 };
+pub use alveus_types::{ItemId, TileBounds, TilePosition};
 
 // ---------------------------------------------------------
 // Room objects & interactions (sync with design/rooms/*.json)

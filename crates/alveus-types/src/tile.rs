@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
-use bevy_reflect::prelude::ReflectDefault;
 use bevy_reflect::Reflect;
+use bevy_reflect::prelude::ReflectDefault;
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Reflect)]
 #[reflect(Component, Default)]

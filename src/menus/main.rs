@@ -33,10 +33,7 @@ fn spawn_main_menu(mut commands: Commands) {
     ));
 }
 
-fn enter_loading_or_gameplay_screen(
-    _: On<Pointer<Click>>,
-    mut commands: Commands,
-) {
+fn enter_loading_or_gameplay_screen(_: On<Pointer<Click>>, mut commands: Commands) {
     commands.trigger(PlayClickEvent);
 }
 
