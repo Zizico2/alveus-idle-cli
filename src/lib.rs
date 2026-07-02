@@ -3,31 +3,32 @@
 // Disable console on Windows for non-dev builds.
 #![cfg_attr(not(feature = "dev"), windows_subsystem = "windows")]
 
+pub mod animals;
 pub mod asset_tracking;
-pub mod components;
 pub mod audio;
+pub mod cleaning;
+pub mod collision;
+pub mod components;
+pub mod content;
 pub mod demo;
 #[cfg(feature = "dev")]
 pub mod dev_tools;
 pub mod headless;
+pub mod hud;
+pub mod interaction;
 pub mod menus;
 pub mod screens;
-pub mod theme;
 pub mod stats;
-pub mod content;
-pub mod interaction;
-pub mod animals;
-pub mod collision;
-pub mod hud;
+pub mod theme;
 
 use std::thread;
 use std::time::Duration;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-use headless::{CommandPlugin, StepRequest, DEFAULT_HEADLESS_RESOLUTION};
 #[cfg(feature = "headless")]
 use headless::HeadlessPlugin;
+use headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, StepRequest};
 
 /// How the application is run.
 #[derive(Debug, Clone)]
@@ -98,12 +99,11 @@ fn parse_run_mode(args: Vec<String>) -> RunMode {
                 }
             }
             "--resolution" => {
-                if let Some(value) = iter.next() {
-                    if let Some((w, h)) = value.split_once('x') {
-                        if let (Ok(w), Ok(h)) = (w.parse(), h.parse()) {
-                            resolution = (w, h);
-                        }
-                    }
+                if let Some(value) = iter.next()
+                    && let Some((w, h)) = value.split_once('x')
+                    && let (Ok(w), Ok(h)) = (w.parse(), h.parse())
+                {
+                    resolution = (w, h);
                 }
             }
             _ => {}
@@ -170,7 +170,9 @@ pub fn build_app(mode: RunMode) -> App {
         .register_type::<content::ItemId>()
         .register_type::<interaction::Interactable>()
         .register_type::<interaction::GiveItem>()
-        .register_type::<interaction::FeedAnimal>();
+        .register_type::<interaction::FeedAnimal>()
+        .register_type::<cleaning::PoopPile>()
+        .register_type::<cleaning::PoopDump>();
 
     app.add_plugins((
         asset_tracking::plugin,
@@ -185,6 +187,7 @@ pub fn build_app(mode: RunMode) -> App {
         stats::StatsPlugin,
         collision::CollisionPlugin,
         interaction::InteractionPlugin,
+        cleaning::CleaningPlugin,
         animals::AnimalsPlugin,
         hud::HudPlugin,
         CommandPlugin,

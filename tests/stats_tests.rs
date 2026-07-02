@@ -1,11 +1,12 @@
+use alveus_idle_cli::screens::Screen;
+use alveus_idle_cli::stats::{
+    AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, EnclosureId, EnclosureName,
+    EnclosureStat, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
+    StatsPlugin, WorsenStatEvent, tick_decay_system,
+};
+use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use bevy::ecs::system::RunSystemOnce;
-use alveus_idle_cli::stats::{
-    AnimalId, AnimalName, AnimalStats, AnimalEnclosure, EnclosureId, EnclosureName, EnclosureStats, SanctuaryUpkeep, AnimalStat, EnclosureStat, ImproveStatEvent, WorsenStatEvent,
-    StatTarget, StatsPlugin, SavePath, tick_decay_system
-};
-use alveus_idle_cli::screens::Screen;
 
 #[test]
 fn test_stats_initialization() {
@@ -25,21 +26,31 @@ fn test_stats_initialization() {
 
     // Verify animal stats entities are spawned
     let animals: Vec<(AnimalId, String, AnimalStats, EnclosureId)> = {
-        let mut animal_query = app.world_mut().query::<(&AnimalId, &AnimalName, &AnimalStats, &AnimalEnclosure)>();
-        animal_query.iter(app.world()).map(|(id, name, stats, enc)| {
-            (*id, name.0.clone(), stats.clone(), enc.0)
-        }).collect()
+        let mut animal_query =
+            app.world_mut()
+                .query::<(&AnimalId, &AnimalName, &AnimalStats, &AnimalEnclosure)>();
+        animal_query
+            .iter(app.world())
+            .map(|(id, name, stats, enc)| (*id, name.0.clone(), stats.clone(), enc.0))
+            .collect()
     };
     assert_eq!(animals.len(), 5, "Should spawn 5 animals");
 
     // Verify enclosure stats entities are spawned
     let enclosures: Vec<(EnclosureId, String, EnclosureStats)> = {
-        let mut enclosure_query = app.world_mut().query::<(&EnclosureId, &EnclosureName, &EnclosureStats)>();
-        enclosure_query.iter(app.world()).map(|(id, name, stats)| {
-            (*id, name.0.clone(), stats.clone())
-        }).collect()
+        let mut enclosure_query = app
+            .world_mut()
+            .query::<(&EnclosureId, &EnclosureName, &EnclosureStats)>();
+        enclosure_query
+            .iter(app.world())
+            .map(|(id, name, stats)| (*id, name.0.clone(), stats.clone()))
+            .collect()
     };
-    assert_eq!(enclosures.len(), 4, "Should spawn 4 enclosures (Playpen, Push Pop, Pasture, Reptile)");
+    assert_eq!(
+        enclosures.len(),
+        4,
+        "Should spawn 4 enclosures (Playpen, Push Pop, Pasture, Reptile)"
+    );
 
     // Find Georgie and Siren and verify they share Reptile Enclosure
     let mut push_pop_enc = None;
@@ -77,7 +88,9 @@ fn test_stat_observers_and_clamping() {
     app.update();
 
     // Verify initial state
-    let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
+    let polly_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<AnimalId>>()
         .iter(app.world())
         .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
         .expect("Polly should exist");
@@ -148,7 +161,9 @@ fn test_shared_enclosure_cleanliness() {
     app.insert_resource(NextState::Pending(Screen::Gameplay));
     app.update();
 
-    let reptile_entity = app.world_mut().query_filtered::<Entity, With<EnclosureId>>()
+    let reptile_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
         .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::ReptileEnclosure)
         .expect("Reptile Enclosure should exist");
@@ -246,12 +261,18 @@ fn test_decay_rate() {
     app.update();
 
     // Verify initial Polly entity stats
-    let polly_entity = app.world_mut().query_filtered::<Entity, With<AnimalId>>()
+    let polly_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<AnimalId>>()
         .iter(app.world())
         .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
         .expect("Polly should exist");
 
-    let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap().clone();
+    let initial_stats = app
+        .world()
+        .get::<AnimalStats>(polly_entity)
+        .unwrap()
+        .clone();
     assert_eq!(initial_stats.hunger, 1000);
     assert_eq!(initial_stats.happiness, 1000);
 

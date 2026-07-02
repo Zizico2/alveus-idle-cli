@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "crates/alveus-types", "crates/alveus-configs"]
+resolver = "2"
+
 [package]
 name = "alveus-idle-cli"
 authors = ["Bernardo António Borda d'Água <berna.agua@protonmail.com>"]
@@ -5,6 +9,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+alveus-types = { path = "crates/alveus-types" }
+alveus-configs = { path = "crates/alveus-configs" }
 bevy = { version = "0.19", default-features = true, features = ["pan_camera", "debug", "dynamic_linking"] }
 bevy_ecs_tiled = { git = "https://github.com/taboky-dev/bevy_ecs_tiled", branch = "main", default-features = false, features = ["user_properties", "png"] }
 bevy_tweening = "0.16.0"

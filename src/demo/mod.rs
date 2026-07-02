@@ -5,19 +5,19 @@
 
 use bevy::prelude::*;
 
-mod animation;
+// mod animation;
 pub mod camera;
+pub mod entrance;
+pub mod interiors;
 pub mod level;
 pub mod movement;
 pub mod player;
-pub mod toast;
-pub mod entrance;
-pub mod interiors;
 pub mod room;
+pub mod toast;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
-        animation::plugin,
+        // animation::plugin,
         camera::CameraControllerPlugin,
         level::plugin,
         movement::plugin,

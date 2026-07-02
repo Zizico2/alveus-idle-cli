@@ -20,7 +20,8 @@ fn move_command_sets_player_intent() {
         MovementDuration(Timer::from_seconds(0.25, TimerMode::Once)),
     ));
 
-    app.world_mut().trigger(GameCommand::Move(MovementIntent::Up));
+    app.world_mut()
+        .trigger(GameCommand::Move(MovementIntent::Up));
     app.update();
 
     let intent = app
@@ -43,7 +44,10 @@ fn skip_splash_command_changes_screen() {
     app.world_mut().trigger(GameCommand::SkipSplash);
     app.update();
 
-    assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Title);
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Title
+    );
 
     common::cleanup_save(save_path);
 }

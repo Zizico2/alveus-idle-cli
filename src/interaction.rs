@@ -1,9 +1,9 @@
-use bevy::prelude::*;
 use crate::components::{CurrentTilePosition, TilePosition};
-use crate::content::{can_interact, item_display_name, ItemId};
+use crate::content::{ItemId, can_interact, item_display_name};
 use crate::demo::player::Player;
 use crate::screens::{InRoom, Screen};
 use crate::stats::{AnimalId, AnimalStat, ImproveStatEvent, StatTarget};
+use bevy::prelude::*;
 
 pub struct InteractionPlugin;
 
@@ -27,7 +27,10 @@ impl Plugin for InteractionPlugin {
                     .chain()
                     .run_if(in_interactive_room),
             )
-            .add_systems(Update, handle_drop_input.run_if(on_overview_with_satchel_item))
+            .add_systems(
+                Update,
+                handle_drop_input.run_if(on_overview_with_satchel_item),
+            )
             .add_observer(apply_animal_fed);
     }
 }
@@ -287,7 +290,7 @@ pub fn perform_interact_in_world(world: &mut World) {
 
     if let Some(feed) = world.get::<FeedAnimal>(entity).cloned() {
         let satchel = world.resource::<PlayerSatchel>();
-        if let Err(message) = validate_feed_animal(&satchel, feed.required_item) {
+        if let Err(message) = validate_feed_animal(satchel, feed.required_item) {
             world.commands().insert_resource(LastPickupMessage {
                 text: Some(message.to_string()),
                 timer: Timer::from_seconds(2.5, TimerMode::Once),

@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use alveus_idle_cli::headless::CommandPlugin;
 use alveus_idle_cli::screens::Screen;
 use alveus_idle_cli::stats::{SavePath, StatsPlugin};
+use bevy::asset::AssetMetaCheck;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::{AssetSourceBuilder, AssetSourceId};
-use bevy::asset::AssetMetaCheck;
 use bevy::image::{CompressedImageFormats, ImageLoader};
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
@@ -32,9 +32,9 @@ fn seed_maps_assets(dir: &Dir) {
 }
 
 fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path) {
-    for entry in std::fs::read_dir(disk_root.join(rel)).unwrap_or_else(|e| {
-        panic!("failed to read {}: {e}", disk_root.join(rel).display())
-    }) {
+    for entry in std::fs::read_dir(disk_root.join(rel))
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", disk_root.join(rel).display()))
+    {
         let entry = entry.expect("valid directory entry");
         let file_name = entry.file_name();
         let child_rel = rel.join(file_name);

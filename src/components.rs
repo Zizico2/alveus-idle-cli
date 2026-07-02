@@ -1,11 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Reflect)]
-#[reflect(Component, Default)]
-pub struct TilePosition {
-    pub x: u32,
-    pub y: u32,
-}
+pub use alveus_types::TilePosition;
 
 #[derive(Clone, Copy, Debug, Default, Component, PartialEq, Eq, Reflect)]
 #[reflect(Component)]

@@ -1,11 +1,11 @@
 #![cfg(feature = "headless")]
 
-use alveus_idle_cli::headless::{register_headless_types, GameCommand};
+use alveus_idle_cli::headless::{GameCommand, register_headless_types};
 use alveus_idle_cli::screens::Screen;
 use alveus_idle_cli::stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
-use bevy::state::app::StatesPlugin;
 use bevy::remote::{BrpMessage, BrpSender};
+use bevy::state::app::StatesPlugin;
 
 #[test]
 fn registered_types_include_game_command_and_screen() {
@@ -15,7 +15,11 @@ fn registered_types_include_game_command_and_screen() {
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();
 
-    assert!(registry.get(std::any::TypeId::of::<GameCommand>()).is_some());
+    assert!(
+        registry
+            .get(std::any::TypeId::of::<GameCommand>())
+            .is_some()
+    );
     assert!(registry.get(std::any::TypeId::of::<Screen>()).is_some());
 }
 
@@ -50,7 +54,10 @@ fn brp_skip_splash_command_changes_screen() {
 
     let response = result_receiver.recv_blocking().expect("brp response");
     assert!(response.is_ok(), "expected ok response: {response:?}");
-    assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Title);
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Title
+    );
 
     let _ = std::fs::remove_file(save_path);
 }

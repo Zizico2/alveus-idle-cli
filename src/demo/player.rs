@@ -11,9 +11,8 @@ use crate::demo::level::TILE_SIZE;
 use crate::{
     AppSystems, PausableSystems,
     asset_tracking::LoadResource,
-    headless::GameCommand,
     demo::{
-        animation::PlayerAnimation,
+        // animation::PlayerAnimation,
         movement::{
             MovementController,
             MovementDuration,
@@ -21,6 +20,7 @@ use crate::{
                             //  ScreenWrap
         },
     },
+    headless::GameCommand,
 };
 
 pub(super) fn plugin(app: &mut App) {
@@ -50,7 +50,7 @@ pub fn player(
     // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
     let layout = TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
     let _texture_atlas_layout = texture_atlas_layouts.add(layout);
-    let player_animation = PlayerAnimation::new();
+    // let player_animation = PlayerAnimation::new();
 
     (
         Name::new("Player"),
@@ -77,7 +77,7 @@ pub fn player(
         },
         // DISABLED
         // ScreenWrap,
-        player_animation,
+        // player_animation,
     )
 }
 
@@ -89,8 +89,6 @@ pub fn player(
     MovementDuration(Timer::from_seconds(0.25, TimerMode::Once))
 )]
 pub struct Player;
-
-
 
 impl PartialEq<CurrentTilePosition> for DesiredTilePosition {
     fn eq(&self, other: &CurrentTilePosition) -> bool {
@@ -106,10 +104,7 @@ impl PartialEq<DesiredTilePosition> for CurrentTilePosition {
 // #[derive(Clone, Copy, Debug, Default, Component)]
 // pub struct MovementLock;
 
-fn record_player_directional_input(
-    input: Res<ButtonInput<KeyCode>>,
-    mut commands: Commands,
-) {
+fn record_player_directional_input(input: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
     let intent = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
         Some(MovementIntent::Up)
     } else if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {

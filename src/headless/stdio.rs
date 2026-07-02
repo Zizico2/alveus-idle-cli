@@ -4,7 +4,9 @@ use std::io::{self, BufRead, Write};
 
 use async_channel::Sender;
 use bevy::prelude::*;
-use bevy::remote::{error_codes, BrpBatch, BrpError, BrpMessage, BrpRequest, BrpResponse, BrpResult, BrpSender};
+use bevy::remote::{
+    BrpBatch, BrpError, BrpMessage, BrpRequest, BrpResponse, BrpResult, BrpSender, error_codes,
+};
 use serde_json::Value;
 
 pub struct StdioBrpPlugin;
@@ -67,10 +69,7 @@ fn process_line(value: Value, request_sender: &Sender<BrpMessage>) -> BrpRespons
             BrpResponse::new(None, Ok(Value::Array(responses)))
         }
         Err(err) => BrpResponse::new(
-            value
-                .as_object()
-                .and_then(|map| map.get("id"))
-                .cloned(),
+            value.as_object().and_then(|map| map.get("id")).cloned(),
             Err(BrpError {
                 code: error_codes::INVALID_REQUEST,
                 message: err.to_string(),

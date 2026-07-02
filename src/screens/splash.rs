@@ -143,4 +143,3 @@ fn check_splash_timer(timer: ResMut<SplashTimer>, mut next_screen: ResMut<NextSt
         next_screen.set(Screen::Title);
     }
 }
-

@@ -1,0 +1,13 @@
+[package]
+name = "alveus-configs"
+version = "0.1.0"
+edition = "2024"
+description = "Static game-design tables (poop configs, animal placements, items) for alveus-idle"
+
+[dependencies]
+alveus-types = { path = "../alveus-types" }
+phf = { version = "0.11", default-features = false }
+
+[build-dependencies]
+alveus-types = { path = "../alveus-types" }
+phf_codegen = "0.11"

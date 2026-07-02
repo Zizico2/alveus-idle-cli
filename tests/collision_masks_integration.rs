@@ -9,14 +9,9 @@ mod common;
 fn interior_collision_masks_from_tiled_assets() {
     let mut app = common::headless_tiled_test_app();
 
-    let nutrition = common::load_tiled_map(
-        &mut app,
-        "maps/interiors/nutrition_house_interior.tmx",
-    );
-    let push_pop = common::load_tiled_map(
-        &mut app,
-        "maps/interiors/push_pop_enclosure_interior.tmx",
-    );
+    let nutrition = common::load_tiled_map(&mut app, "maps/interiors/nutrition_house_interior.tmx");
+    let push_pop =
+        common::load_tiled_map(&mut app, "maps/interiors/push_pop_enclosure_interior.tmx");
 
     let assets = app.world().resource::<Assets<TiledMapAsset>>();
 

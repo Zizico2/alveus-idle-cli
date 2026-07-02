@@ -1,15 +1,17 @@
-use bevy::prelude::*;
-use bevy::state::state::FreelyMutableState;
-use bevy_ecs_tiled::prelude::*;
 use crate::animals::spawn_push_pop_npc;
-use crate::collision::{resolve_spawn_tile, CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem};
+use crate::collision::{
+    CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, resolve_spawn_tile,
+};
 use crate::components::{BuildingEntrance, CurrentTilePosition, DesiredTilePosition, TilePosition};
 use crate::content::{animal_default_placement, default_tile_position};
 use crate::demo::level::{InteriorAssets, TILE_SIZE};
-use crate::demo::player::{player, Player, PlayerAssets};
+use crate::demo::player::{Player, PlayerAssets, player};
 use crate::demo::toast::despawn_active_toast;
-use crate::screens::{Screen, InRoom};
+use crate::screens::{InRoom, Screen};
 use crate::stats::{AnimalId, AnimalTilePosition, EnclosureId};
+use bevy::prelude::*;
+use bevy::state::state::FreelyMutableState;
+use bevy_ecs_tiled::prelude::*;
 
 #[derive(Resource, Debug, Clone, Copy, Reflect)]
 #[reflect(Resource)]
@@ -50,8 +52,7 @@ pub fn try_exit_room<S: States + FreelyMutableState>(
     next_screen: &mut NextState<S>,
     force: bool,
 ) -> bool {
-    let should_exit =
-        force || (player_pos.x == exit_door.x && player_pos.y == exit_door.y);
+    let should_exit = force || (player_pos.x == exit_door.x && player_pos.y == exit_door.y);
 
     if should_exit {
         info!("Exiting room interior!");
@@ -72,7 +73,8 @@ pub struct RoomConfig<S: States + FreelyMutableState> {
     pub exit_spawn: TilePosition,
     pub exit_door: TilePosition,
     pub get_interior_map: fn(&InteriorAssets) -> Handle<TiledMapAsset>,
-    pub spawn_extras_fn: fn(&mut ChildSpawnerCommands, &mut Assets<Mesh>, &mut Assets<ColorMaterial>, TilePosition),
+    pub spawn_extras_fn:
+        fn(&mut ChildSpawnerCommands, &mut Assets<Mesh>, &mut Assets<ColorMaterial>, TilePosition),
     pub room_title: String,
 }
 
@@ -92,10 +94,10 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
 
     // OnEnter systems
     let enter_state = room_state.clone();
-    
+
     let enter_state_for_spawner = enter_state.clone();
     let room_title_for_spawner = room_title.clone();
-    
+
     let enter_state_for_ui = enter_state.clone();
     let room_title_for_ui = room_title.clone();
 
@@ -125,58 +127,62 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                     .expect("Push Pop must have placement config")
                     .wander_bounds;
 
-                commands.spawn((
-                    Name::new(format!("{} Room", room_title_for_spawner)),
-                    Transform::default(),
-                    Visibility::default(),
-                    DespawnOnExit(enter_state_for_spawner.clone()),
-                )).with_children(|parent| {
-                    parent.spawn((
-                        player(
-                            400.0,
-                            &player_assets,
-                            &mut texture_atlas_layouts,
-                            &mut meshes,
-                            &mut materials,
-                            room_spawn,
-                        ),
-                        CurrentTilePosition(room_spawn),
-                        DesiredTilePosition(room_spawn),
-                    ));
+                commands
+                    .spawn((
+                        Name::new(format!("{} Room", room_title_for_spawner)),
+                        Transform::default(),
+                        Visibility::default(),
+                        DespawnOnExit(enter_state_for_spawner.clone()),
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            player(
+                                400.0,
+                                &player_assets,
+                                &mut texture_atlas_layouts,
+                                &mut meshes,
+                                &mut materials,
+                                room_spawn,
+                            ),
+                            CurrentTilePosition(room_spawn),
+                            DesiredTilePosition(room_spawn),
+                        ));
 
-                    let push_pop_tile = resolve_spawn_tile(
-                        push_pop_preferred,
-                        wander_bounds,
-                        collision_key,
-                        &masks,
-                        &persisted_obstacles,
-                        &live_obstacles,
-                        None,
-                    );
+                        let push_pop_tile = resolve_spawn_tile(
+                            push_pop_preferred,
+                            wander_bounds,
+                            collision_key,
+                            &masks,
+                            &persisted_obstacles,
+                            &live_obstacles,
+                            None,
+                        );
 
-                    let map_handle = get_interior_map(&interior_assets);
-                    spawn_interior_map(parent, map_handle);
-                    spawn_extras_fn(parent, &mut meshes, &mut materials, push_pop_tile);
-                });
+                        let map_handle = get_interior_map(&interior_assets);
+                        spawn_interior_map(parent, map_handle);
+                        spawn_extras_fn(parent, &mut meshes, &mut materials, push_pop_tile);
+                    });
             },
             move |mut commands: Commands| {
-                commands.spawn((
-                    Name::new("Room UI Root"),
-                    Node {
-                        position_type: PositionType::Absolute,
-                        top: Val::Px(24.0),
-                        left: Val::Px(24.0),
-                        flex_direction: FlexDirection::Column,
-                        row_gap: Val::Px(8.0),
-                        ..default()
-                    },
-                    DespawnOnExit(enter_state_for_ui.clone()),
-                )).with_children(|parent| {
-                    parent.spawn((
-                        Text::new(room_title_for_ui.clone()),
-                        TextFont::from_font_size(32.0),
-                        TextColor(Color::srgb(0.2, 0.8, 0.6)),
-                    ));
+                commands
+                    .spawn((
+                        Name::new("Room UI Root"),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            top: Val::Px(24.0),
+                            left: Val::Px(24.0),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(8.0),
+                            ..default()
+                        },
+                        DespawnOnExit(enter_state_for_ui.clone()),
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            Text::new(room_title_for_ui.clone()),
+                            TextFont::from_font_size(32.0),
+                            TextColor(Color::srgb(0.2, 0.8, 0.6)),
+                        ));
                         parent.spawn((
                             Text::new("Press [Backspace] to exit and return to overview"),
                             TextFont::from_font_size(18.0),
@@ -185,7 +191,7 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                     });
             },
             despawn_active_toast,
-        )
+        ),
     );
 
     let enter_state = room_state.clone();
@@ -193,10 +199,15 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
     app.add_systems(
         Update,
         (move |input: Res<ButtonInput<KeyCode>>,
-              player_query: Single<&BuildingEntrance, With<Player>>,
-              mut next_screen: ResMut<NextState<S>>| {
+               player_query: Single<&BuildingEntrance, With<Player>>,
+               mut next_screen: ResMut<NextState<S>>| {
             if input.just_pressed(KeyCode::Enter) {
-                try_enter_room(&*player_query, entrance, enter_state.clone(), &mut next_screen);
+                try_enter_room(
+                    &player_query,
+                    entrance,
+                    enter_state.clone(),
+                    &mut next_screen,
+                );
             }
         })
         .run_if(in_state(gp_state)),
@@ -207,9 +218,9 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
     app.add_systems(
         Update,
         (move |input: Res<ButtonInput<KeyCode>>,
-              player_query: Single<&CurrentTilePosition, With<Player>>,
-              mut next_screen: ResMut<NextState<S>>,
-              mut spawn_point: ResMut<PlayerSpawnPoint>| {
+               player_query: Single<&CurrentTilePosition, With<Player>>,
+               mut next_screen: ResMut<NextState<S>>,
+               mut spawn_point: ResMut<PlayerSpawnPoint>| {
             let force = input.just_pressed(KeyCode::Backspace);
             try_exit_room(
                 player_query.0,
@@ -230,11 +241,7 @@ fn spawn_interior_map(parent: &mut ChildSpawnerCommands, map_handle: Handle<Tile
         Name::new("Interior Map"),
         TiledMap(map_handle),
         TilemapAnchor::BottomLeft,
-        Transform::from_xyz(
-            -(TILE_SIZE as f32 / 2.0),
-            -(TILE_SIZE as f32 / 2.0),
-            0.0,
-        ),
+        Transform::from_xyz(-(TILE_SIZE as f32 / 2.0), -(TILE_SIZE as f32 / 2.0), 0.0),
     ));
 }
 
@@ -267,18 +274,21 @@ pub struct NutritionHousePlugin;
 
 impl Plugin for NutritionHousePlugin {
     fn build(&self, app: &mut App) {
-        build_room(app, RoomConfig {
-            room_state: Screen::InRoom(InRoom::NutritionHouse),
-            gameplay_state: Screen::Gameplay,
-            entrance: BuildingEntrance::NutritionHouse,
-            enclosure_id: EnclosureId::NutritionHousePlaypen,
-            room_spawn: TilePosition { x: 5, y: 2 },
-            exit_spawn: TilePosition { x: 33, y: 12 },
-            exit_door: TilePosition { x: 5, y: 0 },
-            get_interior_map: nutrition_house_map,
-            spawn_extras_fn: spawn_no_extras,
-            room_title: "Nutrition House".to_string(),
-        });
+        build_room(
+            app,
+            RoomConfig {
+                room_state: Screen::InRoom(InRoom::NutritionHouse),
+                gameplay_state: Screen::Gameplay,
+                entrance: BuildingEntrance::NutritionHouse,
+                enclosure_id: EnclosureId::NutritionHousePlaypen,
+                room_spawn: TilePosition { x: 5, y: 2 },
+                exit_spawn: TilePosition { x: 33, y: 12 },
+                exit_door: TilePosition { x: 5, y: 0 },
+                get_interior_map: nutrition_house_map,
+                spawn_extras_fn: spawn_no_extras,
+                room_title: "Nutrition House".to_string(),
+            },
+        );
     }
 }
 
@@ -286,17 +296,20 @@ pub struct PushPopEnclosurePlugin;
 
 impl Plugin for PushPopEnclosurePlugin {
     fn build(&self, app: &mut App) {
-        build_room(app, RoomConfig {
-            room_state: Screen::InRoom(InRoom::PushPopEnclosure),
-            gameplay_state: Screen::Gameplay,
-            entrance: BuildingEntrance::PushPopEnclosure,
-            enclosure_id: EnclosureId::PushPopEnclosure,
-            room_spawn: TilePosition { x: 6, y: 2 },
-            exit_spawn: TilePosition { x: 40, y: 33 },
-            exit_door: TilePosition { x: 6, y: 0 },
-            get_interior_map: push_pop_enclosure_map,
-            spawn_extras_fn: spawn_push_pop_extras,
-            room_title: "Push Pop Enclosure".to_string(),
-        });
+        build_room(
+            app,
+            RoomConfig {
+                room_state: Screen::InRoom(InRoom::PushPopEnclosure),
+                gameplay_state: Screen::Gameplay,
+                entrance: BuildingEntrance::PushPopEnclosure,
+                enclosure_id: EnclosureId::PushPopEnclosure,
+                room_spawn: TilePosition { x: 6, y: 2 },
+                exit_spawn: TilePosition { x: 40, y: 33 },
+                exit_door: TilePosition { x: 6, y: 0 },
+                get_interior_map: push_pop_enclosure_map,
+                spawn_extras_fn: spawn_push_pop_extras,
+                room_title: "Push Pop Enclosure".to_string(),
+            },
+        );
     }
 }

@@ -2,26 +2,27 @@
 
 use bevy::prelude::*;
 
+use crate::cleaning::{PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow};
 use crate::components::{
     BuildingEntrance, CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure,
     Obstacle, PersistedDynamicObstacle, TilePosition,
 };
 use crate::content::{ItemId, RoomObjectId};
+use crate::demo::entrance::{PlayerEnteredBuildingEvent, PlayerExitedBuildingEvent};
 use crate::demo::movement::{MovementController, MovementIntent};
 use crate::demo::player::Player;
 use crate::demo::room::PlayerSpawnPoint;
 use crate::demo::toast::{DismissToastEvent, TriggerToastEvent};
-use crate::demo::entrance::{PlayerEnteredBuildingEvent, PlayerExitedBuildingEvent};
 use crate::interaction::{
     ActiveInteractionTarget, AnimalFedEvent, FeedAnimal, GiveItem, Interactable, LastPickupMessage,
     PlayerSatchel,
 };
-use crate::menus::{main::PlayClickEvent, Menu};
+use crate::menus::{Menu, main::PlayClickEvent};
 use crate::screens::{InRoom, Screen};
 use crate::stats::{
-    AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition, EnclosureId,
-    EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
-    WorsenStatEvent,
+    AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition,
+    EnclosureId, EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath,
+    StatTarget, WorsenStatEvent,
 };
 
 use super::camera::HeadlessRenderTarget;
@@ -46,6 +47,9 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<Interactable>()
         .register_type::<GiveItem>()
         .register_type::<FeedAnimal>()
+        .register_type::<PoopPile>()
+        .register_type::<PoopDump>()
+        .register_type::<PoopWheelbarrow>()
         .register_type::<RoomObjectId>()
         .register_type::<ItemId>()
         .register_type::<AnimalId>()
@@ -69,6 +73,8 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<GameCommand>()
         .register_type::<PlayClickEvent>()
         .register_type::<AnimalFedEvent>()
+        .register_type::<PoopPickedUpEvent>()
+        .register_type::<PoopDumpedEvent>()
         .register_type::<ImproveStatEvent>()
         .register_type::<WorsenStatEvent>()
         .register_type::<PlayerEnteredBuildingEvent>()

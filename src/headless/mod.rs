@@ -7,13 +7,13 @@ pub use reflect::register_headless_types;
 #[cfg(feature = "cli")]
 mod stdio;
 
-pub use camera::{HeadlessCameraPlugin, HeadlessRenderTarget, DEFAULT_HEADLESS_RESOLUTION};
-pub use command::{GameCommand, StepRequest, CommandPlugin};
+pub use camera::{DEFAULT_HEADLESS_RESOLUTION, HeadlessCameraPlugin, HeadlessRenderTarget};
+pub use command::{CommandPlugin, GameCommand, StepRequest};
 pub const DEFAULT_BRP_PORT: u16 = 15702;
 
 use bevy::prelude::*;
 #[cfg(feature = "remote")]
-use bevy::remote::{http::RemoteHttpPlugin, RemotePlugin};
+use bevy::remote::{RemotePlugin, http::RemoteHttpPlugin};
 
 pub struct HeadlessPlugin {
     pub http_port: u16,
@@ -41,9 +41,8 @@ impl Plugin for HeadlessPlugin {
 
         #[cfg(feature = "remote")]
         {
-            app.add_plugins(RemotePlugin::default()).add_plugins(
-                RemoteHttpPlugin::default().with_port(self.http_port),
-            );
+            app.add_plugins(RemotePlugin::default())
+                .add_plugins(RemoteHttpPlugin::default().with_port(self.http_port));
         }
 
         #[cfg(feature = "cli")]
