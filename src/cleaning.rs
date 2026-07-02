@@ -1,13 +1,14 @@
 //! Poop spawning, wheelbarrow pickup, and compost-dump cleaning loop.
 
-use std::borrow::Borrow;
+use std::collections::HashSet;
 
 use bevy::prelude::*;
+use itertools::iproduct;
 use rand::prelude::*;
+use rand::seq::IteratorRandom;
 
 use crate::collision::{
-    DynamicObstacleTiles, LiveObstacleItem, CollisionMapKey, CollisionMasks,
-    enclosure_for_room, is_walkable_with_dynamic,
+    DynamicObstacleTiles, LiveObstacleItem, CollisionMapKey, CollisionMasks, enclosure_for_room,
 };
 use crate::components::{CurrentTilePosition, DynamicObstacle, InEnclosure, TilePosition};
 use crate::demo::level::TILE_SIZE;
@@ -182,32 +183,39 @@ pub fn try_dump_poop(wheelbarrow: &PoopWheelbarrow) -> Result<Vec<EnclosureId>, 
     Ok(wheelbarrow.poops.clone())
 }
 
-pub fn pick_random_poop_tile_with_blocked(
+fn live_obstacles_for_enclosure(
+    enclosure_id: EnclosureId,
+    live_obstacles: &Query<LiveObstacleItem<'_>>,
+) -> HashSet<TilePosition> {
+    live_obstacles
+        .iter()
+        .filter_map(|(_, _, pos, in_enc)| {
+            in_enc
+                .filter(|InEnclosure(id)| *id == enclosure_id)
+                .map(|_| pos.0)
+        })
+        .collect()
+}
+
+fn pick_random_poop_tile_in_bounds(
     config: &PoopConfig,
     key: CollisionMapKey,
     masks: &CollisionMasks,
-    blocked: &[TilePosition],
-    live_tiles: impl IntoIterator<Item = impl Borrow<TilePosition>>,
+    blocked: &HashSet<TilePosition>,
+    live: &HashSet<TilePosition>,
     exclude: Option<TilePosition>,
     rng: &mut impl Rng,
 ) -> Option<TilePosition> {
-    let live: Vec<TilePosition> = live_tiles.into_iter().map(|t| *t.borrow()).collect();
-    let mut candidates = Vec::new();
-    for x in config.spawn_bounds.bottom_left.x..=config.spawn_bounds.top_right.x {
-        for y in config.spawn_bounds.bottom_left.y..=config.spawn_bounds.top_right.y {
-            let tile = TilePosition { x, y };
-            if exclude == Some(tile) {
-                continue;
-            }
-            if blocked.contains(&tile) {
-                continue;
-            }
-            if is_walkable_with_dynamic(&masks, blocked.iter(), live.iter(), key, tile) {
-                candidates.push(tile);
-            }
-        }
-    }
-    candidates.choose(rng).copied()
+    let bl = config.spawn_bounds.bottom_left;
+    let tr = config.spawn_bounds.top_right;
+
+    iproduct!(bl.x..=tr.x, bl.y..=tr.y)
+        .map(|(x, y)| TilePosition { x, y })
+        .filter(|tile| exclude != Some(*tile))
+        .filter(|tile| !blocked.contains(tile))
+        .filter(|tile| masks.is_statically_walkable(key, *tile))
+        .filter(|tile| !live.contains(tile))
+        .choose(rng)
 }
 
 pub fn pick_random_poop_tile(
@@ -220,23 +228,9 @@ pub fn pick_random_poop_tile(
     exclude: Option<TilePosition>,
     rng: &mut impl Rng,
 ) -> Option<TilePosition> {
-    let live: Vec<TilePosition> = live_obstacles
-        .iter()
-        .filter_map(|(_, _, pos, in_enc)| {
-            in_enc
-                .filter(|enc| enc.0 == enclosure_id)
-                .map(|_| pos.0)
-        })
-        .collect();
-    pick_random_poop_tile_with_blocked(
-        config,
-        key,
-        masks,
-        &tiles.0,
-        live,
-        exclude,
-        rng,
-    )
+    let blocked: HashSet<TilePosition> = tiles.0.iter().copied().collect();
+    let live = live_obstacles_for_enclosure(enclosure_id, live_obstacles);
+    pick_random_poop_tile_in_bounds(config, key, masks, &blocked, &live, exclude, rng)
 }
 
 pub fn spawn_poop_entity(
@@ -308,21 +302,23 @@ pub fn sync_threshold_poops_for_config(
 
     let target = target_poop_count(cleanliness, config.spawn_thresholds);
     let mut spawned = Vec::new();
+    let mut blocked: HashSet<TilePosition> = tiles.0.iter().copied().collect();
+    let live = live_obstacles_for_enclosure(enclosure_id, live_obstacles);
 
     while (tiles.0.len() as u32) < target {
-        let Some(tile) = pick_random_poop_tile(
-            enclosure_id,
+        let Some(tile) = pick_random_poop_tile_in_bounds(
             config,
             key,
             masks,
-            tiles,
-            live_obstacles,
+            &blocked,
+            &live,
             exclude,
             rng,
         ) else {
             break;
         };
         tiles.insert(tile);
+        blocked.insert(tile);
         spawned.push(tile);
     }
 
@@ -491,4 +487,163 @@ pub fn apply_poop_dump(
         text: Some("Emptied wheelbarrow".to_string()),
         timer: Timer::from_seconds(2.5, TimerMode::Once),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alveus_types::TileBounds;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    fn test_config() -> PoopConfig {
+        PoopConfig {
+            spawn_thresholds: &[800],
+            poop_decay_rate: 1.0,
+            cleanliness_restore_per_poop: 1,
+            spawn_bounds: TileBounds {
+                bottom_left: TilePosition { x: 0, y: 0 },
+                top_right: TilePosition { x: 2, y: 2 },
+            },
+        }
+    }
+
+    fn test_key() -> CollisionMapKey {
+        CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure)
+    }
+
+    fn all_test_tiles() -> HashSet<TilePosition> {
+        HashSet::from([
+            TilePosition { x: 0, y: 0 },
+            TilePosition { x: 1, y: 0 },
+            TilePosition { x: 2, y: 0 },
+            TilePosition { x: 0, y: 1 },
+            TilePosition { x: 1, y: 1 },
+            TilePosition { x: 2, y: 1 },
+            TilePosition { x: 0, y: 2 },
+            TilePosition { x: 1, y: 2 },
+            TilePosition { x: 2, y: 2 },
+        ])
+    }
+
+    #[test]
+    fn pick_random_poop_tile_in_bounds_returns_none_when_fully_blocked_by_mask() {
+        let config = test_config();
+        let key = test_key();
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(key, all_test_tiles());
+        let blocked = HashSet::new();
+        let live = HashSet::new();
+        let mut rng = StdRng::seed_from_u64(1);
+
+        assert!(pick_random_poop_tile_in_bounds(
+            &config,
+            key,
+            &masks,
+            &blocked,
+            &live,
+            None,
+            &mut rng,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn pick_random_poop_tile_in_bounds_excludes_blocked_tiles() {
+        let config = test_config();
+        let key = test_key();
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(key, HashSet::new());
+        let blocked = HashSet::from([TilePosition { x: 0, y: 0 }, TilePosition { x: 2, y: 2 }]);
+        let live = HashSet::new();
+        let mut rng = StdRng::seed_from_u64(2);
+
+        for _ in 0..20 {
+            let tile = pick_random_poop_tile_in_bounds(
+                &config,
+                key,
+                &masks,
+                &blocked,
+                &live,
+                None,
+                &mut rng,
+            )
+            .expect("open tiles remain");
+            assert!(!blocked.contains(&tile));
+        }
+    }
+
+    #[test]
+    fn pick_random_poop_tile_in_bounds_excludes_live_tiles() {
+        let config = test_config();
+        let key = test_key();
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(key, HashSet::new());
+        let blocked = HashSet::new();
+        let live = HashSet::from([TilePosition { x: 1, y: 1 }]);
+        let mut rng = StdRng::seed_from_u64(3);
+
+        for _ in 0..20 {
+            let tile = pick_random_poop_tile_in_bounds(
+                &config,
+                key,
+                &masks,
+                &blocked,
+                &live,
+                None,
+                &mut rng,
+            )
+            .expect("open tiles remain");
+            assert!(!live.contains(&tile));
+        }
+    }
+
+    #[test]
+    fn pick_random_poop_tile_in_bounds_respects_exclude() {
+        let config = test_config();
+        let key = test_key();
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(key, HashSet::new());
+        let blocked = HashSet::new();
+        let live = HashSet::new();
+        let exclude = TilePosition { x: 1, y: 1 };
+        let mut rng = StdRng::seed_from_u64(4);
+
+        for _ in 0..20 {
+            let tile = pick_random_poop_tile_in_bounds(
+                &config,
+                key,
+                &masks,
+                &blocked,
+                &live,
+                Some(exclude),
+                &mut rng,
+            )
+            .expect("open tiles remain");
+            assert_ne!(tile, exclude);
+        }
+    }
+
+    #[test]
+    fn pick_random_poop_tile_in_bounds_picks_valid_tile() {
+        let config = test_config();
+        let key = test_key();
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(key, HashSet::new());
+        let blocked = HashSet::new();
+        let live = HashSet::new();
+        let mut rng = StdRng::seed_from_u64(5);
+
+        let tile = pick_random_poop_tile_in_bounds(
+            &config,
+            key,
+            &masks,
+            &blocked,
+            &live,
+            None,
+            &mut rng,
+        )
+        .expect("should pick from open grid");
+        assert!(all_test_tiles().contains(&tile));
+    }
 }

@@ -166,6 +166,7 @@ dependencies = [
  "bevy_ecs_tiled",
  "bevy_tweening",
  "getrandom 0.4.3",
+ "itertools",
  "moonshine-save",
  "rand 0.10.1",
  "ron",
