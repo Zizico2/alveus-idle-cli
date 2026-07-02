@@ -11,15 +11,24 @@ use crate::stats::{
 };
 use alveus_types::EnclosureId;
 
-// Poop config data + the PHF lookup table live in `alveus-configs`; re-export so
+// Poop config data lives in `alveus-configs`; re-export so
 // `crate::cleaning::*` paths keep resolving for the decay math and tests below.
-pub use alveus_configs::{poop_config_for, PoopConfig, POOP_CONFIG, WHEELBARROW_CAPACITY};
+pub use alveus_configs::{poop_config_for, PoopConfig, WHEELBARROW_CAPACITY};
 
 pub fn room_for_enclosure(id: EnclosureId) -> Option<InRoom> {
     match id {
         EnclosureId::PushPopEnclosure => Some(InRoom::PushPopEnclosure),
         EnclosureId::NutritionHousePlaypen => Some(InRoom::NutritionHouse),
         _ => None,
+    }
+}
+
+fn active_poop_config_for(id: EnclosureId) -> Option<&'static PoopConfig> {
+    match id {
+        EnclosureId::PushPopEnclosure => Some(poop_config_for(id)),
+        EnclosureId::NutritionHousePlaypen
+        | EnclosureId::Pasture
+        | EnclosureId::ReptileEnclosure => None,
     }
 }
 
@@ -37,7 +46,7 @@ pub fn cleanliness_decay_with_poops(
     poop_count: usize,
 ) -> f32 {
     base_rate
-        + poop_config_for(enclosure_id)
+        + active_poop_config_for(enclosure_id)
             .map(|c| c.poop_decay_rate * poop_count as f32)
             .unwrap_or(0.0)
 }
@@ -101,7 +110,7 @@ pub fn enclosure_cleanliness_decay_amount(
     if hours <= 0.0 {
         return 0;
     }
-    if let Some(config) = poop_config_for(enclosure_id) {
+    if let Some(config) = active_poop_config_for(enclosure_id) {
         start.saturating_sub(cleanliness_after_threshold_decay(
             start,
             hours,
@@ -218,7 +227,7 @@ pub fn apply_poop_pickup(
 
     commands.entity(event.entity).despawn();
 
-    if let Some(config) = poop_config_for(event.enclosure_id) {
+    if let Some(config) = active_poop_config_for(event.enclosure_id) {
         commands.trigger(ImproveStatEvent {
             target: StatTarget::Enclosure {
                 id: event.enclosure_id,

@@ -9,8 +9,8 @@ use crate::stats::{AnimalId, EnclosureId};
 
 pub use alveus_types::{ItemId, TileBounds, TilePosition};
 pub use alveus_configs::{
-    animal_default_placement, item_display_name, AnimalPlacementDef, ItemStaticData,
-    ITEMS_DATA, OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT, PUSH_POP_PLACEMENT,
+    animal_default_placement, item_data, item_display_name, AnimalPlacementDef, ItemStaticData,
+    OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT, PUSH_POP_PLACEMENT,
 };
 
 // ---------------------------------------------------------

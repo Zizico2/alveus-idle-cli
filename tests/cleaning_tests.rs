@@ -241,7 +241,7 @@ fn test_poop_pickup_removes_tile() {
 
 #[test]
 fn test_cleanliness_after_threshold_decay_24h_from_full() {
-    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop poop config");
+    let config = poop_config_for(EnclosureId::PushPopEnclosure);
     assert_eq!(
         cleanliness_after_threshold_decay(1000, 24.0, 30.0, config),
         0,
@@ -287,7 +287,7 @@ fn test_wheelbarrow_persists_in_save() {
 
 #[test]
 fn push_pop_poop_config_matches_design_intent() {
-    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop poop config");
+    let config = poop_config_for(EnclosureId::PushPopEnclosure);
     assert_eq!(config.spawn_thresholds, &[800, 500, 200]);
     assert_eq!(config.cleanliness_restore_per_poop, 350);
 }
