@@ -23,15 +23,6 @@ pub fn room_for_enclosure(id: EnclosureId) -> Option<InRoom> {
     }
 }
 
-fn active_poop_config_for(id: EnclosureId) -> Option<&'static PoopConfig> {
-    match id {
-        EnclosureId::PushPopEnclosure => Some(poop_config_for(id)),
-        EnclosureId::NutritionHousePlaypen
-        | EnclosureId::Pasture
-        | EnclosureId::ReptileEnclosure => None,
-    }
-}
-
 /// How many poops should be on the floor given current enclosure cleanliness.
 pub fn target_poop_count(cleanliness: u32, thresholds: &[u32]) -> u32 {
     thresholds
@@ -45,10 +36,8 @@ pub fn cleanliness_decay_with_poops(
     enclosure_id: EnclosureId,
     poop_count: usize,
 ) -> f32 {
-    base_rate
-        + active_poop_config_for(enclosure_id)
-            .map(|c| c.poop_decay_rate * poop_count as f32)
-            .unwrap_or(0.0)
+    let config = poop_config_for(enclosure_id);
+    base_rate + config.poop_decay_rate * poop_count as f32
 }
 
 /// Simulate threshold-crossing poop acceleration over a block of hours (offline / time-skip).
@@ -105,22 +94,18 @@ pub fn enclosure_cleanliness_decay_amount(
     hours: f32,
     base_rate: f32,
     enclosure_id: EnclosureId,
-    starting_poop_count: usize,
+    _starting_poop_count: usize,
 ) -> u32 {
     if hours <= 0.0 {
         return 0;
     }
-    if let Some(config) = active_poop_config_for(enclosure_id) {
-        start.saturating_sub(cleanliness_after_threshold_decay(
-            start,
-            hours,
-            base_rate,
-            config,
-        ))
-    } else {
-        let rate = cleanliness_decay_with_poops(base_rate, enclosure_id, starting_poop_count);
-        (rate * hours).round() as u32
-    }
+    let config = poop_config_for(enclosure_id);
+    start.saturating_sub(cleanliness_after_threshold_decay(
+        start,
+        hours,
+        base_rate,
+        config,
+    ))
 }
 
 // ---------------------------------------------------------
@@ -227,15 +212,14 @@ pub fn apply_poop_pickup(
 
     commands.entity(event.entity).despawn();
 
-    if let Some(config) = active_poop_config_for(event.enclosure_id) {
-        commands.trigger(ImproveStatEvent {
-            target: StatTarget::Enclosure {
-                id: event.enclosure_id,
-                stat: EnclosureStat::Cleanliness,
-            },
-            amount: config.cleanliness_restore_per_poop,
-        });
-    }
+    let config = poop_config_for(event.enclosure_id);
+    commands.trigger(ImproveStatEvent {
+        target: StatTarget::Enclosure {
+            id: event.enclosure_id,
+            stat: EnclosureStat::Cleanliness,
+        },
+        amount: config.cleanliness_restore_per_poop,
+    });
 
     commands.insert_resource(LastPickupMessage {
         text: Some(format!(

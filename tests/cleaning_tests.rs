@@ -54,7 +54,7 @@ fn test_try_dump_poop_returns_poops() {
 }
 
 #[test]
-fn test_cleanliness_decay_with_poops_hybrid() {
+fn test_cleanliness_decay_with_poops() {
     let base = 30.0;
     assert_eq!(
         cleanliness_decay_with_poops(base, EnclosureId::PushPopEnclosure, 0),
@@ -63,10 +63,6 @@ fn test_cleanliness_decay_with_poops_hybrid() {
     assert_eq!(
         cleanliness_decay_with_poops(base, EnclosureId::PushPopEnclosure, 3),
         90.0
-    );
-    assert_eq!(
-        cleanliness_decay_with_poops(base, EnclosureId::Pasture, 3),
-        30.0
     );
 }
 

@@ -105,10 +105,9 @@ const PUSH_POP_POOP_CONFIG: PoopConfig = PoopConfig {
 
 /// Static poop tuning for an enclosure.
 ///
-/// This is intentionally exhaustive even though only Push Pop currently has
-/// active runtime poop behavior. Placeholder arms copy Push Pop's values for
-/// now so adding an [`EnclosureId`] variant fails to compile until the table is
-/// consciously extended.
+/// Exhaustive over [`EnclosureId`]. Placeholder arms copy Push Pop's values for
+/// now so adding a variant fails to compile until the table is consciously
+/// extended.
 pub const fn poop_config_for(id: EnclosureId) -> &'static PoopConfig {
     match id {
         EnclosureId::NutritionHousePlaypen => &PUSH_POP_POOP_CONFIG,
