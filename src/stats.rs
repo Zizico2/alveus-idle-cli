@@ -1,9 +1,14 @@
 use crate::AppSystems;
+use crate::cleaning::{
+    PoopPile, cleanliness_decay_with_poops, enclosure_cleanliness_decay_amount,
+    sync_missing_poop_entities,
+};
 use crate::collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, random_wander_step,
 };
 use crate::components::TilePosition;
 use crate::content::{OFFLINE_WANDER_STEPS_PER_HOUR, default_tile_position, enclosure_for_animal};
+use crate::screens::{InRoom, Screen};
 pub use alveus_types::{AnimalId, EnclosureId};
 use bevy::prelude::*;
 use moonshine_save::prelude::*;
@@ -822,11 +827,12 @@ fn ensure_dynamic_obstacle_tiles(
     }
 }
 
-fn apply_offline_decay_system(
+pub(crate) fn apply_offline_decay_system(
     mut commands: Commands,
     timestamp_query: Query<(Entity, &SaveTimestamp)>,
     animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
-    enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates)>,
+    enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>,
+    dynamic_enclosure_query: Query<(&EnclosureId, &DynamicObstacleTiles)>,
 ) {
     let Ok((timestamp_entity, timestamp)) = timestamp_query.single() else {
         return;
@@ -879,17 +885,20 @@ fn apply_offline_decay_system(
             }
         }
 
-        for (id, decay_rates) in &enclosure_query {
-            let cleanliness_decay = (decay_rates.cleanliness_rate * hours_elapsed).round() as u32;
-            if cleanliness_decay > 0 {
-                commands.trigger(WorsenStatEvent {
-                    target: StatTarget::Enclosure {
-                        id: *id,
-                        stat: EnclosureStat::Cleanliness,
-                    },
-                    amount: cleanliness_decay,
-                });
-            }
+        for (id, decay_rates, stats) in &enclosure_query {
+            let poop_count = dynamic_enclosure_query
+                .iter()
+                .find(|(enc_id, _)| **enc_id == *id)
+                .map(|(_, tiles)| tiles.0.len())
+                .unwrap_or(0);
+            let cleanliness_decay = enclosure_cleanliness_decay_amount(
+                stats.cleanliness,
+                hours_elapsed,
+                decay_rates.cleanliness_rate,
+                *id,
+                poop_count,
+            );
+            trigger_enclosure_decay(&mut commands, *id, cleanliness_decay);
         }
 
         let wander_steps = (hours_elapsed * OFFLINE_WANDER_STEPS_PER_HOUR).round() as u32;
@@ -960,6 +969,7 @@ pub fn tick_decay_system(
     mut enclosure_query: Query<(
         &EnclosureId,
         &EnclosureDecayRates,
+        &DynamicObstacleTiles,
         &mut EnclosureDecayAccumulators,
     )>,
 ) {
@@ -993,8 +1003,13 @@ pub fn tick_decay_system(
         }
     }
 
-    for (id, decay_rates, mut accs) in &mut enclosure_query {
-        accs.cleanliness += decay_rates.cleanliness_rate * delta_hours;
+    for (id, decay_rates, tiles, mut accs) in &mut enclosure_query {
+        let effective_rate = cleanliness_decay_with_poops(
+            decay_rates.cleanliness_rate,
+            *id,
+            tiles.0.len(),
+        );
+        accs.cleanliness += effective_rate * delta_hours;
 
         if accs.cleanliness >= 1.0 {
             let decay_amount = accs.cleanliness.floor();
@@ -1103,6 +1118,8 @@ fn save_stats_periodically_system(
             .allow::<DynamicObstacleTiles>()
             .allow::<EnclosureId>()
             .allow::<EnclosureStats>();
+        save.resources = bevy::world_serialization::WorldFilter::deny_all()
+            .allow::<crate::cleaning::PoopWheelbarrow>();
         commands.trigger_save(save);
     }
 }
@@ -1112,30 +1129,47 @@ pub fn advance_simulated_hours(
     commands: &mut Commands,
     hours: f32,
     animal_query: &Query<(&AnimalId, &AnimalDecayRates)>,
-    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates)>,
+    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>,
+    tiles_query: &Query<(&EnclosureId, &DynamicObstacleTiles)>,
 ) {
-    advance_simulated_hours_queries(commands, hours, animal_query, enclosure_query);
+    advance_simulated_hours_queries(commands, hours, animal_query, enclosure_query, tiles_query);
 }
 
 /// Fast-forward simulated decay using a mutable world (command queue / headless dispatch).
 pub fn advance_simulated_hours_world(world: &mut World, hours: f32) {
     let mut animal_query = world.query::<(&AnimalId, &AnimalDecayRates)>();
-    let mut enclosure_query = world.query::<(&EnclosureId, &EnclosureDecayRates)>();
+    let mut enclosure_query =
+        world.query::<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>();
+    let mut tiles_query = world.query::<(&EnclosureId, &DynamicObstacleTiles)>();
     let animal_decays: Vec<(AnimalId, AnimalDecayRates)> = animal_query
         .iter(world)
         .map(|(id, rates)| (*id, rates.clone()))
         .collect();
-    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates)> = enclosure_query
+    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates, u32, usize)> = enclosure_query
         .iter(world)
-        .map(|(id, rates)| (*id, rates.clone()))
+        .map(|(id, rates, stats)| {
+            let poop_count = tiles_query
+                .iter(world)
+                .find(|(enc_id, _)| *enc_id == id)
+                .map(|(_, tiles)| tiles.0.len())
+                .unwrap_or(0);
+            (*id, rates.clone(), stats.cleanliness, poop_count)
+        })
         .collect();
 
     let mut commands = world.commands();
     for (id, decay_rates) in animal_decays {
         trigger_animal_decay(&mut commands, id, &decay_rates, hours);
     }
-    for (id, decay_rates) in enclosure_decays {
-        trigger_enclosure_decay(&mut commands, id, &decay_rates, hours);
+    for (id, decay_rates, start_cleanliness, poop_count) in enclosure_decays {
+        let amount = enclosure_cleanliness_decay_amount(
+            start_cleanliness,
+            hours,
+            decay_rates.cleanliness_rate,
+            id,
+            poop_count,
+        );
+        trigger_enclosure_decay(&mut commands, id, amount);
     }
 }
 
@@ -1143,14 +1177,28 @@ fn advance_simulated_hours_queries(
     commands: &mut Commands,
     hours: f32,
     animal_query: &Query<(&AnimalId, &AnimalDecayRates)>,
-    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates)>,
+    enclosure_query: &Query<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>,
+    tiles_query: &Query<(&EnclosureId, &DynamicObstacleTiles)>,
 ) {
     info!("Advancing simulated time by {hours} hours");
+
     for (id, decay_rates) in animal_query {
         trigger_animal_decay(commands, *id, decay_rates, hours);
     }
-    for (id, decay_rates) in enclosure_query {
-        trigger_enclosure_decay(commands, *id, decay_rates, hours);
+    for (id, decay_rates, stats) in enclosure_query {
+        let poop_count = tiles_query
+            .iter()
+            .find(|(enc_id, _)| *enc_id == id)
+            .map(|(_, tiles)| tiles.0.len())
+            .unwrap_or(0);
+        let amount = enclosure_cleanliness_decay_amount(
+            stats.cleanliness,
+            hours,
+            decay_rates.cleanliness_rate,
+            *id,
+            poop_count,
+        );
+        trigger_enclosure_decay(commands, *id, amount);
     }
 }
 
@@ -1179,20 +1227,16 @@ fn trigger_animal_decay(
     });
 }
 
-fn trigger_enclosure_decay(
-    commands: &mut Commands,
-    id: EnclosureId,
-    decay_rates: &EnclosureDecayRates,
-    hours: f32,
-) {
-    let cleanliness_decay = (decay_rates.cleanliness_rate * hours).round() as u32;
-
+fn trigger_enclosure_decay(commands: &mut Commands, id: EnclosureId, amount: u32) {
+    if amount == 0 {
+        return;
+    }
     commands.trigger(WorsenStatEvent {
         target: StatTarget::Enclosure {
             id,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: cleanliness_decay,
+        amount,
     });
 }
 
@@ -1200,8 +1244,13 @@ fn trigger_enclosure_decay(
 fn debug_stats_control_system(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
+    screen: Res<State<Screen>>,
     animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
-    enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates)>,
+    enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>,
+    tiles_query: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+    mut meshes: Option<ResMut<Assets<Mesh>>>,
+    mut materials: Option<ResMut<Assets<ColorMaterial>>>,
+    existing_poops: Query<&TilePosition, With<PoopPile>>,
 ) {
     // Keys 1, 2, 3: care actions for Polly
     if input.just_pressed(KeyCode::Digit1) {
@@ -1370,7 +1419,7 @@ fn debug_stats_control_system(
                 amount: 100,
             });
         }
-        for (id, _) in &enclosure_query {
+        for (id, _, _) in &enclosure_query {
             commands.trigger(WorsenStatEvent {
                 target: StatTarget::Enclosure {
                     id: *id,
@@ -1386,7 +1435,34 @@ fn debug_stats_control_system(
         || input.just_pressed(KeyCode::NumpadAdd)
         || input.just_pressed(KeyCode::KeyL)
     {
-        advance_simulated_hours_queries(&mut commands, 4.0, &animal_query, &enclosure_query);
+        advance_simulated_hours_queries(
+            &mut commands,
+            4.0,
+            &animal_query,
+            &enclosure_query,
+            &tiles_query,
+        );
+
+        if matches!(screen.get(), Screen::InRoom(InRoom::PushPopEnclosure)) {
+            if let Some((_, tiles)) = tiles_query
+                .iter()
+                .find(|(id, _)| **id == EnclosureId::PushPopEnclosure)
+            {
+                if let (Some(mut meshes), Some(mut materials)) =
+                    (meshes.as_deref_mut(), materials.as_deref_mut())
+                {
+                    sync_missing_poop_entities(
+                        &mut commands,
+                        meshes,
+                        materials,
+                        InRoom::PushPopEnclosure,
+                        EnclosureId::PushPopEnclosure,
+                        tiles,
+                        &existing_poops,
+                    );
+                }
+            }
+        }
     }
 }
 

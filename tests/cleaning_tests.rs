@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use alveus_idle_cli::cleaning::{
     CleaningPlugin, PoopDumpedEvent, PoopPickedUpEvent, PoopWheelbarrow, WHEELBARROW_CAPACITY,
     cleanliness_after_threshold_decay, cleanliness_decay_with_poops, poop_config_for,
@@ -6,7 +9,8 @@ use alveus_idle_cli::cleaning::{
 use alveus_idle_cli::collision::{CollisionMasks, DynamicObstacleTiles};
 use alveus_idle_cli::components::TilePosition;
 use alveus_idle_cli::stats::{
-    EnclosureId, EnclosureStat, EnclosureStats, StatTarget, WorsenStatEvent,
+    advance_simulated_hours_world, EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp,
+    StatTarget, WorsenStatEvent,
 };
 use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
 use moonshine_save::load::TriggerLoad;
@@ -283,3 +287,327 @@ fn push_pop_poop_config_matches_design_intent() {
     assert_eq!(config.spawn_thresholds, &[800, 500, 200]);
     assert_eq!(config.cleanliness_restore_per_poop, 350);
 }
+#[test]
+fn test_poop_count_accelerates_offline_decay() {
+    let save_path = "test_clean_decay.ron";
+    common::cleanup_save(save_path);
+
+    let mut app = common::minimal_stats_app(save_path);
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
+        })
+        .expect("Push Pop enclosure stats entity");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        // At 20% with three floor poops (threshold band), decay runs at 30 + 3*20 = 90/h.
+        stats.cleanliness = 200;
+        let mut tiles = app
+            .world_mut()
+            .get_mut::<DynamicObstacleTiles>(enc_entity)
+            .unwrap();
+        tiles.insert(TilePosition { x: 6, y: 4 });
+        tiles.insert(TilePosition { x: 7, y: 4 });
+        tiles.insert(TilePosition { x: 8, y: 4 });
+    }
+
+    advance_simulated_hours_world(app.world_mut(), 10.0);
+    app.update();
+
+    let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
+    // 10h * 90/h = 900 decay from 200 -> 0
+    assert_eq!(stats.cleanliness, 0);
+
+    common::cleanup_save(save_path);
+}
+
+#[test]
+fn test_threshold_poop_spawn_on_cleanliness() {
+    let save_path = "test_threshold_poops.ron";
+    common::cleanup_save(save_path);
+
+    let mut app = common::minimal_stats_app(save_path);
+    app.init_resource::<CollisionMasks>();
+    app.add_plugins(CleaningPlugin);
+
+    {
+        let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+                EnclosureId::NutritionHousePlaypen,
+            ),
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            HashSet::new(),
+        );
+    }
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
+        })
+        .expect("Push Pop enclosure stats entity");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        stats.cleanliness = 800;
+    }
+    app.update();
+
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(tiles.0.len(), 1, "one poop at 80% cleanliness");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        stats.cleanliness = 500;
+    }
+    app.update();
+
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(tiles.0.len(), 2, "two poops at 50% cleanliness");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        stats.cleanliness = 200;
+    }
+    app.update();
+
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(tiles.0.len(), 3, "three poops at 20% cleanliness");
+
+    common::cleanup_save(save_path);
+}
+
+#[test]
+fn test_decay_spawns_poops_when_crossing_thresholds() {
+    let save_path = "test_decay_threshold_poops.ron";
+    common::cleanup_save(save_path);
+
+    let mut app = common::minimal_stats_app(save_path);
+    app.init_resource::<CollisionMasks>();
+    app.add_plugins(CleaningPlugin);
+
+    {
+        let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+                EnclosureId::NutritionHousePlaypen,
+            ),
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            HashSet::new(),
+        );
+    }
+    app.update();
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
+        })
+        .expect("Push Pop enclosure stats entity");
+
+    advance_simulated_hours_world(app.world_mut(), 7.0);
+    app.update();
+
+    let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
+    assert!(stats.cleanliness <= 800, "decay should reach first threshold");
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(tiles.0.len(), 1, "first poop spawns after decay crosses 80%");
+
+    common::cleanup_save(save_path);
+}
+
+#[test]
+fn test_offline_decay_from_full_spawns_three_poops() {
+    let save_path = "test_offline_threshold_poops.ron";
+    common::cleanup_save(save_path);
+
+    let mut app = common::minimal_stats_app(save_path);
+    app.init_resource::<CollisionMasks>();
+    app.add_plugins(CleaningPlugin);
+
+    {
+        let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+                EnclosureId::NutritionHousePlaypen,
+            ),
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            HashSet::new(),
+        );
+    }
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
+        })
+        .expect("Push Pop enclosure stats entity");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        stats.cleanliness = 1000;
+        app.world_mut()
+            .get_mut::<DynamicObstacleTiles>(enc_entity)
+            .unwrap()
+            .0
+            .clear();
+    }
+
+    // 40h offline at 30/h passive decay drains 1000 -> 0 with no floor poops yet.
+    let hours_offline = 40.0;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_secs();
+    app.world_mut().spawn((
+        SaveTimestamp {
+            value: now.saturating_sub((hours_offline * 3600.0) as u64),
+        },
+    ));
+
+    app.update();
+
+    let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
+    assert_eq!(
+        stats.cleanliness, 0,
+        "offline catch-up should drain enclosure cleanliness to 0"
+    );
+
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(
+        tiles.0.len(),
+        3,
+        "three poops should spawn when offline decay reaches 0% cleanliness"
+    );
+
+    common::cleanup_save(save_path);
+}
+
+#[test]
+fn test_offline_decay_accelerates_with_spawned_poops() {
+    let save_path = "test_offline_poop_accel.ron";
+    common::cleanup_save(save_path);
+
+    let mut app = common::minimal_stats_app(save_path);
+    app.init_resource::<CollisionMasks>();
+    app.add_plugins(CleaningPlugin);
+
+    {
+        let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+                EnclosureId::NutritionHousePlaypen,
+            ),
+            HashSet::new(),
+        );
+        masks.set_static_mask(
+            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            HashSet::new(),
+        );
+    }
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&e| {
+            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
+        })
+        .expect("Push Pop enclosure stats entity");
+
+    {
+        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        stats.cleanliness = 1000;
+        app.world_mut()
+            .get_mut::<DynamicObstacleTiles>(enc_entity)
+            .unwrap()
+            .0
+            .clear();
+    }
+
+    // 24h flat decay: 720 drain -> 280 (28%) -> 2 poops.
+    // Segmented (poops spawn at thresholds): reaches 0% -> 3 poops.
+    let hours_offline = 24.0;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_secs();
+    app.world_mut().spawn((
+        SaveTimestamp {
+            value: now.saturating_sub((hours_offline * 3600.0) as u64),
+        },
+    ));
+
+    app.update();
+
+    let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
+    assert_eq!(
+        stats.cleanliness, 0,
+        "24h offline with threshold poop acceleration should drain to 0, not stop at 280"
+    );
+
+    let tiles = app
+        .world()
+        .get::<DynamicObstacleTiles>(enc_entity)
+        .unwrap();
+    assert_eq!(
+        tiles.0.len(),
+        3,
+        "24h offline should cross all three thresholds and spawn three poops"
+    );
+
+    common::cleanup_save(save_path);
+}
+

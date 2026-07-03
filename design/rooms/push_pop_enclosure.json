@@ -77,7 +77,22 @@
       "gate_position": { "x": 6, "y": 0 }
     }
   ],
-  "dynamic_spawns": [],
+  "dynamic_spawns": [
+    {
+      "spawn_id": "push_pop_poops",
+      "object_template": "poop_pile",
+      "count": { "min": 0, "max": 3 },
+      "spawn_bounds": {
+        "bottom_left": { "x": 5, "y": 3 },
+        "top_right": { "x": 10, "y": 8 }
+      },
+      "spawn_thresholds": [0.8, 0.5, 0.2],
+      "poop_decay_rate_per_hour": 0.02,
+      "cleanliness_restore_per_poop": 0.35,
+      "wheelbarrow_capacity": 10,
+      "_note": "Authoritative runtime values: src/cleaning.rs POOP_CONFIG and WHEELBARROW_CAPACITY. Compost bin is on the overview map at tile (3,0), not in this room."
+    }
+  ],
   "ambient": {
     "floor_color": { "r": 0.72, "g": 0.62, "b": 0.45 },
     "wall_color": { "r": 0.45, "g": 0.38, "b": 0.28 },

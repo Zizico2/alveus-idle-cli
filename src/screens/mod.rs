@@ -22,6 +22,10 @@ pub fn plugin(app: &mut App) {
 pub enum InRoom {
     NutritionHouse,
     PushPopEnclosure,
+    /// Reserved for a future pasture interior; not enterable in gameplay yet.
+    Pasture,
+    /// Reserved for a future reptile enclosure interior; not enterable in gameplay yet.
+    ReptileEnclosure,
 }
 
 /// The game's main screen states.
