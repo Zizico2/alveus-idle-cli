@@ -1,7 +1,11 @@
+use crate::cleaning::{
+    PoopDump, PoopDumpedEvent, PoopPile, PoopPickedUpEvent, PoopWheelbarrow, try_dump_poop,
+    try_pickup_poop,
+};
 use crate::components::{CurrentTilePosition, TilePosition};
 use crate::content::{ItemId, can_interact, item_display_name};
 use crate::demo::player::Player;
-use crate::screens::{InRoom, Screen};
+use crate::screens::Screen;
 use crate::stats::{AnimalId, AnimalStat, ImproveStatEvent, StatTarget};
 use bevy::prelude::*;
 
@@ -25,7 +29,7 @@ impl Plugin for InteractionPlugin {
                     decay_pickup_message,
                 )
                     .chain()
-                    .run_if(in_interactive_room),
+                    .run_if(allows_tile_interaction),
             )
             .add_systems(
                 Update,
@@ -104,11 +108,8 @@ pub struct AnimalFedEvent {
     pub dish_position: TilePosition,
 }
 
-fn in_interactive_room(screen: Res<State<Screen>>) -> bool {
-    matches!(
-        screen.get(),
-        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
-    )
+fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
+    matches!(screen.get(), Screen::Gameplay | Screen::InRoom(_))
 }
 
 fn update_interaction_target(
@@ -202,7 +203,10 @@ fn handle_interaction_input(
     tile_query: Query<&TilePosition>,
     give_query: Query<&GiveItem>,
     feed_query: Query<&FeedAnimal>,
+    poop_query: Query<&PoopPile>,
+    dump_query: Query<&PoopDump>,
     mut satchel: ResMut<PlayerSatchel>,
+    mut wheelbarrow: ResMut<PoopWheelbarrow>,
     mut commands: Commands,
 ) {
     if input.just_pressed(KeyCode::Space) {
@@ -211,7 +215,10 @@ fn handle_interaction_input(
             &tile_query,
             &give_query,
             &feed_query,
+            &poop_query,
+            &dump_query,
             &mut satchel,
+            &mut wheelbarrow,
             &mut commands,
         );
     }
@@ -222,7 +229,10 @@ pub fn perform_interact(
     tile_query: &Query<&TilePosition>,
     give_query: &Query<&GiveItem>,
     feed_query: &Query<&FeedAnimal>,
+    poop_query: &Query<&PoopPile>,
+    dump_query: &Query<&PoopDump>,
     satchel: &mut PlayerSatchel,
+    wheelbarrow: &mut PoopWheelbarrow,
     commands: &mut Commands,
 ) {
     let Some(entity) = active.interactable else {
@@ -264,6 +274,43 @@ pub fn perform_interact(
             delta: feed.delta,
             dish_position: *tile_pos,
         });
+        return;
+    }
+
+    if let Ok(poop) = poop_query.get(entity) {
+        if let Err(message) = try_pickup_poop(wheelbarrow, poop.enclosure_id) {
+            commands.insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+
+        let Ok(tile_pos) = tile_query.get(entity) else {
+            let _ = wheelbarrow.poops.pop();
+            return;
+        };
+
+        commands.trigger(PoopPickedUpEvent {
+            entity,
+            enclosure_id: poop.enclosure_id,
+            tile: *tile_pos,
+        });
+        return;
+    }
+
+    if let Ok(_dump) = dump_query.get(entity) {
+        match try_dump_poop(wheelbarrow) {
+            Ok(poops) => {
+                commands.trigger(PoopDumpedEvent { poops });
+            }
+            Err(message) => {
+                commands.insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+            }
+        }
     }
 }
 
@@ -309,6 +356,52 @@ pub fn perform_interact_in_world(world: &mut World) {
             delta: feed.delta,
             dish_position: tile_pos,
         });
+        return;
+    }
+
+    if let Some(poop) = world.get::<PoopPile>(entity).copied() {
+        let pickup_result = {
+            let mut wheelbarrow = world.resource_mut::<PoopWheelbarrow>();
+            try_pickup_poop(&mut wheelbarrow, poop.enclosure_id)
+        };
+        if let Err(message) = pickup_result {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+
+        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
+            let mut wheelbarrow = world.resource_mut::<PoopWheelbarrow>();
+            let _ = wheelbarrow.poops.pop();
+            return;
+        };
+
+        world.trigger(PoopPickedUpEvent {
+            entity,
+            enclosure_id: poop.enclosure_id,
+            tile: tile_pos,
+        });
+        return;
+    }
+
+    if world.get::<PoopDump>(entity).is_some() {
+        let dump_result = {
+            let wheelbarrow = world.resource::<PoopWheelbarrow>();
+            try_dump_poop(&wheelbarrow)
+        };
+        match dump_result {
+            Ok(poops) => {
+                world.trigger(PoopDumpedEvent { poops });
+            }
+            Err(message) => {
+                world.commands().insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+            }
+        }
     }
 }
 

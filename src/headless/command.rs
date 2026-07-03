@@ -51,7 +51,8 @@ pub enum GameCommand {
     MoveStop,
     /// Interact with whatever is currently in front of / under the player
     /// (`Space` in-game): pick up a `GiveItem`, feed an animal via `FeedAnimal`,
-    /// etc. No-op if there is no active interaction target.
+    /// pick up a `PoopPile` into the wheelbarrow, empty the wheelbarrow at the
+    /// overview `PoopDump` compost bin (enclosure-agnostic), etc. No-op if there is no active interaction target.
     Interact,
     /// Drop the currently held satchel item (`K` in-game). No-op if empty.
     DropItem,
