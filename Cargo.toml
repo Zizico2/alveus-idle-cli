@@ -52,7 +52,7 @@ alveus-headless = { path = "crates/alveus-headless" }
 bevy = { version = "0.19", default-features = true }
 bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
 bevy_reflect = "0.19"
-bevy_ecs_tiled = { git = "https://github.com/taboky-dev/bevy_ecs_tiled", branch = "main", default-features = false, features = ["user_properties", "png"] }
+bevy_ecs_tiled = { version = "0.13", default-features = false, features = ["user_properties", "png"] }
 bevy_tweening = "0.16.0"
 itertools = "0.14"
 rand = "0.10.1"

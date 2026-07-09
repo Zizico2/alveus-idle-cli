@@ -1027,8 +1027,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_ecs_tiled"
-version = "0.12.0"
-source = "git+https://github.com/taboky-dev/bevy_ecs_tiled?branch=main#f07be1dc55103de1c6e5fd4242a40ef7bbc8a961"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40740edb8b0ee20b0a9b723b1f9b7caf00214d77eec3e8502c3cfad5912aeb6f"
 dependencies = [
  "bevy",
  "bevy_ecs_tilemap",
@@ -1044,8 +1045,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_ecs_tilemap"
-version = "0.18.1"
-source = "git+https://github.com/taboky-dev/bevy_ecs_tilemap.git?rev=b5dfea8#b5dfea8de703124abe64d9b3532d18459a7ca7b7"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0110f93feeaf310d87accf3820a21ebda01063bac12eba9c35e417092a80c34"
 dependencies = [
  "bevy",
  "log",
