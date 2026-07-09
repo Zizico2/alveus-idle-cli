@@ -1,0 +1,25 @@
+[package]
+name = "alveus-world"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Overview/interior world: level loading, player, movement, rooms, entrances, camera, and toasts for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true, features = ["pan_camera"] }
+bevy_ecs_tiled.workspace = true
+bevy_tweening.workspace = true
+alveus-types.workspace = true
+alveus-content.workspace = true
+alveus-components.workspace = true
+alveus-collision.workspace = true
+alveus-stats.workspace = true
+alveus-animals.workspace = true
+alveus-asset-tracking.workspace = true
+alveus-app.workspace = true
+
+[features]
+tiled-render = ["bevy_ecs_tiled/render"]
+
+[lints]
+workspace = true

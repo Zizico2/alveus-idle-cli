@@ -1,8 +1,8 @@
 #![cfg(feature = "headless")]
 
-use alveus_idle_cli::headless::{GameCommand, register_headless_types};
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{SavePath, StatsPlugin};
+use alveus_headless::{GameCommand, register_headless_types};
+use alveus_app::Screen;
+use alveus_stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::remote::{BrpMessage, BrpSender};
 use bevy::state::app::StatesPlugin;
@@ -31,7 +31,7 @@ fn brp_skip_splash_command_changes_screen() {
     app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((StatsPlugin, alveus_idle_cli::headless::CommandPlugin));
+    app.add_plugins((StatsPlugin, alveus_headless::CommandPlugin));
     app.add_plugins(bevy::remote::RemotePlugin::default());
     register_headless_types(&mut app);
     app.insert_resource(State::new(Screen::Splash));
@@ -43,7 +43,7 @@ fn brp_skip_splash_command_changes_screen() {
         .send_blocking(BrpMessage {
             method: "world.trigger_event".to_string(),
             params: Some(serde_json::json!({
-                "event": "alveus_idle_cli::headless::command::GameCommand",
+                "event": "alveus_headless::command::GameCommand",
                 "value": "SkipSplash"
             })),
             sender: result_sender,

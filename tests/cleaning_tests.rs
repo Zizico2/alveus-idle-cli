@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use alveus_idle_cli::cleaning::{
+use alveus_cleaning::{
     CleaningPlugin, PoopDumpedEvent, PoopPickedUpEvent, PoopWheelbarrow, WHEELBARROW_CAPACITY,
     cleanliness_after_threshold_decay, cleanliness_decay_with_poops, poop_config_for,
     target_poop_count, try_dump_poop, try_pickup_poop,
 };
-use alveus_idle_cli::collision::{CollisionMasks, DynamicObstacleTiles};
-use alveus_idle_cli::components::TilePosition;
-use alveus_idle_cli::stats::{
+use alveus_collision::{CollisionMasks, DynamicObstacleTiles};
+use alveus_components::TilePosition;
+use alveus_stats::{
     advance_simulated_hours_world, EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp,
     StatTarget, WorsenStatEvent,
 };
@@ -338,17 +338,17 @@ fn test_threshold_poop_spawn_on_cleanliness() {
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            alveus_collision::CollisionMapKey::Overview,
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+            alveus_collision::CollisionMapKey::Enclosure(
                 EnclosureId::NutritionHousePlaypen,
             ),
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
             HashSet::new(),
         );
     }
@@ -413,17 +413,17 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            alveus_collision::CollisionMapKey::Overview,
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+            alveus_collision::CollisionMapKey::Enclosure(
                 EnclosureId::NutritionHousePlaypen,
             ),
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
             HashSet::new(),
         );
     }
@@ -464,17 +464,17 @@ fn test_offline_decay_from_full_spawns_three_poops() {
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            alveus_collision::CollisionMapKey::Overview,
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+            alveus_collision::CollisionMapKey::Enclosure(
                 EnclosureId::NutritionHousePlaypen,
             ),
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
             HashSet::new(),
         );
     }
@@ -543,17 +543,17 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Overview,
+            alveus_collision::CollisionMapKey::Overview,
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(
+            alveus_collision::CollisionMapKey::Enclosure(
                 EnclosureId::NutritionHousePlaypen,
             ),
             HashSet::new(),
         );
         masks.set_static_mask(
-            alveus_idle_cli::collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
             HashSet::new(),
         );
     }

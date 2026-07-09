@@ -1,0 +1,12 @@
+[package]
+name = "alveus-asset-tracking"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Load collections of asset handles as resources for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+
+[lints]
+workspace = true

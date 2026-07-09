@@ -193,18 +193,18 @@
  <objectgroup id="8" name="Terrain Metadata">
   <object id="6" x="1024" y="1120" width="128" height="64">
    <properties>
-    <property name="building_entrance" type="class" propertytype="alveus_idle_cli::components::BuildingEntrance">
+    <property name="building_entrance" type="class" propertytype="alveus_components::BuildingEntrance">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::components::BuildingEntrance:::Variant" value="NutritionHouse"/>
+      <property name=":variant" propertytype="alveus_components::BuildingEntrance:::Variant" value="NutritionHouse"/>
      </properties>
     </property>
    </properties>
   </object>
   <object id="7" x="1216" y="1120" width="128" height="64">
    <properties>
-    <property name="building_entrance" type="class" propertytype="alveus_idle_cli::components::BuildingEntrance">
+    <property name="building_entrance" type="class" propertytype="alveus_components::BuildingEntrance">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::components::BuildingEntrance:::Variant" value="PushPopEnclosure"/>
+      <property name=":variant" propertytype="alveus_components::BuildingEntrance:::Variant" value="PushPopEnclosure"/>
      </properties>
     </property>
    </properties>

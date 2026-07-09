@@ -12,7 +12,7 @@ from pathlib import Path
 
 PORT = 15702
 BASE = f"http://127.0.0.1:{PORT}/"
-EVENT = "alveus_idle_cli::headless::command::GameCommand"
+EVENT = "alveus_headless::command::GameCommand"
 SCREENSHOTS = Path(__file__).resolve().parent.parent / "screenshots"
 SCREENSHOT = SCREENSHOTS / "nutrition_house_screenshot.png"
 # Example constants — verify in src/ before relying on these (map/room config can change).

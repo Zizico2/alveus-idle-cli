@@ -147,6 +147,78 @@ dependencies = [
 ]
 
 [[package]]
+name = "alveus-animals"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-content",
+ "alveus-stats",
+ "alveus-types",
+ "bevy",
+ "rand 0.10.1",
+]
+
+[[package]]
+name = "alveus-app"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "alveus-asset-tracking"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "alveus-audio"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "alveus-cleaning"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-configs",
+ "alveus-stats",
+ "alveus-types",
+ "bevy",
+ "itertools",
+ "rand 0.10.1",
+]
+
+[[package]]
+name = "alveus-collision"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-components",
+ "alveus-content",
+ "alveus-types",
+ "bevy",
+ "bevy_ecs_tiled",
+ "moonshine-save",
+ "rand 0.10.1",
+]
+
+[[package]]
+name = "alveus-components"
+version = "0.1.0"
+dependencies = [
+ "alveus-types",
+ "bevy",
+]
+
+[[package]]
 name = "alveus-configs"
 version = "0.1.0"
 dependencies = [
@@ -156,23 +228,138 @@ dependencies = [
 ]
 
 [[package]]
-name = "alveus-idle-cli"
+name = "alveus-content"
 version = "0.1.0"
 dependencies = [
  "alveus-configs",
  "alveus-types",
+ "bevy",
+]
+
+[[package]]
+name = "alveus-headless"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-cleaning",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-content",
+ "alveus-interaction",
+ "alveus-menus",
+ "alveus-screens",
+ "alveus-stats",
+ "alveus-world",
+ "async-channel",
+ "bevy",
+ "serde_json",
+]
+
+[[package]]
+name = "alveus-hud"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-cleaning",
+ "alveus-components",
+ "alveus-content",
+ "alveus-interaction",
+ "alveus-stats",
+ "alveus-types",
+ "bevy",
+]
+
+[[package]]
+name = "alveus-idle-cli"
+version = "0.1.0"
+dependencies = [
+ "alveus-animals",
+ "alveus-app",
+ "alveus-asset-tracking",
+ "alveus-audio",
+ "alveus-cleaning",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-configs",
+ "alveus-content",
+ "alveus-headless",
+ "alveus-hud",
+ "alveus-interaction",
+ "alveus-menus",
+ "alveus-screens",
+ "alveus-stats",
+ "alveus-theme",
+ "alveus-types",
+ "alveus-world",
  "async-channel",
  "bevy",
  "bevy_ecs_tiled",
- "bevy_tweening",
- "getrandom 0.4.3",
- "itertools",
  "moonshine-save",
  "rand 0.10.1",
  "ron",
- "serde",
  "serde_json",
- "tracing",
+]
+
+[[package]]
+name = "alveus-interaction"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-cleaning",
+ "alveus-components",
+ "alveus-content",
+ "alveus-stats",
+ "alveus-types",
+ "bevy",
+]
+
+[[package]]
+name = "alveus-menus"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-asset-tracking",
+ "alveus-audio",
+ "alveus-theme",
+ "bevy",
+]
+
+[[package]]
+name = "alveus-screens"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-asset-tracking",
+ "alveus-collision",
+ "alveus-theme",
+ "alveus-world",
+ "bevy",
+ "bevy_ecs_tiled",
+]
+
+[[package]]
+name = "alveus-stats"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-configs",
+ "alveus-content",
+ "alveus-types",
+ "bevy",
+ "moonshine-save",
+ "rand 0.10.1",
+ "ron",
+]
+
+[[package]]
+name = "alveus-theme"
+version = "0.1.0"
+dependencies = [
+ "alveus-asset-tracking",
+ "alveus-audio",
+ "bevy",
 ]
 
 [[package]]
@@ -183,6 +370,23 @@ dependencies = [
  "bevy_reflect",
  "moonshine-save",
  "phf_shared",
+]
+
+[[package]]
+name = "alveus-world"
+version = "0.1.0"
+dependencies = [
+ "alveus-animals",
+ "alveus-app",
+ "alveus-asset-tracking",
+ "alveus-collision",
+ "alveus-components",
+ "alveus-content",
+ "alveus-stats",
+ "alveus-types",
+ "bevy",
+ "bevy_ecs_tiled",
+ "bevy_tweening",
 ]
 
 [[package]]
@@ -2897,11 +3101,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "r-efi 6.0.0",
  "rand_core 0.10.1",
- "wasm-bindgen",
 ]
 
 [[package]]

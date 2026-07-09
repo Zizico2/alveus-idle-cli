@@ -7,6 +7,7 @@ use moonshine_save::prelude::*;
 use phf_shared::{FmtConst, PhfBorrow, PhfHash};
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
+#[type_path = "alveus_types"]
 #[reflect(Component)]
 #[require(Save, Unload)]
 pub enum EnclosureId {

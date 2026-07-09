@@ -1,0 +1,20 @@
+[package]
+name = "alveus-cleaning"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Poop spawning, wheelbarrow pickup, and compost-dump cleaning loop for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+itertools.workspace = true
+rand.workspace = true
+alveus-types.workspace = true
+alveus-configs.workspace = true
+alveus-components.workspace = true
+alveus-collision.workspace = true
+alveus-stats.workspace = true
+alveus-app.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "alveus-app"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Core app-wide states and system-set schedule for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,6 +3,7 @@ use bevy_reflect::Reflect;
 use bevy_reflect::prelude::ReflectDefault;
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Reflect)]
+#[type_path = "alveus_types"]
 #[reflect(Component, Default)]
 pub struct TilePosition {
     pub x: u32,

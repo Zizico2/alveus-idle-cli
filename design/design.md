@@ -76,9 +76,9 @@ design/
 
 | Constant | Value | Location |
 |---|---|---|
-| `TILE_SIZE` | `32` (pixels) | `src/demo/level.rs` |
-| `GRID_SNAP_EPSILON` | `0.05` (pixels) | `src/demo/entrance.rs` |
-| `PLAYER_Z_INDEX` | `2.0` | `src/demo/player.rs` |
+| `TILE_SIZE` | `32` (pixels) | `crates/alveus-components` / world level |
+| `GRID_SNAP_EPSILON` | `0.05` (pixels) | `crates/alveus-world/src/entrance.rs` |
+| `PLAYER_Z_INDEX` | `2.0` | `crates/alveus-world/src/player.rs` |
 
 ### Coordinate Convention
 
@@ -209,7 +209,7 @@ On first game launch (new save), the player spawns at tile `(25, 10)` — outsid
 
 ### Entrance Detection
 
-The entrance system (`src/demo/entrance.rs`) works as follows:
+The entrance system (`crates/alveus-world/src/entrance.rs`) works as follows:
 
 1. **Tiled objects** with `BuildingEntrance` properties are loaded by `bevy_ecs_tiled`.
 2. On `Added<BuildingEntrance>`, the `validate_and_snap_entrances` system:
@@ -230,7 +230,7 @@ The entrance system (`src/demo/entrance.rs`) works as follows:
 
 ### Room Lifecycle
 
-Rooms are self-contained game states. The `build_room<S>` function in `src/demo/room.rs` generically wires up any room via `RoomConfig<S>`:
+Rooms are self-contained game states. The `build_room<S>` function in `crates/alveus-world/src/room.rs` generically wires up any room via `RoomConfig<S>`:
 
 ```rust
 pub struct RoomConfig<S: States + FreelyMutableState> {

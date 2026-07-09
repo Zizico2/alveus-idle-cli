@@ -1,6 +1,6 @@
-use alveus_idle_cli::menus::PlayClickEvent;
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{SavePath, StatsPlugin};
+use alveus_menus::PlayClickEvent;
+use alveus_app::Screen;
+use alveus_stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 use moonshine_save::prelude::SaveWorld;
@@ -51,11 +51,11 @@ fn test_play_crash_on_invalid_save() {
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
-    app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
+    app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
 
     // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_idle_cli::menus::main::handle_play_click);
+    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions
@@ -82,11 +82,11 @@ fn test_save_exclude_and_hydration() {
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
-    app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
+    app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
 
     // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_idle_cli::menus::main::handle_play_click);
+    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions (this spawns default stats because no save exists)
@@ -105,24 +105,24 @@ fn test_save_exclude_and_hydration() {
     // Verify that the default entities have static components (e.g. AnimalName, EnclosureName)
     let polly_entity = app
         .world_mut()
-        .query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
+        .query_filtered::<Entity, With<alveus_stats::AnimalId>>()
         .iter(app.world())
         .find(|&e| {
             *app.world()
-                .get::<alveus_idle_cli::stats::AnimalId>(e)
+                .get::<alveus_stats::AnimalId>(e)
                 .unwrap()
-                == alveus_idle_cli::stats::AnimalId::Polly
+                == alveus_stats::AnimalId::Polly
         })
         .expect("Polly should exist");
 
     assert!(
         app.world()
-            .get::<alveus_idle_cli::stats::AnimalName>(polly_entity)
+            .get::<alveus_stats::AnimalName>(polly_entity)
             .is_some()
     );
     assert!(
         app.world()
-            .get::<alveus_idle_cli::stats::AnimalEnclosure>(polly_entity)
+            .get::<alveus_stats::AnimalEnclosure>(polly_entity)
             .is_some()
     );
 
@@ -130,7 +130,7 @@ fn test_save_exclude_and_hydration() {
     {
         let mut stats = app
             .world_mut()
-            .get_mut::<alveus_idle_cli::stats::AnimalStats>(polly_entity)
+            .get_mut::<alveus_stats::AnimalStats>(polly_entity)
             .unwrap();
         stats.hunger = 450;
     }
@@ -144,17 +144,17 @@ fn test_save_exclude_and_hydration() {
     // Spawn the SaveTimestamp entity if not exists
     app.world_mut().spawn((
         Name::new("Save Timestamp"),
-        alveus_idle_cli::stats::SaveTimestamp { value: now_unix },
+        alveus_stats::SaveTimestamp { value: now_unix },
     ));
 
     // Trigger SaveWorld with allowlist
     let mut save = SaveWorld::default_into_file(test_save_path);
     save.components = bevy::world_serialization::WorldFilter::deny_all()
-        .allow::<alveus_idle_cli::stats::SaveTimestamp>()
-        .allow::<alveus_idle_cli::stats::AnimalId>()
-        .allow::<alveus_idle_cli::stats::AnimalStats>()
-        .allow::<alveus_idle_cli::stats::EnclosureId>()
-        .allow::<alveus_idle_cli::stats::EnclosureStats>();
+        .allow::<alveus_stats::SaveTimestamp>()
+        .allow::<alveus_stats::AnimalId>()
+        .allow::<alveus_stats::AnimalStats>()
+        .allow::<alveus_stats::EnclosureId>()
+        .allow::<alveus_stats::EnclosureStats>();
     app.world_mut().trigger_save(save);
 
     // Run update to make sure save completes (commands are applied)
@@ -188,9 +188,9 @@ fn test_save_exclude_and_hydration() {
     for entity in app
         .world_mut()
         .query_filtered::<Entity, Or<(
-            With<alveus_idle_cli::stats::SaveTimestamp>,
-            With<alveus_idle_cli::stats::AnimalId>,
-            With<alveus_idle_cli::stats::EnclosureId>,
+            With<alveus_stats::SaveTimestamp>,
+            With<alveus_stats::AnimalId>,
+            With<alveus_stats::EnclosureId>,
         )>>()
         .iter(app.world())
     {
@@ -210,37 +210,37 @@ fn test_save_exclude_and_hydration() {
     // Now, verify that the loaded entity got hydrated with static components!
     let loaded_polly_entity = app
         .world_mut()
-        .query_filtered::<Entity, With<alveus_idle_cli::stats::AnimalId>>()
+        .query_filtered::<Entity, With<alveus_stats::AnimalId>>()
         .iter(app.world())
         .find(|&e| {
             *app.world()
-                .get::<alveus_idle_cli::stats::AnimalId>(e)
+                .get::<alveus_stats::AnimalId>(e)
                 .unwrap()
-                == alveus_idle_cli::stats::AnimalId::Polly
+                == alveus_stats::AnimalId::Polly
         })
         .expect("Loaded Polly should exist");
 
     // Check stats are loaded correctly (hunger is 450)
     let stats = app
         .world()
-        .get::<alveus_idle_cli::stats::AnimalStats>(loaded_polly_entity)
+        .get::<alveus_stats::AnimalStats>(loaded_polly_entity)
         .expect("Stats missing");
     assert_eq!(stats.hunger, 450, "Hunger stat should be restored");
 
     // Check static components are hydrated!
     let name = app
         .world()
-        .get::<alveus_idle_cli::stats::AnimalName>(loaded_polly_entity)
+        .get::<alveus_stats::AnimalName>(loaded_polly_entity)
         .expect("Name not hydrated");
     assert_eq!(name.0, "Polly", "Name should be hydrated");
 
     let enc = app
         .world()
-        .get::<alveus_idle_cli::stats::AnimalEnclosure>(loaded_polly_entity)
+        .get::<alveus_stats::AnimalEnclosure>(loaded_polly_entity)
         .expect("Enclosure not hydrated");
     assert_eq!(
         enc.0,
-        alveus_idle_cli::stats::EnclosureId::NutritionHousePlaypen,
+        alveus_stats::EnclosureId::NutritionHousePlaypen,
         "Enclosure should be hydrated"
     );
 
@@ -256,11 +256,11 @@ fn test_play_without_save() {
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
-    app.init_resource::<alveus_idle_cli::asset_tracking::ResourceHandles>();
+    app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath("nonexistent_play_without_save.ron".to_string()));
 
     // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_idle_cli::menus::main::handle_play_click);
+    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions
@@ -280,7 +280,7 @@ fn test_play_without_save() {
 
     let animal_count = app
         .world_mut()
-        .query::<&alveus_idle_cli::stats::AnimalId>()
+        .query::<&alveus_stats::AnimalId>()
         .iter(app.world())
         .count();
     assert_eq!(

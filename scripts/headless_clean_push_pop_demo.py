@@ -11,7 +11,7 @@ import urllib.request
 
 PORT = 15702
 BASE = f"http://127.0.0.1:{PORT}/"
-EVENT = "alveus_idle_cli::headless::command::GameCommand"
+EVENT = "alveus_headless::command::GameCommand"
 
 PUSH_POP_ENTRANCE = (39, 12)
 COMPOST_BIN = (3, 0)
@@ -63,16 +63,16 @@ def parse_tile_position(raw) -> tuple[int, int] | None:
 def player_tile() -> tuple[int, int] | None:
     res = rpc("world.query", {
         "data": {
-            "components": ["alveus_idle_cli::components::CurrentTilePosition"],
+            "components": ["alveus_components::CurrentTilePosition"],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::demo::player::Player"]},
+        "filter": {"with": ["alveus_components::Player"]},
     })
     row = (res or [None])[0]
     if not row:
         return None
     raw = row.get("components", {}).get(
-        "alveus_idle_cli::components::CurrentTilePosition"
+        "alveus_components::CurrentTilePosition"
     )
     return parse_tile_position(raw)
 
@@ -81,27 +81,27 @@ def enclosure_cleanliness() -> int | None:
     res = rpc("world.query", {
         "data": {
             "components": [
-                "alveus_idle_cli::stats::EnclosureId",
-                "alveus_idle_cli::stats::EnclosureStats",
+                "alveus_stats::EnclosureId",
+                "alveus_stats::EnclosureStats",
             ],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::stats::EnclosureId"]},
+        "filter": {"with": ["alveus_stats::EnclosureId"]},
     })
     for row in res or []:
         comps = row.get("components", {})
-        enc = comps.get("alveus_idle_cli::stats::EnclosureId")
+        enc = comps.get("alveus_stats::EnclosureId")
         if enc == "PushPopEnclosure" or (
             isinstance(enc, dict) and enc.get(":variant") == "PushPopEnclosure"
         ):
-            stats = comps.get("alveus_idle_cli::stats::EnclosureStats", {})
+            stats = comps.get("alveus_stats::EnclosureStats", {})
             return int(stats.get("cleanliness", 0))
     return None
 
 
 def wheelbarrow_count() -> int:
     res = rpc("world.get_resources", {
-        "resource": "alveus_idle_cli::cleaning::PoopWheelbarrow",
+        "resource": "alveus_components::PoopWheelbarrow",
     })
     wb = (res or {}).get("value", {})
     poops = wb.get("poops", [])
@@ -111,18 +111,18 @@ def wheelbarrow_count() -> int:
 def poop_tile_count() -> int:
     res = rpc("world.query", {
         "data": {
-            "components": ["alveus_idle_cli::collision::DynamicObstacleTiles"],
+            "components": ["alveus_collision::DynamicObstacleTiles"],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::stats::EnclosureId"]},
+        "filter": {"with": ["alveus_stats::EnclosureId"]},
     })
     for row in res or []:
         comps = row.get("components", {})
-        enc = comps.get("alveus_idle_cli::stats::EnclosureId")
+        enc = comps.get("alveus_stats::EnclosureId")
         if enc == "PushPopEnclosure" or (
             isinstance(enc, dict) and enc.get(":variant") == "PushPopEnclosure"
         ):
-            tiles = comps.get("alveus_idle_cli::collision::DynamicObstacleTiles", [])
+            tiles = comps.get("alveus_collision::DynamicObstacleTiles", [])
             if isinstance(tiles, dict) and "0" in tiles:
                 tiles = tiles["0"]
             return len(tiles or [])

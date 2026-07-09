@@ -10,7 +10,7 @@
  <tile id="2">
   <image source="tiles/wall.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
    </properties>
@@ -21,7 +21,7 @@
  <tile id="4">
   <image source="tiles/prep_table.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
    </properties>
@@ -29,15 +29,15 @@
  <tile id="5">
   <image source="tiles/fridge.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
-    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+    <property name="room_object_id" type="class" propertytype="alveus_content::RoomObjectId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="DietFridge"/>
+      <property name=":variant" propertytype="alveus_content::RoomObjectId:::Variant" value="DietFridge"/>
      </properties>
     </property>
-    <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
+    <property name="give_item" type="class" propertytype="alveus_interaction::GiveItem">
      <properties>
     <property name="item_id" type="class" propertytype="alveus_types::ItemId">
      <properties>
@@ -51,15 +51,15 @@
  <tile id="6">
   <image source="tiles/seed_chest.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
-    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+    <property name="room_object_id" type="class" propertytype="alveus_content::RoomObjectId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="SeedChest"/>
+      <property name=":variant" propertytype="alveus_content::RoomObjectId:::Variant" value="SeedChest"/>
      </properties>
     </property>
-    <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
+    <property name="give_item" type="class" propertytype="alveus_interaction::GiveItem">
      <properties>
     <property name="item_id" type="class" propertytype="alveus_types::ItemId">
      <properties>
@@ -79,7 +79,7 @@
  <tile id="9">
   <image source="tiles/fence.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
    </properties>
@@ -90,7 +90,7 @@
  <tile id="11">
   <image source="tiles/shelter.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
    </properties>
@@ -98,15 +98,15 @@
  <tile id="12">
   <image source="tiles/feeding_dish.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
-    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+    <property name="room_object_id" type="class" propertytype="alveus_content::RoomObjectId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="PushPopFeedingDish"/>
+      <property name=":variant" propertytype="alveus_content::RoomObjectId:::Variant" value="PushPopFeedingDish"/>
      </properties>
     </property>
-    <property name="feed_animal" type="class" propertytype="alveus_idle_cli::interaction::FeedAnimal">
+    <property name="feed_animal" type="class" propertytype="alveus_interaction::FeedAnimal">
      <properties>
     <property name="animal_id" type="class" propertytype="alveus_types::AnimalId">
      <properties>
@@ -118,9 +118,9 @@
       <property name=":variant" propertytype="alveus_types::ItemId:::Variant" value="TortoiseLeafyGreens"/>
      </properties>
     </property>
-    <property name="stat" type="class" propertytype="alveus_idle_cli::stats::AnimalStat">
+    <property name="stat" type="class" propertytype="alveus_stats::AnimalStat">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::stats::AnimalStat:::Variant" value="Hunger"/>
+      <property name=":variant" propertytype="alveus_stats::AnimalStat:::Variant" value="Hunger"/>
      </properties>
     </property>
       <property name="delta" type="int" value="1000"/>

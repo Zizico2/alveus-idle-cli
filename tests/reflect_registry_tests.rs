@@ -1,6 +1,6 @@
-use alveus_idle_cli::headless::{GameCommand, register_headless_types};
-use alveus_idle_cli::interaction::PlayerSatchel;
-use alveus_idle_cli::stats::SanctuaryUpkeep;
+use alveus_headless::{GameCommand, register_headless_types};
+use alveus_interaction::PlayerSatchel;
+use alveus_stats::SanctuaryUpkeep;
 use bevy::prelude::*;
 
 #[test]

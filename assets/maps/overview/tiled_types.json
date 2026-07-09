@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "name": "alveus_idle_cli::cleaning::PoopDump",
+    "name": "alveus_cleaning::PoopDump",
     "type": "class",
     "useAs": [
       "property"
@@ -18,7 +18,7 @@
   },
   {
     "id": 2,
-    "name": "alveus_idle_cli::cleaning::PoopPile",
+    "name": "alveus_cleaning::PoopPile",
     "type": "class",
     "useAs": [
       "property"
@@ -28,15 +28,15 @@
     "members": [
       {
         "name": "enclosure_id",
-        "propertyType": "alveus_types::enclosure_id::EnclosureId",
+        "propertyType": "alveus_types::EnclosureId",
         "type": "string",
         "value": "NutritionHousePlaypen"
       }
     ]
   },
   {
-    "id": 5,
-    "name": "alveus_idle_cli::components::BuildingEntrance",
+    "id": 4,
+    "name": "alveus_components::BuildingEntrance",
     "type": "class",
     "useAs": [
       "property"
@@ -46,15 +46,15 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+        "propertyType": "alveus_components::BuildingEntrance:::Variant",
         "type": "class",
         "value": "NoEntrance"
       }
     ]
   },
   {
-    "id": 4,
-    "name": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+    "id": 3,
+    "name": "alveus_components::BuildingEntrance:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -65,8 +65,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 6,
-    "name": "alveus_idle_cli::components::CurrentTilePosition",
+    "id": 5,
+    "name": "alveus_components::CurrentTilePosition",
     "type": "class",
     "useAs": [
       "property"
@@ -76,15 +76,15 @@
     "members": [
       {
         "name": "0",
-        "propertyType": "alveus_types::tile::TilePosition",
+        "propertyType": "alveus_types::TilePosition",
         "type": "class",
         "value": null
       }
     ]
   },
   {
-    "id": 7,
-    "name": "alveus_idle_cli::components::DynamicObstacle",
+    "id": 6,
+    "name": "alveus_components::DynamicObstacle",
     "type": "class",
     "useAs": [
       "property"
@@ -94,8 +94,8 @@
     "members": []
   },
   {
-    "id": 8,
-    "name": "alveus_idle_cli::components::InEnclosure",
+    "id": 7,
+    "name": "alveus_components::InEnclosure",
     "type": "class",
     "useAs": [
       "property"
@@ -105,15 +105,15 @@
     "members": [
       {
         "name": "0",
-        "propertyType": "alveus_types::enclosure_id::EnclosureId",
+        "propertyType": "alveus_types::EnclosureId",
         "type": "string",
         "value": null
       }
     ]
   },
   {
-    "id": 9,
-    "name": "alveus_idle_cli::components::Obstacle",
+    "id": 8,
+    "name": "alveus_components::Interactable",
     "type": "class",
     "useAs": [
       "property"
@@ -124,7 +124,56 @@
   },
   {
     "id": 10,
-    "name": "alveus_idle_cli::components::PersistedDynamicObstacle",
+    "name": "alveus_components::MovementController",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "intent",
+        "propertyType": "core::option::Option<alveus_components::MovementIntent>",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "name": "alveus_components::MovementIntent",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "alveus_components::MovementIntent:::Variant",
+        "type": "class",
+        "value": "Up"
+      }
+    ]
+  },
+  {
+    "id": 49,
+    "name": "alveus_components::MovementIntent:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "Up",
+      "Down",
+      "Left",
+      "Right"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 11,
+    "name": "alveus_components::Obstacle",
     "type": "class",
     "useAs": [
       "property"
@@ -135,7 +184,29 @@
   },
   {
     "id": 12,
-    "name": "alveus_idle_cli::content::RoomObjectId",
+    "name": "alveus_components::PersistedDynamicObstacle",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 13,
+    "name": "alveus_components::Player",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": []
+  },
+  {
+    "id": 16,
+    "name": "alveus_content::RoomObjectId",
     "type": "class",
     "useAs": [
       "property"
@@ -145,27 +216,28 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_idle_cli::content::RoomObjectId:::Variant",
+        "propertyType": "alveus_content::RoomObjectId:::Variant",
         "type": "class",
         "value": "DietFridge"
       }
     ]
   },
   {
-    "id": 11,
-    "name": "alveus_idle_cli::content::RoomObjectId:::Variant",
+    "id": 15,
+    "name": "alveus_content::RoomObjectId:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
       "DietFridge",
       "SeedChest",
-      "PushPopFeedingDish"
+      "PushPopFeedingDish",
+      "CompostBin"
     ],
     "valuesAsFlags": false
   },
   {
-    "id": 13,
-    "name": "alveus_idle_cli::interaction::ActiveInteractionTarget",
+    "id": 17,
+    "name": "alveus_interaction::ActiveInteractionTarget",
     "type": "class",
     "useAs": [
       "property"
@@ -181,8 +253,8 @@
     ]
   },
   {
-    "id": 14,
-    "name": "alveus_idle_cli::interaction::FeedAnimal",
+    "id": 18,
+    "name": "alveus_interaction::FeedAnimal",
     "type": "class",
     "useAs": [
       "property"
@@ -192,19 +264,19 @@
     "members": [
       {
         "name": "animal_id",
-        "propertyType": "alveus_types::animal_id::AnimalId",
+        "propertyType": "alveus_types::AnimalId",
         "type": "string",
         "value": null
       },
       {
         "name": "required_item",
-        "propertyType": "alveus_types::item_id::ItemId",
+        "propertyType": "alveus_types::ItemId",
         "type": "string",
         "value": null
       },
       {
         "name": "stat",
-        "propertyType": "alveus_idle_cli::stats::AnimalStat",
+        "propertyType": "alveus_stats::AnimalStat",
         "type": "string",
         "value": null
       },
@@ -221,8 +293,8 @@
     ]
   },
   {
-    "id": 15,
-    "name": "alveus_idle_cli::interaction::GiveItem",
+    "id": 19,
+    "name": "alveus_interaction::GiveItem",
     "type": "class",
     "useAs": [
       "property"
@@ -232,7 +304,7 @@
     "members": [
       {
         "name": "item_id",
-        "propertyType": "alveus_types::item_id::ItemId",
+        "propertyType": "alveus_types::ItemId",
         "type": "string",
         "value": null
       },
@@ -244,19 +316,8 @@
     ]
   },
   {
-    "id": 16,
-    "name": "alveus_idle_cli::interaction::Interactable",
-    "type": "class",
-    "useAs": [
-      "property"
-    ],
-    "color": "#000000",
-    "drawFill": true,
-    "members": []
-  },
-  {
-    "id": 18,
-    "name": "alveus_idle_cli::interaction::PlayerSatchel",
+    "id": 20,
+    "name": "alveus_interaction::PlayerSatchel",
     "type": "class",
     "useAs": [
       "property"
@@ -266,15 +327,15 @@
     "members": [
       {
         "name": "item",
-        "propertyType": "core::option::Option<alveus_types::item_id::ItemId>",
+        "propertyType": "core::option::Option<alveus_types::ItemId>",
         "type": "class",
         "value": null
       }
     ]
   },
   {
-    "id": 19,
-    "name": "alveus_idle_cli::stats::AnimalDecayAccumulators",
+    "id": 21,
+    "name": "alveus_stats::AnimalDecayAccumulators",
     "type": "class",
     "useAs": [
       "property"
@@ -295,8 +356,8 @@
     ]
   },
   {
-    "id": 20,
-    "name": "alveus_idle_cli::stats::AnimalDecayRates",
+    "id": 22,
+    "name": "alveus_stats::AnimalDecayRates",
     "type": "class",
     "useAs": [
       "property"
@@ -317,8 +378,8 @@
     ]
   },
   {
-    "id": 21,
-    "name": "alveus_idle_cli::stats::AnimalEnclosure",
+    "id": 23,
+    "name": "alveus_stats::AnimalEnclosure",
     "type": "class",
     "useAs": [
       "property"
@@ -328,15 +389,15 @@
     "members": [
       {
         "name": "0",
-        "propertyType": "alveus_types::enclosure_id::EnclosureId",
+        "propertyType": "alveus_types::EnclosureId",
         "type": "string",
         "value": null
       }
     ]
   },
   {
-    "id": 22,
-    "name": "alveus_idle_cli::stats::AnimalName",
+    "id": 24,
+    "name": "alveus_stats::AnimalName",
     "type": "class",
     "useAs": [
       "property"
@@ -352,8 +413,8 @@
     ]
   },
   {
-    "id": 43,
-    "name": "alveus_idle_cli::stats::AnimalStat",
+    "id": 57,
+    "name": "alveus_stats::AnimalStat",
     "type": "class",
     "useAs": [
       "property"
@@ -363,15 +424,15 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_idle_cli::stats::AnimalStat:::Variant",
+        "propertyType": "alveus_stats::AnimalStat:::Variant",
         "type": "class",
         "value": "Hunger"
       }
     ]
   },
   {
-    "id": 42,
-    "name": "alveus_idle_cli::stats::AnimalStat:::Variant",
+    "id": 56,
+    "name": "alveus_stats::AnimalStat:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -382,8 +443,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 23,
-    "name": "alveus_idle_cli::stats::AnimalStats",
+    "id": 25,
+    "name": "alveus_stats::AnimalStats",
     "type": "class",
     "useAs": [
       "property"
@@ -404,8 +465,8 @@
     ]
   },
   {
-    "id": 24,
-    "name": "alveus_idle_cli::stats::AnimalTilePosition",
+    "id": 26,
+    "name": "alveus_stats::AnimalTilePosition",
     "type": "class",
     "useAs": [
       "property"
@@ -415,15 +476,15 @@
     "members": [
       {
         "name": "0",
-        "propertyType": "alveus_types::tile::TilePosition",
+        "propertyType": "alveus_types::TilePosition",
         "type": "class",
         "value": null
       }
     ]
   },
   {
-    "id": 25,
-    "name": "alveus_idle_cli::stats::EnclosureDecayAccumulators",
+    "id": 27,
+    "name": "alveus_stats::EnclosureDecayAccumulators",
     "type": "class",
     "useAs": [
       "property"
@@ -439,8 +500,8 @@
     ]
   },
   {
-    "id": 26,
-    "name": "alveus_idle_cli::stats::EnclosureDecayRates",
+    "id": 28,
+    "name": "alveus_stats::EnclosureDecayRates",
     "type": "class",
     "useAs": [
       "property"
@@ -456,8 +517,8 @@
     ]
   },
   {
-    "id": 27,
-    "name": "alveus_idle_cli::stats::EnclosureName",
+    "id": 29,
+    "name": "alveus_stats::EnclosureName",
     "type": "class",
     "useAs": [
       "property"
@@ -473,8 +534,8 @@
     ]
   },
   {
-    "id": 28,
-    "name": "alveus_idle_cli::stats::EnclosureStats",
+    "id": 30,
+    "name": "alveus_stats::EnclosureStats",
     "type": "class",
     "useAs": [
       "property"
@@ -490,8 +551,8 @@
     ]
   },
   {
-    "id": 29,
-    "name": "alveus_idle_cli::stats::SanctuaryUpkeep",
+    "id": 31,
+    "name": "alveus_stats::SanctuaryUpkeep",
     "type": "class",
     "useAs": [
       "property"
@@ -522,8 +583,8 @@
     ]
   },
   {
-    "id": 30,
-    "name": "alveus_idle_cli::stats::SavePath",
+    "id": 32,
+    "name": "alveus_stats::SavePath",
     "type": "class",
     "useAs": [
       "property"
@@ -539,8 +600,8 @@
     ]
   },
   {
-    "id": 31,
-    "name": "alveus_idle_cli::stats::SaveTimestamp",
+    "id": 33,
+    "name": "alveus_stats::SaveTimestamp",
     "type": "class",
     "useAs": [
       "property"
@@ -556,8 +617,8 @@
     ]
   },
   {
-    "id": 39,
-    "name": "alveus_types::animal_id::AnimalId",
+    "id": 35,
+    "name": "alveus_types::AnimalId",
     "type": "class",
     "useAs": [
       "property"
@@ -567,15 +628,15 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_types::animal_id::AnimalId:::Variant",
+        "propertyType": "alveus_types::AnimalId:::Variant",
         "type": "class",
         "value": "Polly"
       }
     ]
   },
   {
-    "id": 38,
-    "name": "alveus_types::animal_id::AnimalId:::Variant",
+    "id": 34,
+    "name": "alveus_types::AnimalId:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -588,8 +649,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 33,
-    "name": "alveus_types::enclosure_id::EnclosureId",
+    "id": 37,
+    "name": "alveus_types::EnclosureId",
     "type": "class",
     "useAs": [
       "property"
@@ -599,15 +660,15 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_types::enclosure_id::EnclosureId:::Variant",
+        "propertyType": "alveus_types::EnclosureId:::Variant",
         "type": "class",
         "value": "NutritionHousePlaypen"
       }
     ]
   },
   {
-    "id": 32,
-    "name": "alveus_types::enclosure_id::EnclosureId:::Variant",
+    "id": 36,
+    "name": "alveus_types::EnclosureId:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -619,8 +680,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 41,
-    "name": "alveus_types::item_id::ItemId",
+    "id": 55,
+    "name": "alveus_types::ItemId",
     "type": "class",
     "useAs": [
       "property"
@@ -630,15 +691,15 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "alveus_types::item_id::ItemId:::Variant",
+        "propertyType": "alveus_types::ItemId:::Variant",
         "type": "class",
         "value": "TortoiseLeafyGreens"
       }
     ]
   },
   {
-    "id": 40,
-    "name": "alveus_types::item_id::ItemId:::Variant",
+    "id": 54,
+    "name": "alveus_types::ItemId:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -648,8 +709,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 34,
-    "name": "alveus_types::tile::TilePosition",
+    "id": 38,
+    "name": "alveus_types::TilePosition",
     "type": "class",
     "useAs": [
       "property"
@@ -670,7 +731,7 @@
     ]
   },
   {
-    "id": 50,
+    "id": 45,
     "name": "bevy_time::timer::TimerMode",
     "type": "class",
     "useAs": [
@@ -688,7 +749,7 @@
     ]
   },
   {
-    "id": 49,
+    "id": 44,
     "name": "bevy_time::timer::TimerMode:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -699,7 +760,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 46,
+    "id": 41,
     "name": "core::option::Option<alloc::string::String>",
     "type": "class",
     "useAs": [
@@ -723,7 +784,7 @@
     ]
   },
   {
-    "id": 44,
+    "id": 39,
     "name": "core::option::Option<alloc::string::String>:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -734,7 +795,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 45,
+    "id": 40,
     "name": "core::option::Option<alloc::string::String>::Some",
     "type": "class",
     "useAs": [
@@ -751,8 +812,8 @@
     ]
   },
   {
-    "id": 53,
-    "name": "core::option::Option<alveus_types::item_id::ItemId>",
+    "id": 48,
+    "name": "core::option::Option<alveus_components::MovementIntent>",
     "type": "class",
     "useAs": [
       "property"
@@ -762,21 +823,21 @@
     "members": [
       {
         "name": ":variant",
-        "propertyType": "core::option::Option<alveus_types::item_id::ItemId>:::Variant",
+        "propertyType": "core::option::Option<alveus_components::MovementIntent>:::Variant",
         "type": "class",
         "value": "None"
       },
       {
         "name": "Some",
-        "propertyType": "core::option::Option<alveus_types::item_id::ItemId>::Some",
+        "propertyType": "core::option::Option<alveus_components::MovementIntent>::Some",
         "type": "class",
         "value": null
       }
     ]
   },
   {
-    "id": 51,
-    "name": "core::option::Option<alveus_types::item_id::ItemId>:::Variant",
+    "id": 46,
+    "name": "core::option::Option<alveus_components::MovementIntent>:::Variant",
     "type": "enum",
     "storageType": "string",
     "values": [
@@ -786,8 +847,8 @@
     "valuesAsFlags": false
   },
   {
-    "id": 52,
-    "name": "core::option::Option<alveus_types::item_id::ItemId>::Some",
+    "id": 47,
+    "name": "core::option::Option<alveus_components::MovementIntent>::Some",
     "type": "class",
     "useAs": [
       "property"
@@ -797,14 +858,67 @@
     "members": [
       {
         "name": "0",
-        "propertyType": "alveus_types::item_id::ItemId",
+        "propertyType": "alveus_components::MovementIntent",
         "type": "string",
         "value": null
       }
     ]
   },
   {
-    "id": 37,
+    "id": 60,
+    "name": "core::option::Option<alveus_types::ItemId>",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": ":variant",
+        "propertyType": "core::option::Option<alveus_types::ItemId>:::Variant",
+        "type": "class",
+        "value": "None"
+      },
+      {
+        "name": "Some",
+        "propertyType": "core::option::Option<alveus_types::ItemId>::Some",
+        "type": "class",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 58,
+    "name": "core::option::Option<alveus_types::ItemId>:::Variant",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "None",
+      "Some"
+    ],
+    "valuesAsFlags": false
+  },
+  {
+    "id": 59,
+    "name": "core::option::Option<alveus_types::ItemId>::Some",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "0",
+        "propertyType": "alveus_types::ItemId",
+        "type": "string",
+        "value": null
+      }
+    ]
+  },
+  {
+    "id": 53,
     "name": "core::option::Option<bevy_ecs::entity::Entity>",
     "type": "class",
     "useAs": [
@@ -828,7 +942,7 @@
     ]
   },
   {
-    "id": 35,
+    "id": 51,
     "name": "core::option::Option<bevy_ecs::entity::Entity>:::Variant",
     "type": "enum",
     "storageType": "string",
@@ -839,7 +953,7 @@
     "valuesAsFlags": false
   },
   {
-    "id": 36,
+    "id": 52,
     "name": "core::option::Option<bevy_ecs::entity::Entity>::Some",
     "type": "class",
     "useAs": [

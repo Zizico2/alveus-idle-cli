@@ -1,11 +1,11 @@
-use alveus_idle_cli::cleaning::CleaningPlugin;
-use alveus_idle_cli::components::TilePosition;
-use alveus_idle_cli::content::ItemId;
-use alveus_idle_cli::interaction::{
+use alveus_cleaning::CleaningPlugin;
+use alveus_components::TilePosition;
+use alveus_content::ItemId;
+use alveus_interaction::{
     AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel, try_give_item,
 };
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin};
+use alveus_app::Screen;
+use alveus_stats::{AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 

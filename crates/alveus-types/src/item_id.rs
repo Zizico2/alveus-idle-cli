@@ -1,6 +1,7 @@
 use bevy_reflect::Reflect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+#[type_path = "alveus_types"]
 pub enum ItemId {
     TortoiseLeafyGreens,
     ChickenGrains,

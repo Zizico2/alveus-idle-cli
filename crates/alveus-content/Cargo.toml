@@ -1,0 +1,14 @@
+[package]
+name = "alveus-content"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Hardcoded game content (room objects, interaction rules, derived lookups) for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+alveus-types.workspace = true
+alveus-configs.workspace = true
+
+[lints]
+workspace = true

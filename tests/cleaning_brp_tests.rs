@@ -1,10 +1,10 @@
 #![cfg(feature = "headless")]
 
-use alveus_idle_cli::cleaning::{CleaningPlugin, PoopWheelbarrow};
-use alveus_idle_cli::collision::CollisionMasks;
-use alveus_idle_cli::headless::register_headless_types;
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{
+use alveus_cleaning::{CleaningPlugin, PoopWheelbarrow};
+use alveus_collision::CollisionMasks;
+use alveus_headless::register_headless_types;
+use alveus_app::Screen;
+use alveus_stats::{
     EnclosureId, EnclosureStat, EnclosureStats, SavePath, StatTarget, StatsPlugin, WorsenStatEvent,
 };
 use bevy::prelude::*;
@@ -22,7 +22,7 @@ fn headless_cleaning_brp_app(save_path: &str) -> App {
     app.add_plugins((
         StatsPlugin,
         CleaningPlugin,
-        alveus_idle_cli::headless::CommandPlugin,
+        alveus_headless::CommandPlugin,
     ));
     app.add_plugins(bevy::remote::RemotePlugin::default());
     register_headless_types(&mut app);
@@ -46,7 +46,7 @@ fn brp_poop_wheelbarrow_is_queryable() {
         .send_blocking(BrpMessage {
             method: "world.get_resources".to_string(),
             params: Some(serde_json::json!({
-                "resource": "alveus_idle_cli::cleaning::PoopWheelbarrow"
+                "resource": "alveus_components::PoopWheelbarrow"
             })),
             sender: result_sender,
         })
@@ -95,7 +95,7 @@ fn brp_improve_stat_cleanliness_for_push_pop_enclosure() {
         .send_blocking(BrpMessage {
             method: "world.trigger_event".to_string(),
             params: Some(serde_json::json!({
-                "event": "alveus_idle_cli::headless::command::GameCommand",
+                "event": "alveus_headless::command::GameCommand",
                 "value": {
                     "ImproveStat": {
                         "target": {

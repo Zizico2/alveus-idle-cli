@@ -14,7 +14,7 @@ TILES_DIR = OUT_DIR / "tiles"
 
 TILE = 32
 OBSTACLE_PROP = """   <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
    </properties>"""
@@ -29,7 +29,7 @@ def enum_variant_prop(name: str, type_path: str, variant: str) -> str:
 
 
 def give_item_prop(item_id: str, prompt: str) -> str:
-    return f"""    <property name="give_item" type="class" propertytype="alveus_idle_cli::interaction::GiveItem">
+    return f"""    <property name="give_item" type="class" propertytype="alveus_interaction::GiveItem">
      <properties>
 {enum_variant_prop("item_id", "alveus_types::ItemId", item_id)}
       <property name="prompt" type="string" value="{prompt}"/>
@@ -44,11 +44,11 @@ def feed_animal_prop(
     delta: int,
     prompt: str,
 ) -> str:
-    return f"""    <property name="feed_animal" type="class" propertytype="alveus_idle_cli::interaction::FeedAnimal">
+    return f"""    <property name="feed_animal" type="class" propertytype="alveus_interaction::FeedAnimal">
      <properties>
 {enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
 {enum_variant_prop("required_item", "alveus_types::ItemId", required_item)}
-{enum_variant_prop("stat", "alveus_idle_cli::stats::AnimalStat", stat)}
+{enum_variant_prop("stat", "alveus_stats::AnimalStat", stat)}
       <property name="delta" type="int" value="{delta}"/>
       <property name="prompt" type="string" value="{prompt}"/>
      </properties>
@@ -70,12 +70,12 @@ def interactable_tile_props(
         interaction = feed_animal_prop(animal_id, required_item, stat, delta, prompt)
 
     return f"""   <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
-    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+    <property name="room_object_id" type="class" propertytype="alveus_content::RoomObjectId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="{room_object}"/>
+      <property name=":variant" propertytype="alveus_content::RoomObjectId:::Variant" value="{room_object}"/>
      </properties>
     </property>
 {interaction}   </properties>"""

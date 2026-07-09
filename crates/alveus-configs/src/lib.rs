@@ -116,3 +116,90 @@ pub const fn poop_config_for(id: EnclosureId) -> &'static PoopConfig {
         EnclosureId::ReptileEnclosure => &PUSH_POP_POOP_CONFIG,
     }
 }
+
+// ---------------------------------------------------------
+// Cleaning math (pure functions over the poop tables)
+// ---------------------------------------------------------
+
+/// How many poops should be on the floor given current enclosure cleanliness.
+pub fn target_poop_count(cleanliness: u32, thresholds: &[u32]) -> u32 {
+    thresholds
+        .iter()
+        .filter(|&&threshold| cleanliness <= threshold)
+        .count() as u32
+}
+
+/// Effective cleanliness decay rate accounting for poops currently on the floor.
+pub fn cleanliness_decay_with_poops(
+    base_rate: f32,
+    enclosure_id: EnclosureId,
+    poop_count: usize,
+) -> f32 {
+    let config = poop_config_for(enclosure_id);
+    base_rate + config.poop_decay_rate * poop_count as f32
+}
+
+/// Simulate threshold-crossing poop acceleration over a block of hours (offline / time-skip).
+pub fn cleanliness_after_threshold_decay(
+    start: u32,
+    hours: f32,
+    base_rate: f32,
+    config: &PoopConfig,
+) -> u32 {
+    if hours <= 0.0 {
+        return start;
+    }
+
+    let mut current = start;
+    let mut remaining = hours;
+
+    let mut thresholds: Vec<u32> = config.spawn_thresholds.to_vec();
+    thresholds.sort_by(|a, b| b.cmp(a));
+
+    for &threshold in &thresholds {
+        if current <= threshold {
+            continue;
+        }
+        let poop_count = target_poop_count(current, config.spawn_thresholds);
+        let rate = base_rate + config.poop_decay_rate * poop_count as f32;
+        if rate <= 0.0 {
+            break;
+        }
+        let drain_to_threshold = current - threshold;
+        let time_needed = drain_to_threshold as f32 / rate;
+
+        if time_needed <= remaining {
+            remaining -= time_needed;
+            current = threshold;
+        } else {
+            let decay = (rate * remaining).round() as u32;
+            return current.saturating_sub(decay);
+        }
+    }
+
+    if remaining > 0.0 && current > 0 {
+        let poop_count = target_poop_count(current, config.spawn_thresholds);
+        let rate = base_rate + config.poop_decay_rate * poop_count as f32;
+        let decay = (rate * remaining).round() as u32;
+        current = current.saturating_sub(decay);
+    }
+
+    current
+}
+
+/// Total cleanliness units lost over `hours`, accounting for threshold poop acceleration when configured.
+pub fn enclosure_cleanliness_decay_amount(
+    start: u32,
+    hours: f32,
+    base_rate: f32,
+    enclosure_id: EnclosureId,
+    _starting_poop_count: usize,
+) -> u32 {
+    if hours <= 0.0 {
+        return 0;
+    }
+    let config = poop_config_for(enclosure_id);
+    start.saturating_sub(cleanliness_after_threshold_decay(
+        start, hours, base_rate, config,
+    ))
+}

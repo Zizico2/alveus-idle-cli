@@ -3,6 +3,7 @@ use bevy_reflect::Reflect;
 use moonshine_save::prelude::*;
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
+#[type_path = "alveus_types"]
 #[reflect(Component)]
 #[require(Save, Unload)]
 pub enum AnimalId {

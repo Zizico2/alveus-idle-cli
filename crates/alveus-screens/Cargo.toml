@@ -1,0 +1,21 @@
+[package]
+name = "alveus-screens"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Screen states and flow (splash, title, loading, gameplay) for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_ecs_tiled.workspace = true
+alveus-app.workspace = true
+alveus-asset-tracking.workspace = true
+alveus-theme.workspace = true
+alveus-collision.workspace = true
+alveus-world.workspace = true
+
+[features]
+tiled-render = ["bevy_ecs_tiled/render"]
+
+[lints]
+workspace = true

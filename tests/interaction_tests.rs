@@ -1,6 +1,6 @@
-use alveus_idle_cli::components::TilePosition;
-use alveus_idle_cli::content::{ItemId, can_interact};
-use alveus_idle_cli::interaction::{PlayerSatchel, try_drop_item, try_feed_animal, try_give_item};
+use alveus_components::TilePosition;
+use alveus_content::{ItemId, can_interact};
+use alveus_interaction::{PlayerSatchel, try_drop_item, try_feed_animal, try_give_item};
 
 #[test]
 fn test_can_interact_on_same_tile_and_adjacent() {

@@ -12,7 +12,7 @@ from pathlib import Path
 
 PORT = 15702
 BASE = f"http://127.0.0.1:{PORT}/"
-EVENT = "alveus_idle_cli::headless::command::GameCommand"
+EVENT = "alveus_headless::command::GameCommand"
 SCREENSHOTS = Path(__file__).resolve().parent.parent / "screenshots"
 SCREENSHOT_OVERVIEW = SCREENSHOTS / "playtest_overview.png"
 SCREENSHOT_INTERIOR = SCREENSHOTS / "playtest_nutrition_house.png"
@@ -65,22 +65,22 @@ def move_dir(direction: str, hold_s: float = 0.35) -> None:
 def player_has_entrance() -> str | None:
     res = rpc("world.query", {
         "data": {
-            "components": ["alveus_idle_cli::components::BuildingEntrance"],
+            "components": ["alveus_components::BuildingEntrance"],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::demo::player::Player"]},
+        "filter": {"with": ["alveus_components::Player"]},
     })
     if not res:
         return None
     ent = res[0].get("components", {}).get(
-        "alveus_idle_cli::components::BuildingEntrance"
+        "alveus_components::BuildingEntrance"
     )
     return str(ent) if ent else None
 
 
 def sanctuary_upkeep() -> dict | None:
     res = rpc("world.get_resources", {
-        "resource": "alveus_idle_cli::stats::SanctuaryUpkeep",
+        "resource": "alveus_stats::SanctuaryUpkeep",
     })
     if isinstance(res, dict):
         return res.get("value")
@@ -92,7 +92,7 @@ def animal_stats() -> list[tuple[str, int, int]]:
         "data": {
             "components": [
                 "alveus_types::AnimalId",
-                "alveus_idle_cli::stats::AnimalStats",
+                "alveus_stats::AnimalStats",
             ],
             "has": [],
         },
@@ -102,14 +102,14 @@ def animal_stats() -> list[tuple[str, int, int]]:
     for row in res or []:
         comps = row.get("components", {})
         aid = comps.get("alveus_types::AnimalId", "?")
-        stats = comps.get("alveus_idle_cli::stats::AnimalStats", {})
+        stats = comps.get("alveus_stats::AnimalStats", {})
         out.append((str(aid), int(stats.get("hunger", -1)), int(stats.get("happiness", -1))))
     return out
 
 
 def satchel_item() -> str | None:
     res = rpc("world.get_resources", {
-        "resource": "alveus_idle_cli::interaction::PlayerSatchel",
+        "resource": "alveus_interaction::PlayerSatchel",
     })
     if isinstance(res, dict):
         item = res.get("value", {}).get("item")

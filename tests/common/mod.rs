@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use alveus_idle_cli::headless::CommandPlugin;
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{SavePath, StatsPlugin};
+use alveus_headless::CommandPlugin;
+use alveus_app::Screen;
+use alveus_stats::{SavePath, StatsPlugin};
 use bevy::asset::AssetMetaCheck;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::{AssetSourceBuilder, AssetSourceId};
 use bevy::image::{CompressedImageFormats, ImageLoader};
 use bevy::prelude::*;
+use bevy::render::{ExtractSchedule, RenderApp};
 use bevy::state::app::StatesPlugin;
 use bevy::time::TimePlugin;
 use bevy_ecs_tiled::prelude::*;
@@ -76,17 +77,24 @@ pub fn headless_tiled_test_app() -> App {
     app.init_asset::<Image>();
     app.register_asset_loader(ImageLoader::new(CompressedImageFormats::empty()));
 
-    app.register_type::<alveus_idle_cli::components::BuildingEntrance>()
-        .register_type::<alveus_idle_cli::components::TilePosition>()
-        .register_type::<alveus_idle_cli::components::Obstacle>()
-        .register_type::<alveus_idle_cli::components::InEnclosure>()
-        .register_type::<alveus_idle_cli::content::RoomObjectId>()
-        .register_type::<alveus_idle_cli::content::ItemId>()
-        .register_type::<alveus_idle_cli::interaction::Interactable>()
-        .register_type::<alveus_idle_cli::interaction::GiveItem>()
-        .register_type::<alveus_idle_cli::interaction::FeedAnimal>()
-        .register_type::<alveus_idle_cli::stats::AnimalId>()
-        .register_type::<alveus_idle_cli::stats::AnimalStat>();
+    // `bevy_ecs_tilemap` with the `render` feature expects a `RenderApp` sub-app
+    // (for array-texture preload extract). Asset-only tests don't need a GPU
+    // backend — a stub sub-app with `ExtractSchedule` is enough.
+    let mut render_app = SubApp::new();
+    render_app.init_schedule(ExtractSchedule);
+    app.insert_sub_app(RenderApp, render_app);
+
+    app.register_type::<alveus_components::BuildingEntrance>()
+        .register_type::<alveus_types::TilePosition>()
+        .register_type::<alveus_components::Obstacle>()
+        .register_type::<alveus_components::InEnclosure>()
+        .register_type::<alveus_content::RoomObjectId>()
+        .register_type::<alveus_types::ItemId>()
+        .register_type::<alveus_components::Interactable>()
+        .register_type::<alveus_interaction::GiveItem>()
+        .register_type::<alveus_interaction::FeedAnimal>()
+        .register_type::<alveus_types::AnimalId>()
+        .register_type::<alveus_stats::AnimalStat>();
 
     app.add_plugins(TiledPlugin(TiledPluginConfig {
         tiled_types_export_file: None,

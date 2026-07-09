@@ -3,32 +3,21 @@
 // Disable console on Windows for non-dev builds.
 #![cfg_attr(not(feature = "dev"), windows_subsystem = "windows")]
 
-pub mod animals;
-pub mod asset_tracking;
-pub mod audio;
-pub mod cleaning;
-pub mod collision;
-pub mod components;
-pub mod content;
-pub mod demo;
+//! Composition root for the Alveus idle game. This crate wires the feature
+//! crates together into an [`App`]; almost all game logic lives in the
+//! `crates/alveus-*` workspace members.
+
 #[cfg(feature = "dev")]
-pub mod dev_tools;
-pub mod headless;
-pub mod hud;
-pub mod interaction;
-pub mod menus;
-pub mod screens;
-pub mod stats;
-pub mod theme;
+mod dev_tools;
 
 use std::thread;
 use std::time::Duration;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
+use alveus_headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, InputPlugin, StepRequest};
 #[cfg(feature = "headless")]
-use headless::HeadlessPlugin;
-use headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, StepRequest};
+use alveus_headless::HeadlessPlugin;
 
 /// How the application is run.
 #[derive(Debug, Clone)]
@@ -49,7 +38,7 @@ pub struct HeadlessConfig {
 impl Default for HeadlessConfig {
     fn default() -> Self {
         Self {
-            port: headless::DEFAULT_BRP_PORT,
+            port: alveus_headless::DEFAULT_BRP_PORT,
             resolution: DEFAULT_HEADLESS_RESOLUTION,
             step_mode: false,
             enable_stdio: cfg!(feature = "cli"),
@@ -158,40 +147,30 @@ pub fn build_app(mode: RunMode) -> App {
             .set(window_plugin),
     );
 
-    app.register_type::<components::BuildingEntrance>()
-        .register_type::<components::TileGroup>()
-        .register_type::<components::RectangleTileGroup>()
-        .register_type::<components::TilePosition>()
-        .register_type::<components::Obstacle>()
-        .register_type::<components::DynamicObstacle>()
-        .register_type::<components::InEnclosure>()
-        .register_type::<components::PersistedDynamicObstacle>()
-        .register_type::<content::RoomObjectId>()
-        .register_type::<content::ItemId>()
-        .register_type::<interaction::Interactable>()
-        .register_type::<interaction::GiveItem>()
-        .register_type::<interaction::FeedAnimal>()
-        .register_type::<cleaning::PoopPile>()
-        .register_type::<cleaning::PoopDump>();
+    // Single canonical Reflect registration (shared with the headless server and
+    // the `gen_tiled_types` exporter).
+    alveus_headless::register_headless_types(&mut app);
 
     app.add_plugins((
-        asset_tracking::plugin,
-        audio::plugin,
-        demo::plugin,
-        #[cfg(feature = "dev")]
-        dev_tools::plugin,
-        menus::plugin,
-        screens::plugin,
-        theme::plugin,
-        bevy_tweening::TweeningPlugin,
-        stats::StatsPlugin,
-        collision::CollisionPlugin,
-        interaction::InteractionPlugin,
-        cleaning::CleaningPlugin,
-        animals::AnimalsPlugin,
-        hud::HudPlugin,
+        alveus_app::plugin,
+        alveus_asset_tracking::plugin,
+        alveus_audio::plugin,
+        alveus_world::plugin,
+        alveus_menus::plugin,
+        alveus_screens::plugin,
+        alveus_theme::plugin,
+        alveus_stats::StatsPlugin,
+        alveus_collision::CollisionPlugin,
+        alveus_interaction::InteractionPlugin,
+        alveus_cleaning::CleaningPlugin,
+        alveus_animals::AnimalsPlugin,
+        alveus_hud::HudPlugin,
         CommandPlugin,
+        InputPlugin,
     ));
+
+    #[cfg(feature = "dev")]
+    app.add_plugins(dev_tools::plugin);
 
     if headless {
         #[cfg(feature = "headless")]
@@ -217,26 +196,8 @@ pub fn build_app(mode: RunMode) -> App {
             panic!("Rebuild with `--features headless` to use --headless mode");
         }
     } else {
-        headless::reflect::register_headless_types(&mut app);
         app.add_systems(Startup, spawn_camera);
     }
-
-    app.configure_sets(
-        Update,
-        (
-            AppSystems::TickTimers,
-            AppSystems::RecordInput,
-            AppSystems::DecayCalculation,
-            AppSystems::UpkeepCalculation,
-            AppSystems::UiUpdate,
-            AppSystems::SaveSystem,
-            AppSystems::Update,
-        )
-            .chain(),
-    );
-
-    app.init_state::<Pause>();
-    app.configure_sets(Update, PausableSystems.run_if(in_state(Pause(false))));
 
     app
 }
@@ -259,26 +220,6 @@ fn run_headless_loop(app: &mut App) -> AppExit {
         }
     }
 }
-
-/// High-level groupings of systems for the app in the `Update` schedule.
-#[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub enum AppSystems {
-    TickTimers,
-    RecordInput,
-    DecayCalculation,
-    UpkeepCalculation,
-    UiUpdate,
-    SaveSystem,
-    Update,
-}
-
-/// Whether or not the game is paused.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
-pub struct Pause(pub bool);
-
-/// A system set for systems that shouldn't run while the game is paused.
-#[derive(SystemSet, Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct PausableSystems;
 
 pub fn spawn_camera(mut commands: Commands) {
     commands.spawn((

@@ -9,7 +9,7 @@ A 2D tile-based simulation/idle game built in Rust using the **Bevy** game engin
 **Alveus Idle CLI** invites players to explore a digital recreation of Alveus Sanctuary. Players control an animal ambassador caretaker (conceptually represented by a duck, using `ducky.png` in the assets) and navigate the sanctuary grounds, entering various operational buildings to perform caretaking tasks.
 
 ### Core Mechanics
-* **Grid-Based Tile Movement:** The player navigates a 32x32 pixel grid. Movement is snapped to individual tiles with smooth transition logic (`src/demo/movement.rs`).
+* **Grid-Based Tile Movement:** The player navigates a 32x32 pixel grid. Movement is snapped to individual tiles with smooth transition logic (`crates/alveus-world/src/movement.rs`).
 * **Obstacle Collision:** Movement is restricted by `Obstacle` components, which dynamically block navigation through walls, boundaries, and heavy furniture.
 * **Building Entrances & Transitions:** Stepping onto designated building entrances triggers a responsive slide-in toast notification prompting the player to enter. Pressing `Enter` transitions the player state into the room interior, while pressing `Backspace` or walking to the exit door returns them to the outdoor overview.
 * **Ambient Audio:** The game features dynamic footstep sound effects (`step1.ogg` through `step4.ogg`) that play in rhythm with player steps.
@@ -45,16 +45,16 @@ The **Nutrition House** is the sanctuary's food preparation hub. Inside this roo
 
 ## 📂 Project Structure
 
-* `src/main.rs`: Application entry point, plugin configuration, and camera setup.
-* `src/components.rs`: Core component declarations (`TilePosition`, `BuildingEntrance`, `Obstacle`, etc.).
-* `src/screens/`: Manages screen states (`Splash`, `Title`, `Loading`, `Gameplay`, and `InRoom`).
-* `src/demo/`:
-  * `level.rs`: Handles overview map spawning and player instantiation.
-  * `player.rs`: Player controller, movement input logging, and asset loading.
-  * `movement.rs`: Manages tile grid snapping and collision checks.
-  * `entrance.rs`: Snapping checks for entrances and transition trigger events.
-  * `room.rs`: Defines interior rooms, specifically building out the floor, walls, and obstacles of the **Nutrition House**.
-  * `toast.rs`: A tween-animated toast UI notifying players of room entry prompts.
+Cargo workspace: thin binary in `src/`, feature crates under `crates/`.
+
+* `src/main.rs` / `src/lib.rs`: Composition root — `build_app`, run modes, plugin wiring.
+* `src/bin/gen_tiled_types.rs`: Regenerates `assets/maps/overview/tiled_types.json`.
+* `crates/alveus-app`: App-wide states (`Screen`, `Menu`, `Pause`, `InRoom`) and `AppSystems`.
+* `crates/alveus-components` / `alveus-content` / `alveus-types` / `alveus-configs`: Shared data and content.
+* `crates/alveus-world`: Level, player, movement, rooms, entrances, camera, toast.
+* `crates/alveus-stats` / `alveus-cleaning` / `alveus-interaction` / `alveus-animals` / `alveus-collision`: Gameplay plugins.
+* `crates/alveus-screens` / `alveus-menus` / `alveus-hud` / `alveus-theme`: UI.
+* `crates/alveus-headless`: BRP/`GameCommand`, reflect registration, offscreen camera, stdio.
 * `assets/`:
   * `images/`: Sprite and UI textures (such as `ducky.png`).
   * `maps/overview/`: Tiled `.tmx` maps, tilesets, and exports.
@@ -66,11 +66,18 @@ The **Nutrition House** is the sanctuary's food preparation hub. Inside this roo
 
 ### Prerequisites
 Make sure you have Rust and Cargo installed. If not, get them at [rustup.rs](https://rustup.rs/).
+For the recipes below, also install [`just`](https://github.com/casey/just).
 
 ### Running the Game (Native)
-To run the game locally in development mode (which includes hot-reloading for assets and Bevy dev tools):
+Preferred local loop — regenerates `tiled_types.json`, then launches the game (hot-reloading and Bevy dev tools via default features):
+```bash
+just dev-run
+```
+
+If Tiled Reflect types haven’t changed, you can skip the export and run directly:
 ```bash
 cargo run
+# or: just run
 ```
 
 ### Building for Release
@@ -114,7 +121,7 @@ cargo run --features headless -- --headless --port 15702 --resolution 1280x720 -
 
 ### Commands (`world.trigger_event`)
 
-Trigger the registered event `alveus_idle_cli::headless::command::GameCommand`:
+Trigger the registered event `alveus_headless::command::GameCommand`:
 
 ```json
 {
@@ -122,7 +129,7 @@ Trigger the registered event `alveus_idle_cli::headless::command::GameCommand`:
   "method": "world.trigger_event",
   "id": 1,
   "params": {
-    "event": "alveus_idle_cli::headless::command::GameCommand",
+    "event": "alveus_headless::command::GameCommand",
     "value": "SkipSplash"
   }
 }
@@ -159,7 +166,7 @@ Offscreen mode renders to an `Image` render target (no display server, no Xvfb).
 {
   "method": "world.trigger_event",
   "params": {
-    "event": "alveus_idle_cli::headless::command::GameCommand",
+    "event": "alveus_headless::command::GameCommand",
     "value": { "Screenshot": { "path": "/tmp/frame.png" } }
   }
 }
@@ -176,7 +183,7 @@ Headless integration tests cover `GameCommand` dispatch, BRP in-process round-tr
 
 ### Module layout
 
-* `src/headless/command.rs` — `GameCommand` enum + dispatcher
-* `src/headless/camera.rs` — offscreen `Camera2d` → `RenderTarget::Image`
-* `src/headless/stdio.rs` — stdin/stdout BRP carrier
-* `src/headless/reflect.rs` — `register_headless_types()` for BRP introspection
+* `crates/alveus-headless/src/command.rs` — `GameCommand` enum + dispatcher
+* `crates/alveus-headless/src/camera.rs` — offscreen `Camera2d` → `RenderTarget::Image`
+* `crates/alveus-headless/src/stdio.rs` — stdin/stdout BRP carrier
+* `crates/alveus-headless/src/reflect.rs` — `register_headless_types()` for BRP introspection

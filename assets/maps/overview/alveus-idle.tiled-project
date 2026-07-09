@@ -15,12 +15,12 @@
       "members": [
         {
           "name": ":variant",
-          "propertyType": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+          "propertyType": "alveus_components::BuildingEntrance:::Variant",
           "type": "class",
           "value": "NoEntrance"
         }
       ],
-      "name": "alveus_idle_cli::components::BuildingEntrance",
+      "name": "alveus_components::BuildingEntrance",
       "type": "class",
       "useAs": [
         "property"
@@ -28,7 +28,7 @@
     },
     {
       "id": 1,
-      "name": "alveus_idle_cli::components::BuildingEntrance:::Variant",
+      "name": "alveus_components::BuildingEntrance:::Variant",
       "storageType": "string",
       "type": "enum",
       "values": [

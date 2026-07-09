@@ -1,17 +1,57 @@
 [workspace]
-members = [".", "crates/alveus-types", "crates/alveus-configs"]
 resolver = "2"
+members = [
+    ".",
+    "crates/alveus-types",
+    "crates/alveus-configs",
+    "crates/alveus-app",
+    "crates/alveus-components",
+    "crates/alveus-content",
+    "crates/alveus-asset-tracking",
+    "crates/alveus-audio",
+    "crates/alveus-theme",
+    "crates/alveus-collision",
+    "crates/alveus-stats",
+    "crates/alveus-cleaning",
+    "crates/alveus-interaction",
+    "crates/alveus-animals",
+    "crates/alveus-world",
+    "crates/alveus-screens",
+    "crates/alveus-menus",
+    "crates/alveus-hud",
+    "crates/alveus-headless",
+]
 
-[package]
-name = "alveus-idle-cli"
-authors = ["Bernardo António Borda d'Água <berna.agua@protonmail.com>"]
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+authors = ["Bernardo António Borda d'Água <berna.agua@protonmail.com>"]
 
-[dependencies]
+[workspace.dependencies]
+# Internal crates
 alveus-types = { path = "crates/alveus-types" }
 alveus-configs = { path = "crates/alveus-configs" }
-bevy = { version = "0.19", default-features = true, features = ["pan_camera", "debug", "dynamic_linking"] }
+alveus-app = { path = "crates/alveus-app" }
+alveus-components = { path = "crates/alveus-components" }
+alveus-content = { path = "crates/alveus-content" }
+alveus-asset-tracking = { path = "crates/alveus-asset-tracking" }
+alveus-audio = { path = "crates/alveus-audio" }
+alveus-theme = { path = "crates/alveus-theme" }
+alveus-collision = { path = "crates/alveus-collision" }
+alveus-stats = { path = "crates/alveus-stats" }
+alveus-cleaning = { path = "crates/alveus-cleaning" }
+alveus-interaction = { path = "crates/alveus-interaction" }
+alveus-animals = { path = "crates/alveus-animals" }
+alveus-world = { path = "crates/alveus-world" }
+alveus-screens = { path = "crates/alveus-screens" }
+alveus-menus = { path = "crates/alveus-menus" }
+alveus-hud = { path = "crates/alveus-hud" }
+alveus-headless = { path = "crates/alveus-headless" }
+
+# External crates
+bevy = { version = "0.19", default-features = true }
+bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
+bevy_reflect = "0.19"
 bevy_ecs_tiled = { git = "https://github.com/taboky-dev/bevy_ecs_tiled", branch = "main", default-features = false, features = ["user_properties", "png"] }
 bevy_tweening = "0.16.0"
 itertools = "0.14"
@@ -20,28 +60,67 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.150"
 ron = "0.12.1"
 moonshine-save = "0.7"
-async-channel = { version = "2", optional = true }
+async-channel = "2"
+phf = { version = "0.11", default-features = false }
+phf_shared = "0.11"
+phf_codegen = "0.11"
+
+[workspace.lints.rust]
+# Mark `bevy_lint` as a valid `cfg`, as it is set when the Bevy linter runs.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(bevy_lint)"] }
+
+[workspace.lints.clippy]
+# Bevy supplies arguments to systems via dependency injection, so it's natural for systems to
+# request more than 7 arguments, which would undesirably trigger this lint.
+too_many_arguments = "allow"
+# Queries may access many components, which would undesirably trigger this lint.
+type_complexity = "allow"
+# Make sure macros use their standard braces, such as `[]` for `bevy_ecs::children!`.
+nonstandard_macro_braces = "warn"
+
+[package]
+name = "alveus-idle-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+default-run = "alveus-idle-cli"
+
+[dependencies]
+alveus-types.workspace = true
+alveus-configs.workspace = true
+alveus-app.workspace = true
+alveus-components.workspace = true
+alveus-content.workspace = true
+alveus-asset-tracking.workspace = true
+alveus-audio.workspace = true
+alveus-theme.workspace = true
+alveus-collision.workspace = true
+alveus-stats.workspace = true
+alveus-cleaning.workspace = true
+alveus-interaction.workspace = true
+alveus-animals.workspace = true
+alveus-world.workspace = true
+alveus-screens.workspace = true
+alveus-menus.workspace = true
+alveus-hud.workspace = true
+alveus-headless.workspace = true
+bevy = { workspace = true, features = ["pan_camera", "debug"] }
 
 [dev-dependencies]
-async-channel = "2"
-# Compile out low-severity logs to improve performance.
-# Remove these features if you want to profile your game with tracy.
-# (see <https://github.com/bevyengine/bevy/blob/main/docs/profiling.md#tracy-profiler>)
-tracing = { version = "0.1", features = [
-    "max_level_debug",
-    "release_max_level_warn",
-] }
-
-[target.wasm32-unknown-unknown.dependencies]
-getrandom = { version = "0.4", features = ["wasm_js"] }
+bevy_ecs_tiled.workspace = true
+moonshine-save.workspace = true
+rand.workspace = true
+ron.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
 
 [features]
 # Default to a native dev build.
 default = ["dev_native", "tiled-render"]
-tiled-render = ["bevy_ecs_tiled/render"]
+tiled-render = ["alveus-collision/tiled-render", "alveus-world/tiled-render"]
 tiled-asset-tests = []
-remote = ["bevy/bevy_remote"]
-cli = ["dep:async-channel"]
+remote = ["alveus-headless/remote"]
+cli = ["alveus-headless/cli"]
 headless = ["remote", "cli"]
 dev = [
     # Improve compile times for dev builds by linking Bevy as a dynamic library.
@@ -59,6 +138,16 @@ dev_native = [
     "bevy/embedded_watcher",
 ]
 
+[lints]
+workspace = true
+
+[[bin]]
+name = "alveus-idle-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "gen_tiled_types"
+path = "src/bin/gen_tiled_types.rs"
 
 [package.metadata.bevy_cli.release]
 # Disable dev features for release builds.
@@ -71,26 +160,9 @@ default-features = false
 [package.metadata.bevy_cli.web.dev]
 features = ["dev"]
 
-
-[lints.rust]
-# Mark `bevy_lint` as a valid `cfg`, as it is set when the Bevy linter runs.
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(bevy_lint)"] }
-
-[lints.clippy]
-# Bevy supplies arguments to systems via dependency injection, so it's natural for systems to
-# request more than 7 arguments, which would undesirably trigger this lint.
-too_many_arguments = "allow"
-# Queries may access many components, which would undesirably trigger this lint.
-type_complexity = "allow"
-# Make sure macros use their standard braces, such as `[]` for `bevy_ecs::children!`.
-nonstandard_macro_braces = "warn"
-
-# You can configure the warning levels of Bevy lints here. For a list of all lints, see:
-# <https://thebevyflock.github.io/bevy_cli/bevy_lint/lints/>
 [package.metadata.bevy_lint]
 # panicking_methods = "deny"
 # pedantic = "warn"
-
 
 # Compile with Performance Optimizations:
 # <https://bevyengine.org/learn/quick-start/getting-started/setup/#compile-with-performance-optimizations>
@@ -138,4 +210,3 @@ opt-level = 0
 [[test]]
 name = "collision_masks_integration"
 required-features = ["tiled-asset-tests"]
-

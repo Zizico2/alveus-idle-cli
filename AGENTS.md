@@ -20,7 +20,7 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
    keypress, an agent shouldn't get a shortcut for it either. Walk tile-by-tile
    with `Move`/`MoveStop`, just like a player.
 2. **The verb list is the enum.** The curated, canonical list of things an agent
-   may do is `GameCommand` in `src/headless/command.rs`. There is no separate
+   may do is `GameCommand` in `crates/alveus-headless/src/command.rs`. There is no separate
    catalogue. When you add or change a verb, update its doc comment — those
    comments are the source of truth agents read.
 3. **No custom BRP methods, no bespoke observation struct.** Commands go through
@@ -49,7 +49,7 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
 
 ## 2. The verb set (what an agent may do)
 
-The authoritative list lives in `src/headless/command.rs` (`GameCommand`), fully
+The authoritative list lives in `crates/alveus-headless/src/command.rs` (`GameCommand`), fully
 documented per-variant in that enum's doc comments. Do not treat line-number
 citations elsewhere in this file as stable anchors — search for the type/name.
 
@@ -70,7 +70,7 @@ Triggering a verb over BRP:
   "id": 1,
   "method": "world.trigger_event",
   "params": {
-    "event": "alveus_idle_cli::headless::command::GameCommand",
+    "event": "alveus_headless::command::GameCommand",
     "value": { "Move": "Right" }
   }
 }
@@ -120,7 +120,7 @@ debugging hard flows. Both together are fine.
 
 **Player tile is mandatory after locomotion.** `CurrentTilePosition` is
 `#[reflect(Component)]` and queryable at
-`alveus_idle_cli::components::CurrentTilePosition` (filter with `Player`). After
+`alveus_components::CurrentTilePosition` (filter with `Player`). After
 every step, read it before deciding the next direction or whether a navigation
 goal was reached. If the tile did not change, the step was blocked — pick another
 direction or query dynamic obstacle positions rather than blindly repeating the
@@ -179,19 +179,19 @@ correct.
 
 | Fact (example) | Value (at time of writing) | Likely source in repo (verify — may move) |
 |----------------|----------------------------|-------------------------------------------|
-| Player spawn (overview) | tile `(0, 0)` | `PlayerSpawnPoint::default()` in `src/demo/room.rs` |
-| Nutrition House entrance tiles | `x = 32..=35`, `y = 11..=12` | `Inserting snapped TileGroup` log from `src/demo/entrance.rs`, or `assets/maps/overview/map.tmx` entrance objects |
+| Player spawn (overview) | tile `(0, 0)` | `PlayerSpawnPoint::default()` in `crates/alveus-world/src/room.rs` |
+| Nutrition House entrance tiles | `x = 32..=35`, `y = 11..=12` | `Inserting snapped TileGroup` log from `crates/alveus-world/src/entrance.rs`, or `assets/maps/overview/map.tmx` entrance objects |
 | Push Pop Enclosure entrance tiles | `x = 38..=41`, `y = 11..=12` | same as above |
-| Nutrition House exit spawn (overview) | `(33, 12)` | `NutritionHousePlugin` `RoomConfig` in `src/demo/room.rs` |
-| Push Pop exit spawn (overview) | `(40, 33)` | `PushPopEnclosurePlugin` `RoomConfig` in `src/demo/room.rs` |
-| One tile step (sim time) | ~0.25s | `MovementDuration` in `src/demo/player.rs` |
+| Nutrition House exit spawn (overview) | `(33, 12)` | `NutritionHousePlugin` `RoomConfig` in `crates/alveus-world/src/room.rs` |
+| Push Pop exit spawn (overview) | `(40, 33)` | `PushPopEnclosurePlugin` `RoomConfig` in `crates/alveus-world/src/room.rs` |
+| One tile step (sim time) | ~0.25s | `MovementDuration` in `crates/alveus-world/src/player.rs` |
 
 ### Minimal script skeleton
 
 ```python
 import json, time, urllib.request
-BASE = "http://127.0.0.1:15702/"  # default; see DEFAULT_BRP_PORT in src/headless/mod.rs
-EVENT = "alveus_idle_cli::headless::command::GameCommand"
+BASE = "http://127.0.0.1:15702/"  # default; see DEFAULT_BRP_PORT in crates/alveus-headless/src/lib.rs
+EVENT = "alveus_headless::command::GameCommand"
 
 def rpc(method, params=None):
     body = {"jsonrpc": "2.0", "id": 1, "method": method}
@@ -209,13 +209,13 @@ def trigger(value):           # send a GameCommand
 
 def player_tile():            # authoritative position — call after every step
     res = rpc("world.query", {"data": {
-        "components": ["alveus_idle_cli::components::CurrentTilePosition"],
+        "components": ["alveus_components::CurrentTilePosition"],
         "has": []},
-        "filter": {"with": ["alveus_idle_cli::demo::player::Player"]}})
+        "filter": {"with": ["alveus_components::Player"]}})
     row = (res or [None])[0]
     if not row:
         return None
-    pos = row["components"]["alveus_idle_cli::components::CurrentTilePosition"]
+    pos = row["components"]["alveus_components::CurrentTilePosition"]
     inner = pos["0"] if isinstance(pos, dict) and "0" in pos else pos
     return int(inner["x"]), int(inner["y"])
 
@@ -307,7 +307,7 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 - Screenshots are written asynchronously — wait ~2 frames before reading the PNG.
 - **Stop the headless server when you're done.** A background `cargo run --features
   headless -- …` keeps simulating in realtime and **autosaves to `save.ron` every
-  ~5 seconds** (default [`SavePath`] in `src/stats.rs`). Kill the process after
+  ~5 seconds** (default [`SavePath`] in `crates/alveus-stats/src/lib.rs`). Kill the process after
   your driver script finishes — do not leave it running in a background terminal.
   Verify with `pgrep -af alveus-idle-cli` (no matches) or that `save.ron`'s mtime
   is no longer changing.
@@ -324,11 +324,11 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
   `GameCommand`s into `PendingGameCommands` and applies them once per frame in
   `First`, `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests`
   in `RemoteLast`, re-running `StateTransition` so effects land in-frame. Preserve
-  this ordering when touching `src/headless/command.rs`.
+  this ordering when touching `crates/alveus-headless/src/command.rs`.
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,
   `#[reflect(Component/Resource/Event)]`, and registration in
-  `register_headless_types` (`src/headless/reflect.rs`). If it's not registered,
+  `register_headless_types` (`crates/alveus-headless/src/reflect.rs`). If it's not registered,
   `world.query`/`registry.schema`/`world.trigger_event` can't see it.
 - **Observation stays client-side.** Derived facts (adjacency, joins like animal
   cleanliness via enclosure) are computed by the client/script/test from raw query
@@ -366,6 +366,6 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 | Protocol-level test | in-process `BrpSender` e2e (`tests/brp_tests.rs`) |
 | Live exploration/debugging | Python driver in `scripts/` against `--realtime` |
 
-BRP event path: `alveus_idle_cli::headless::command::GameCommand` (defined in
-`src/headless/command.rs`). Default port: `15702` (`DEFAULT_BRP_PORT` in
-`src/headless/mod.rs`) unless overridden with `--port`.
+BRP event path: `alveus_headless::command::GameCommand` (defined in
+`crates/alveus-headless/src/command.rs`). Default port: `15702` (`DEFAULT_BRP_PORT` in
+`crates/alveus-headless/src/lib.rs`) unless overridden with `--port`.

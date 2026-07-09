@@ -1,5 +1,5 @@
-use alveus_idle_cli::collision::build_mask_for_asset;
-use alveus_idle_cli::components::TilePosition;
+use alveus_collision::build_mask_for_asset;
+use alveus_components::TilePosition;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::TiledMapAsset;
 

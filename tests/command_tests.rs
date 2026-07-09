@@ -1,10 +1,9 @@
 mod common;
 
-use alveus_idle_cli::demo::movement::{MovementController, MovementDuration, MovementIntent};
-use alveus_idle_cli::demo::player::Player;
-use alveus_idle_cli::headless::GameCommand;
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{AnimalId, AnimalStat, StatTarget};
+use alveus_components::{MovementController, MovementDuration, MovementIntent, Player};
+use alveus_headless::GameCommand;
+use alveus_app::Screen;
+use alveus_stats::{AnimalId, AnimalStat, StatTarget};
 use bevy::prelude::*;
 
 #[test]
@@ -15,8 +14,8 @@ fn move_command_sets_player_intent() {
     app.world_mut().spawn((
         Player,
         MovementController::default(),
-        alveus_idle_cli::components::CurrentTilePosition::default(),
-        alveus_idle_cli::components::DesiredTilePosition::default(),
+        alveus_components::CurrentTilePosition::default(),
+        alveus_components::DesiredTilePosition::default(),
         MovementDuration(Timer::from_seconds(0.25, TimerMode::Once)),
     ));
 
@@ -79,7 +78,7 @@ fn worsen_stat_command_updates_animal() {
 
     let stats = app
         .world()
-        .get::<alveus_idle_cli::stats::AnimalStats>(polly)
+        .get::<alveus_stats::AnimalStats>(polly)
         .expect("polly stats");
     assert_eq!(stats.hunger, 600);
 

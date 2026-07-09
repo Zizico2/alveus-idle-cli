@@ -1,0 +1,28 @@
+[package]
+name = "alveus-headless"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Headless / remote control: semantic verbs, keyboard input mapping, offscreen rendering, and BRP transports for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+async-channel = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+alveus-app.workspace = true
+alveus-components.workspace = true
+alveus-content.workspace = true
+alveus-collision.workspace = true
+alveus-cleaning.workspace = true
+alveus-interaction.workspace = true
+alveus-stats.workspace = true
+alveus-world.workspace = true
+alveus-screens.workspace = true
+alveus-menus.workspace = true
+
+[features]
+remote = ["bevy/bevy_remote"]
+cli = ["remote", "dep:async-channel", "dep:serde_json"]
+
+[lints]
+workspace = true

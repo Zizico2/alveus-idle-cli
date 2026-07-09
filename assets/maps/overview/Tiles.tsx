@@ -13,15 +13,15 @@
  <tile id="3">
   <image source="compost_bin.png" width="32" height="32"/>
    <properties>
-    <property name="obstacle" type="class" propertytype="alveus_idle_cli::components::Obstacle">
+    <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
      <properties/>
     </property>
-    <property name="room_object_id" type="class" propertytype="alveus_idle_cli::content::RoomObjectId">
+    <property name="room_object_id" type="class" propertytype="alveus_content::RoomObjectId">
      <properties>
-      <property name=":variant" propertytype="alveus_idle_cli::content::RoomObjectId:::Variant" value="CompostBin"/>
+      <property name=":variant" propertytype="alveus_content::RoomObjectId:::Variant" value="CompostBin"/>
      </properties>
     </property>
-    <property name="poop_dump" type="class" propertytype="alveus_idle_cli::cleaning::PoopDump">
+    <property name="poop_dump" type="class" propertytype="alveus_cleaning::PoopDump">
      <properties>
       <property name="prompt" type="string" value="Empty wheelbarrow"/>
      </properties>

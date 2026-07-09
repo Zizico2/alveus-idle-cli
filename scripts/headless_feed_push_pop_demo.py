@@ -11,7 +11,7 @@ import urllib.request
 
 PORT = 15702
 BASE = f"http://127.0.0.1:{PORT}/"
-EVENT = "alveus_idle_cli::headless::command::GameCommand"
+EVENT = "alveus_headless::command::GameCommand"
 
 # Planning hints — always confirm via player_tile() after each step (AGENTS.md §4).
 OVERVIEW_SPAWN = (0, 0)
@@ -68,16 +68,16 @@ def parse_tile_position(raw) -> tuple[int, int] | None:
 def player_tile() -> tuple[int, int] | None:
     res = rpc("world.query", {
         "data": {
-            "components": ["alveus_idle_cli::components::CurrentTilePosition"],
+            "components": ["alveus_components::CurrentTilePosition"],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::demo::player::Player"]},
+        "filter": {"with": ["alveus_components::Player"]},
     })
     row = (res or [None])[0]
     if not row:
         return None
     raw = row.get("components", {}).get(
-        "alveus_idle_cli::components::CurrentTilePosition"
+        "alveus_components::CurrentTilePosition"
     )
     return parse_tile_position(raw)
 
@@ -151,7 +151,7 @@ def walk_adjacent_to(
 
 def satchel_item() -> str | None:
     res = rpc("world.get_resources", {
-        "resource": "alveus_idle_cli::interaction::PlayerSatchel",
+        "resource": "alveus_interaction::PlayerSatchel",
     })
     if isinstance(res, dict):
         item = res.get("value", {}).get("item")
@@ -162,17 +162,17 @@ def satchel_item() -> str | None:
 def player_entrance() -> str | None:
     res = rpc("world.query", {
         "data": {
-            "components": ["alveus_idle_cli::components::BuildingEntrance"],
+            "components": ["alveus_components::BuildingEntrance"],
             "has": [],
         },
-        "filter": {"with": ["alveus_idle_cli::demo::player::Player"]},
+        "filter": {"with": ["alveus_components::Player"]},
     })
     row = (res or [None])[0]
     if not row:
         return None
     return str(
         row.get("components", {}).get(
-            "alveus_idle_cli::components::BuildingEntrance"
+            "alveus_components::BuildingEntrance"
         )
     )
 
@@ -182,7 +182,7 @@ def animal_hunger(animal: str = "PushPop") -> int | None:
         "data": {
             "components": [
                 "alveus_types::AnimalId",
-                "alveus_idle_cli::stats::AnimalStats",
+                "alveus_stats::AnimalStats",
             ],
             "has": [],
         },
@@ -192,7 +192,7 @@ def animal_hunger(animal: str = "PushPop") -> int | None:
         comps = row.get("components", {})
         aid = comps.get("alveus_types::AnimalId")
         if str(aid) == animal:
-            stats = comps.get("alveus_idle_cli::stats::AnimalStats", {})
+            stats = comps.get("alveus_stats::AnimalStats", {})
             return int(stats.get("hunger", -1))
     return None
 

@@ -1,5 +1,5 @@
-use alveus_idle_cli::screens::Screen;
-use alveus_idle_cli::stats::{
+use alveus_app::Screen;
+use alveus_stats::{
     AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, EnclosureId, EnclosureName,
     EnclosureStat, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
     StatsPlugin, WorsenStatEvent, tick_decay_system,

@@ -1,0 +1,18 @@
+[package]
+name = "alveus-interaction"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Player interaction dispatch (give item, feed animal, poop pickup/dump) for alveus-idle"
+
+[dependencies]
+bevy = { workspace = true }
+alveus-types.workspace = true
+alveus-content.workspace = true
+alveus-components.workspace = true
+alveus-cleaning.workspace = true
+alveus-stats.workspace = true
+alveus-app.workspace = true
+
+[lints]
+workspace = true
