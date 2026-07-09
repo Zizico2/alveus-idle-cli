@@ -10,6 +10,7 @@ bevy = { workspace = true, features = ["pan_camera"] }
 bevy_ecs_tiled.workspace = true
 bevy_tweening.workspace = true
 alveus-types.workspace = true
+alveus-configs.workspace = true
 alveus-content.workspace = true
 alveus-components.workspace = true
 alveus-collision.workspace = true

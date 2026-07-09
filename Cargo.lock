@@ -214,6 +214,7 @@ dependencies = [
 name = "alveus-components"
 version = "0.1.0"
 dependencies = [
+ "alveus-configs",
  "alveus-types",
  "bevy",
 ]
@@ -262,6 +263,7 @@ dependencies = [
  "alveus-app",
  "alveus-cleaning",
  "alveus-components",
+ "alveus-configs",
  "alveus-content",
  "alveus-interaction",
  "alveus-stats",
@@ -307,6 +309,7 @@ dependencies = [
  "alveus-app",
  "alveus-cleaning",
  "alveus-components",
+ "alveus-configs",
  "alveus-content",
  "alveus-stats",
  "alveus-types",
@@ -381,6 +384,7 @@ dependencies = [
  "alveus-asset-tracking",
  "alveus-collision",
  "alveus-components",
+ "alveus-configs",
  "alveus-content",
  "alveus-stats",
  "alveus-types",

@@ -1,5 +1,9 @@
 # Alveus Sanctuary Keeping: Creative Concept Document
 
+> **Historical creative doc — not binding.**  
+> Backlog & lore: [`ROADMAP.md`](ROADMAP.md). Numbers: [`crates/alveus-configs`](crates/alveus-configs).  
+> **Siren** is a Blue-fronted Amazon memorial ambassador; sections below that describe snake shed / “Python Scarf” are superseded.
+
 Welcome to **Alveus Sanctuary Keeping**, a cozy, low-stress daily management game where players take on the role of Alveus Sanctuary staff members to care for real-world animal ambassadors. Designed to be played in **10-minute daily check-ins**, the game rewards consistency and care, providing a relaxing virtual wildlife sanctuary experience.
 
 ---

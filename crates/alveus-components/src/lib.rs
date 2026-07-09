@@ -7,10 +7,8 @@
 
 use bevy::prelude::*;
 
+pub use alveus_configs::{PLAYER_MOVE_DURATION_SECS, TILE_SIZE};
 pub use alveus_types::{EnclosureId, TilePosition};
-
-/// World tile size in pixels.
-pub const TILE_SIZE: u32 = 32;
 
 // ---------------------------------------------------------
 // Spatial components
@@ -86,7 +84,7 @@ pub struct Interactable;
 #[require(
     CurrentTilePosition,
     DesiredTilePosition,
-    MovementDuration(Timer::from_seconds(0.25, TimerMode::Once))
+    MovementDuration(Timer::from_seconds(PLAYER_MOVE_DURATION_SECS, TimerMode::Once))
 )]
 pub struct Player;
 

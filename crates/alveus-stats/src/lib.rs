@@ -3,8 +3,12 @@ use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, random_wander_step,
 };
 use alveus_components::PoopWheelbarrow;
-use alveus_configs::{cleanliness_decay_with_poops, enclosure_cleanliness_decay_amount};
-use alveus_content::{OFFLINE_WANDER_STEPS_PER_HOUR, default_tile_position, enclosure_for_animal};
+use alveus_configs::{
+    ANIMALS_DATA, AUTOSAVE_INTERVAL_SECS, ENCLOSURES_DATA, OFFLINE_WANDER_STEPS_PER_HOUR, STAT_FULL,
+    STAT_SCALE, animal_default_placement, cleanliness_decay_with_poops,
+    enclosure_cleanliness_decay_amount, enclosure_for_animal,
+};
+use alveus_content::default_tile_position;
 pub use alveus_types::{AnimalId, EnclosureId};
 use alveus_types::{TileBounds, TilePosition};
 use bevy::prelude::*;
@@ -34,8 +38,8 @@ pub struct AnimalName(pub String);
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct AnimalStats {
-    pub hunger: u32,    // [0, 1000]
-    pub happiness: u32, // [0, 1000]
+    pub hunger: u32,    // [0, STAT_SCALE]
+    pub happiness: u32, // [0, STAT_SCALE]
 }
 
 #[derive(Component, Debug, Clone, Reflect)]
@@ -83,7 +87,7 @@ pub struct EnclosureName(pub String);
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct EnclosureStats {
-    pub cleanliness: u32, // [0, 1000]
+    pub cleanliness: u32, // [0, STAT_SCALE]
 }
 
 #[derive(Component, Debug, Clone, Reflect)]
@@ -159,63 +163,10 @@ pub struct PendingOfflineWander {
     pub steps: u32,
 }
 
-// ---------------------------------------------------------
-// Hardcoded Animal Data (Sync with design/data/animals.json)
-// ---------------------------------------------------------
-
-pub struct AnimalStaticData {
-    pub animal_id: AnimalId,
-    pub display_name: &'static str,
-    pub hunger_decay_rate: f32,
-    pub happiness_decay_rate: f32,
-}
-
-/// WARNING: The static array `ANIMALS_DATA` is hardcoded to avoid runtime JSON parsing overhead
-/// and ensure fast initialization. It MUST be kept in sync with the canonical config file:
-/// `design/data/animals.json`.
-///
-/// If any species, display names, or decay rates are modified in `animals.json`, the corresponding
-/// values in this array MUST be updated manually to match.
-///
-/// Future developers (humans and AI agents) should always consult both files when updating
-/// animal attributes or adding new animals to the sanctuary.
-pub const ANIMALS_DATA: &[AnimalStaticData] = &[
-    AnimalStaticData {
-        animal_id: AnimalId::Polly,
-        display_name: "Polly",
-        hunger_decay_rate: 0.04,
-        happiness_decay_rate: 0.05,
-    },
-    AnimalStaticData {
-        animal_id: AnimalId::PushPop,
-        display_name: "Push Pop",
-        hunger_decay_rate: 0.04,
-        happiness_decay_rate: 0.05,
-    },
-    AnimalStaticData {
-        animal_id: AnimalId::Stompy,
-        display_name: "Stompy",
-        hunger_decay_rate: 0.04,
-        happiness_decay_rate: 0.05,
-    },
-    AnimalStaticData {
-        animal_id: AnimalId::Georgie,
-        display_name: "Georgie",
-        hunger_decay_rate: 0.04,
-        happiness_decay_rate: 0.05,
-    },
-    AnimalStaticData {
-        animal_id: AnimalId::Siren,
-        display_name: "Siren",
-        hunger_decay_rate: 0.04,
-        happiness_decay_rate: 0.05,
-    },
-];
-
 fn animal_world_components(
     animal_id: AnimalId,
 ) -> (Option<AnimalTilePosition>, Option<AnimalBackgroundWander>) {
-    match alveus_content::animal_default_placement(animal_id) {
+    match animal_default_placement(animal_id) {
         Some(placement) => (
             Some(AnimalTilePosition(placement.home_position)),
             Some(AnimalBackgroundWander::new(placement.wander_bounds)),
@@ -223,25 +174,6 @@ fn animal_world_components(
         None => (None, None),
     }
 }
-
-const ENCLOSURE_MAPPINGS: &[(EnclosureId, &str, f32)] = &[
-    (
-        EnclosureId::NutritionHousePlaypen,
-        "Nutrition House Playpen",
-        0.03 * 1000.0,
-    ),
-    (
-        EnclosureId::PushPopEnclosure,
-        "Push Pop Enclosure",
-        0.03 * 1000.0,
-    ),
-    (EnclosureId::Pasture, "Pasture Grassland", 0.03 * 1000.0),
-    (
-        EnclosureId::ReptileEnclosure,
-        "Reptile Enclosure",
-        0.03 * 1000.0,
-    ),
-];
 
 // ---------------------------------------------------------
 // Plugin
@@ -361,7 +293,7 @@ fn improve_stat_observer(
                         match stat {
                             AnimalStat::Hunger => {
                                 let prev = stats.hunger;
-                                stats.hunger = stats.hunger.saturating_add(event.amount).min(1000);
+                                stats.hunger = stats.hunger.saturating_add(event.amount).min(STAT_SCALE);
                                 info!(
                                     "Improved hunger for {} ({}): {} -> {}",
                                     name.0,
@@ -373,7 +305,7 @@ fn improve_stat_observer(
                             AnimalStat::Happiness => {
                                 let prev = stats.happiness;
                                 stats.happiness =
-                                    stats.happiness.saturating_add(event.amount).min(1000);
+                                    stats.happiness.saturating_add(event.amount).min(STAT_SCALE);
                                 info!(
                                     "Improved happiness for {} ({}): {} -> {}",
                                     name.0,
@@ -409,7 +341,7 @@ fn improve_stat_observer(
                             found = true;
                             let prev = enc_stats.cleanliness;
                             enc_stats.cleanliness =
-                                enc_stats.cleanliness.saturating_add(event.amount).min(1000);
+                                enc_stats.cleanliness.saturating_add(event.amount).min(STAT_SCALE);
                             info!(
                                 "Improved cleanliness for Enclosure {} ({}): {} -> {}",
                                 enc_name.0,
@@ -443,7 +375,7 @@ fn improve_stat_observer(
                     found = true;
                     let prev = enc_stats.cleanliness;
                     enc_stats.cleanliness =
-                        enc_stats.cleanliness.saturating_add(event.amount).min(1000);
+                        enc_stats.cleanliness.saturating_add(event.amount).min(STAT_SCALE);
                     info!(
                         "Improved cleanliness for Enclosure {} ({}): {} -> {}",
                         enc_name.0,
@@ -637,13 +569,17 @@ fn init_stats_system(mut commands: Commands, query: Query<&AnimalId>, save_path:
 }
 
 fn spawn_default_stats(commands: &mut Commands) {
-    for &(enc_id, enc_name, cleanliness_rate) in ENCLOSURE_MAPPINGS {
+    for enc in ENCLOSURES_DATA {
         commands.spawn((
-            Name::new(format!("Enclosure Stats - {}", enc_name)),
-            enc_id,
-            EnclosureName(enc_name.to_string()),
-            EnclosureStats { cleanliness: 1000 },
-            EnclosureDecayRates { cleanliness_rate },
+            Name::new(format!("Enclosure Stats - {}", enc.display_name)),
+            enc.enclosure_id,
+            EnclosureName(enc.display_name.to_string()),
+            EnclosureStats {
+                cleanliness: STAT_FULL,
+            },
+            EnclosureDecayRates {
+                cleanliness_rate: enc.cleanliness_decay_per_hour,
+            },
             EnclosureDecayAccumulators::default(),
             DynamicObstacleTiles::default(),
         ));
@@ -653,8 +589,8 @@ fn spawn_default_stats(commands: &mut Commands) {
         let display_name = animal.display_name.to_string();
 
         let decay_rates = AnimalDecayRates {
-            hunger_rate: animal.hunger_decay_rate * 1000.0,
-            happiness_rate: animal.happiness_decay_rate * 1000.0,
+            hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
+            happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
         };
 
         let enc_id = enclosure_for_animal(animal.animal_id);
@@ -666,8 +602,8 @@ fn spawn_default_stats(commands: &mut Commands) {
             AnimalName(display_name),
             AnimalEnclosure(enc_id),
             AnimalStats {
-                hunger: 1000,
-                happiness: 1000,
+                hunger: STAT_FULL,
+                happiness: STAT_FULL,
             },
             decay_rates,
             AnimalDecayAccumulators::default(),
@@ -691,17 +627,21 @@ fn spawn_missing_stat_entities(
     let existing_enclosures: HashSet<EnclosureId> =
         enclosure_query.iter().map(|(_, id)| *id).collect();
 
-    for &(enc_id, enc_name, cleanliness_rate) in ENCLOSURE_MAPPINGS {
-        if existing_enclosures.contains(&enc_id) {
+    for enc in ENCLOSURES_DATA {
+        if existing_enclosures.contains(&enc.enclosure_id) {
             continue;
         }
-        info!("Spawning missing enclosure stats entity: {}", enc_name);
+        info!("Spawning missing enclosure stats entity: {}", enc.display_name);
         commands.spawn((
-            Name::new(format!("Enclosure Stats - {}", enc_name)),
-            enc_id,
-            EnclosureName(enc_name.to_string()),
-            EnclosureStats { cleanliness: 1000 },
-            EnclosureDecayRates { cleanliness_rate },
+            Name::new(format!("Enclosure Stats - {}", enc.display_name)),
+            enc.enclosure_id,
+            EnclosureName(enc.display_name.to_string()),
+            EnclosureStats {
+                cleanliness: STAT_FULL,
+            },
+            EnclosureDecayRates {
+                cleanliness_rate: enc.cleanliness_decay_per_hour,
+            },
             EnclosureDecayAccumulators::default(),
             DynamicObstacleTiles::default(),
         ));
@@ -716,8 +656,8 @@ fn spawn_missing_stat_entities(
             animal.display_name
         );
         let decay_rates = AnimalDecayRates {
-            hunger_rate: animal.hunger_decay_rate * 1000.0,
-            happiness_rate: animal.happiness_decay_rate * 1000.0,
+            hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
+            happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
         };
         let (tile_position, background_wander) = animal_world_components(animal.animal_id);
 
@@ -727,8 +667,8 @@ fn spawn_missing_stat_entities(
             AnimalName(animal.display_name.to_string()),
             AnimalEnclosure(enclosure_for_animal(animal.animal_id)),
             AnimalStats {
-                hunger: 1000,
-                happiness: 1000,
+                hunger: STAT_FULL,
+                happiness: STAT_FULL,
             },
             decay_rates,
             AnimalDecayAccumulators::default(),
@@ -754,8 +694,8 @@ fn hydrate_loaded_stats_observer(
     for (entity, id) in &animal_query {
         if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == *id) {
             let decay_rates = AnimalDecayRates {
-                hunger_rate: animal.hunger_decay_rate * 1000.0,
-                happiness_rate: animal.happiness_decay_rate * 1000.0,
+                hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
+                happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
             };
 
             let enc_id = enclosure_for_animal(*id);
@@ -771,14 +711,16 @@ fn hydrate_loaded_stats_observer(
     }
 
     for (entity, id) in &enclosure_query {
-        if let Some(&(_, enc_name, cleanliness_rate)) = ENCLOSURE_MAPPINGS
+        if let Some(enc) = ENCLOSURES_DATA
             .iter()
-            .find(|(mapped_id, _, _)| *mapped_id == *id)
+            .find(|mapped| mapped.enclosure_id == *id)
         {
             commands.entity(entity).insert((
-                Name::new(format!("Enclosure Stats - {}", enc_name)),
-                EnclosureName(enc_name.to_string()),
-                EnclosureDecayRates { cleanliness_rate },
+                Name::new(format!("Enclosure Stats - {}", enc.display_name)),
+                EnclosureName(enc.display_name.to_string()),
+                EnclosureDecayRates {
+                    cleanliness_rate: enc.cleanliness_decay_per_hour,
+                },
                 EnclosureDecayAccumulators::default(),
                 DynamicObstacleTiles::default(),
             ));
@@ -1047,19 +989,19 @@ fn update_upkeep_system(
     }
 
     upkeep.mean_hunger = if animal_count > 0.0 {
-        (total_hunger as f32 / animal_count) / 1000.0
+        (total_hunger as f32 / animal_count) / STAT_SCALE as f32
     } else {
         1.0
     };
 
     upkeep.mean_happiness = if animal_count > 0.0 {
-        (total_happy as f32 / animal_count) / 1000.0
+        (total_happy as f32 / animal_count) / STAT_SCALE as f32
     } else {
         1.0
     };
 
     upkeep.mean_cleanliness = if enclosure_count > 0.0 {
-        (total_clean as f32 / enclosure_count) / 1000.0
+        (total_clean as f32 / enclosure_count) / STAT_SCALE as f32
     } else {
         1.0
     };
@@ -1067,13 +1009,13 @@ fn update_upkeep_system(
     upkeep.score = (upkeep.mean_hunger + upkeep.mean_cleanliness + upkeep.mean_happiness) / 3.0;
 }
 
-/// Simple resource timer for periodic autosaves (every 5 seconds)
+/// Simple resource timer for periodic autosaves ([`AUTOSAVE_INTERVAL_SECS`])
 #[derive(Resource, Deref, DerefMut)]
 struct AutoSaveTimer(Timer);
 
 impl Default for AutoSaveTimer {
     fn default() -> Self {
-        Self(Timer::from_seconds(5.0, TimerMode::Repeating))
+        Self(Timer::from_seconds(AUTOSAVE_INTERVAL_SECS, TimerMode::Repeating))
     }
 }
 

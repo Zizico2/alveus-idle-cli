@@ -7,7 +7,10 @@ use alveus_collision::{
 use alveus_components::{
     BuildingEntrance, CurrentTilePosition, DesiredTilePosition, Player, TILE_SIZE, TilePosition,
 };
-use alveus_content::{animal_default_placement, default_tile_position};
+use alveus_configs::{
+    NUTRITION_HOUSE_ROOM, OVERVIEW_PLAYER_SPAWN, PUSH_POP_ENCLOSURE_ROOM, animal_default_placement,
+};
+use alveus_content::default_tile_position;
 use alveus_stats::{AnimalTilePosition, EnclosureId};
 use alveus_types::AnimalId;
 use bevy::prelude::*;
@@ -26,8 +29,7 @@ pub struct PlayerSpawnPoint {
 impl Default for PlayerSpawnPoint {
     fn default() -> Self {
         Self {
-            // Default starting position when entering the game
-            position: TilePosition { x: 0, y: 0 },
+            position: OVERVIEW_PLAYER_SPAWN,
         }
     }
 }
@@ -276,9 +278,9 @@ impl Plugin for NutritionHousePlugin {
                 gameplay_state: Screen::Gameplay,
                 entrance: BuildingEntrance::NutritionHouse,
                 enclosure_id: EnclosureId::NutritionHousePlaypen,
-                room_spawn: TilePosition { x: 5, y: 2 },
-                exit_spawn: TilePosition { x: 33, y: 12 },
-                exit_door: TilePosition { x: 5, y: 0 },
+                room_spawn: NUTRITION_HOUSE_ROOM.room_spawn,
+                exit_spawn: NUTRITION_HOUSE_ROOM.exit_spawn,
+                exit_door: NUTRITION_HOUSE_ROOM.exit_door,
                 get_interior_map: nutrition_house_map,
                 spawn_extras_fn: spawn_no_extras,
                 room_title: "Nutrition House".to_string(),
@@ -298,9 +300,9 @@ impl Plugin for PushPopEnclosurePlugin {
                 gameplay_state: Screen::Gameplay,
                 entrance: BuildingEntrance::PushPopEnclosure,
                 enclosure_id: EnclosureId::PushPopEnclosure,
-                room_spawn: TilePosition { x: 6, y: 2 },
-                exit_spawn: TilePosition { x: 40, y: 33 },
-                exit_door: TilePosition { x: 6, y: 0 },
+                room_spawn: PUSH_POP_ENCLOSURE_ROOM.room_spawn,
+                exit_spawn: PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
+                exit_door: PUSH_POP_ENCLOSURE_ROOM.exit_door,
                 get_interior_map: push_pop_enclosure_map,
                 spawn_extras_fn: spawn_push_pop_extras,
                 room_title: "Push Pop Enclosure".to_string(),

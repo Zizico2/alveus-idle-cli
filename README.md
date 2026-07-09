@@ -2,6 +2,17 @@
 
 A 2D tile-based simulation/idle game built in Rust using the **Bevy** game engine. The game is inspired by and themed around **Alveus Sanctuary**, the nonprofit wildlife sanctuary and virtual education center founded by streamer Maya Higa.
 
+### Design & roadmap
+
+| Need | Start here |
+|------|------------|
+| What to build next / lore | [`ROADMAP.md`](ROADMAP.md) |
+| Shipped gameplay numbers | [`crates/alveus-configs`](crates/alveus-configs) |
+| Not-yet-shipped ballparks | [`crates/alveus-configs/README.md`](crates/alveus-configs/README.md) |
+| Historical intent (markdown only) | [`design/`](design/) |
+
+`design/` is inspiration, not a contract. **Siren** is a Blue-fronted Amazon memorial ambassador (see ROADMAP lore table) — not a ball python.
+
 ---
 
 ## 🎮 Game Concept & Overview

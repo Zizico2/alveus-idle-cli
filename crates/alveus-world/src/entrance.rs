@@ -2,11 +2,12 @@ use alveus_app::Screen;
 use alveus_components::{
     BuildingEntrance, CurrentTilePosition, Player, RectangleTileGroup, TileGroup, TilePosition,
 };
+use alveus_configs::TILE_SIZE as TILE_SIZE_U32;
 use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::*;
 
-// Grid Snapping bounds
-pub const TILE_SIZE: f32 = 32.0;
+// Grid snapping uses the same tile size as the rest of the game ([`alveus_configs::TILE_SIZE`]).
+pub const TILE_SIZE: f32 = TILE_SIZE_U32 as f32;
 pub const GRID_SNAP_EPSILON: f32 = 0.05;
 
 pub struct EntrancePlugin;

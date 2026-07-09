@@ -1,6 +1,7 @@
 use alveus_app::{AppSystems, InRoom, Screen};
 use alveus_cleaning::{PoopDump, PoopPile, PoopWheelbarrow, WHEELBARROW_CAPACITY};
 use alveus_components::LastPickupMessage;
+use alveus_configs::{ANIMALS_DATA, NEGLECT_UPKEEP_THRESHOLD, STAT_SCALE};
 use alveus_content::item_display_name;
 use alveus_interaction::{ActiveInteractionTarget, FeedAnimal, GiveItem, PlayerSatchel};
 use alveus_stats::{AnimalEnclosure, AnimalStat, AnimalStats, EnclosureStats, SanctuaryUpkeep};
@@ -273,12 +274,15 @@ fn spawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi
                         ..default()
                     },
                 )).with_children(|stack| {
-                    // Spawn animal cards for the 4 ambassadors
-                    spawn_animal_card(stack, AnimalId::Polly, "Polly", "Silkie Chicken", "Playpen");
-                    spawn_animal_card(stack, AnimalId::PushPop, "Push Pop", "Sulcata Tortoise", "Push Pop Enclosure");
-                    spawn_animal_card(stack, AnimalId::Stompy, "Stompy", "Emu", "Pasture Grassland");
-                    spawn_animal_card(stack, AnimalId::Georgie, "Georgie", "African Bullfrog", "Reptile Enclosure");
-                    spawn_animal_card(stack, AnimalId::Siren, "Siren", "Ball Python", "Reptile Enclosure");
+                    for animal in ANIMALS_DATA {
+                        spawn_animal_card(
+                            stack,
+                            animal.animal_id,
+                            animal.display_name,
+                            animal.species,
+                            animal.home_label,
+                        );
+                    }
                 });
 
                 // D. Debug Controls Help Card
@@ -558,20 +562,23 @@ fn update_hud_system(
     // 3. Update Individual Stat Texts
     for (mut txt, marker) in &mut stat_text_query {
         if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
-            txt.0 = format!("{}%", (val as f32 / 10.0).round() as i32);
+            txt.0 = format!(
+                "{}%",
+                ((val as f32 / STAT_SCALE as f32) * 100.0).round() as i32
+            );
         }
     }
 
     // 4. Update Individual Stat Progress Bars
     for (mut node, marker) in &mut stat_bar_query {
         if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
-            node.width = Val::Percent(val as f32 / 10.0);
+            node.width = Val::Percent((val as f32 / STAT_SCALE as f32) * 100.0);
         }
     }
 
     // 5. Update Neglect Banner Visibility
     for mut vis in &mut neglect_banner_query {
-        let desired_visibility = if upkeep.score < 0.30 {
+        let desired_visibility = if upkeep.score < NEGLECT_UPKEEP_THRESHOLD {
             Visibility::Inherited
         } else {
             Visibility::Hidden

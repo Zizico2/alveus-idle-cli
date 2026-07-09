@@ -1,14 +1,50 @@
-//! Static game-design tables synced with `design/data/*.json` and
-//! `design/rooms/*.json`. These are the canonical runtime values.
+//! Canonical runtime gameplay numbers for alveus-idle.
 //!
-//! Types here are the config *schemas*; the identifier/value types they are
-//! built from live in [`alveus_types`]. The main crate re-exports both so they
-//! remain accessible under their original module paths.
+//! **This crate is the source of truth for shipped magic values.** Gameplay crates
+//! read constants and tables from here — do not scatter new balance numbers in
+//! feature crates. Not-yet-implemented ballparks live in this crate's `README.md`
+//! (Planned defaults); promote them into Rust when a system ships.
+//!
+//! Identifier enums live in [`alveus_types`]. Historical prose lives in `design/`
+//! (markdown only) and [`ROADMAP.md`](../../ROADMAP.md).
 
 use alveus_types::{AnimalId, EnclosureId, ItemId, TileBounds, TilePosition};
 
 // ---------------------------------------------------------
-// Items (sync with design/data/items.json)
+// Scale & timing
+// ---------------------------------------------------------
+
+/// Internal stat scale: design fractions `0.0–1.0` map to `0..=STAT_SCALE`.
+pub const STAT_SCALE: u32 = 1000;
+
+/// Full / initial value for hunger, happiness, and enclosure cleanliness.
+pub const STAT_FULL: u32 = STAT_SCALE;
+
+/// World tile size in pixels.
+pub const TILE_SIZE: u32 = 32;
+
+/// Wall-clock seconds for one player tile step.
+pub const PLAYER_MOVE_DURATION_SECS: f32 = 0.25;
+
+/// Autosave interval (seconds).
+pub const AUTOSAVE_INTERVAL_SECS: f32 = 5.0;
+
+/// Upkeep score at or below this shows the neglect banner (and related Epic 5 effects).
+pub const NEGLECT_UPKEEP_THRESHOLD: f32 = 0.30;
+
+/// Current satchel capacity (one carried item). Planned target is 2 — see README.
+pub const SATCHEL_MAX_SLOTS: u8 = 1;
+
+/// Default overview spawn when entering gameplay (runtime; not design-map coords).
+pub const OVERVIEW_PLAYER_SPAWN: TilePosition = TilePosition { x: 0, y: 0 };
+
+/// Rough idle wander rate used for offline catch-up (steps per hour).
+pub const OFFLINE_WANDER_STEPS_PER_HOUR: f32 = 30.0;
+
+pub const WHEELBARROW_CAPACITY: u8 = 10;
+
+// ---------------------------------------------------------
+// Items
 // ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
@@ -16,10 +52,7 @@ pub struct ItemStaticData {
     pub display_name: &'static str,
 }
 
-/// Static data for an item. This is a *total* mapping — every [`ItemId`] has
-/// data — so it's an exhaustive `match` rather than a partial lookup: adding an
-/// `ItemId` variant fails to compile until its data is filled in, with no
-/// runtime `Unknown Item` fallback.
+/// Exhaustive item table — adding an [`ItemId`] fails to compile until filled in.
 pub const fn item_data(item_id: ItemId) -> ItemStaticData {
     match item_id {
         ItemId::TortoiseLeafyGreens => ItemStaticData {
@@ -36,7 +69,132 @@ pub const fn item_display_name(item_id: ItemId) -> &'static str {
 }
 
 // ---------------------------------------------------------
-// Animal placement (runtime; positions change over time)
+// Animals
+// ---------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+pub struct AnimalStaticData {
+    pub animal_id: AnimalId,
+    pub display_name: &'static str,
+    /// Common species label for HUD / education hooks.
+    pub species: &'static str,
+    /// Short home / enclosure label for HUD cards.
+    pub home_label: &'static str,
+    /// Hunger decay as a fraction of [`STAT_SCALE`] per simulated hour (e.g. `0.04`).
+    pub hunger_decay_rate: f32,
+    /// Happiness decay as a fraction of [`STAT_SCALE`] per simulated hour.
+    pub happiness_decay_rate: f32,
+}
+
+pub const ANIMALS_DATA: &[AnimalStaticData] = &[
+    AnimalStaticData {
+        animal_id: AnimalId::Polly,
+        display_name: "Polly",
+        species: "Silkie Chicken",
+        home_label: "Playpen",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: AnimalId::PushPop,
+        display_name: "Push Pop",
+        species: "Sulcata Tortoise",
+        home_label: "Push Pop Enclosure",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: AnimalId::Stompy,
+        display_name: "Stompy",
+        species: "Emu",
+        home_label: "Pasture Grassland",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: AnimalId::Georgie,
+        display_name: "Georgie",
+        species: "African Bullfrog",
+        home_label: "Studio",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+    AnimalStaticData {
+        animal_id: AnimalId::Siren,
+        display_name: "Siren",
+        species: "Blue-fronted Amazon",
+        home_label: "Studio",
+        hunger_decay_rate: 0.04,
+        happiness_decay_rate: 0.05,
+    },
+];
+
+/// Exhaustive lookup — prefer this when matching on a single id.
+pub const fn animal_data(animal_id: AnimalId) -> &'static AnimalStaticData {
+    match animal_id {
+        AnimalId::Polly => &ANIMALS_DATA[0],
+        AnimalId::PushPop => &ANIMALS_DATA[1],
+        AnimalId::Stompy => &ANIMALS_DATA[2],
+        AnimalId::Georgie => &ANIMALS_DATA[3],
+        AnimalId::Siren => &ANIMALS_DATA[4],
+    }
+}
+
+pub const fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
+    match animal_id {
+        AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
+        AnimalId::PushPop => EnclosureId::PushPopEnclosure,
+        AnimalId::Stompy => EnclosureId::Pasture,
+        AnimalId::Georgie | AnimalId::Siren => EnclosureId::ReptileEnclosure,
+    }
+}
+
+// ---------------------------------------------------------
+// Enclosures
+// ---------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+pub struct EnclosureStaticData {
+    pub enclosure_id: EnclosureId,
+    pub display_name: &'static str,
+    /// Cleanliness units lost per hour on the [`STAT_SCALE`] integer scale.
+    pub cleanliness_decay_per_hour: f32,
+}
+
+pub const ENCLOSURES_DATA: &[EnclosureStaticData] = &[
+    EnclosureStaticData {
+        enclosure_id: EnclosureId::NutritionHousePlaypen,
+        display_name: "Nutrition House Playpen",
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+    },
+    EnclosureStaticData {
+        enclosure_id: EnclosureId::PushPopEnclosure,
+        display_name: "Push Pop Enclosure",
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+    },
+    EnclosureStaticData {
+        enclosure_id: EnclosureId::Pasture,
+        display_name: "Pasture Grassland",
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+    },
+    EnclosureStaticData {
+        enclosure_id: EnclosureId::ReptileEnclosure,
+        display_name: "Reptile Enclosure",
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+    },
+];
+
+pub const fn enclosure_data(enclosure_id: EnclosureId) -> &'static EnclosureStaticData {
+    match enclosure_id {
+        EnclosureId::NutritionHousePlaypen => &ENCLOSURES_DATA[0],
+        EnclosureId::PushPopEnclosure => &ENCLOSURES_DATA[1],
+        EnclosureId::Pasture => &ENCLOSURES_DATA[2],
+        EnclosureId::ReptileEnclosure => &ENCLOSURES_DATA[3],
+    }
+}
+
+// ---------------------------------------------------------
+// Animal placement (defaults for new saves)
 // ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +204,6 @@ pub struct AnimalPlacementDef {
     pub wander_bounds: TileBounds,
 }
 
-/// Sync with design/rooms/nutrition_house.json animals[0].
 /// `home_position` is the default tile for new saves only — not the runtime spawn point.
 pub const POLLY_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
     animal_id: AnimalId::Polly,
@@ -57,7 +214,6 @@ pub const POLLY_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
     },
 };
 
-/// Sync with design/rooms/push_pop_enclosure.json animals[0].
 /// `home_position` is the default tile for new saves only — not the runtime spawn point.
 pub const PUSH_POP_PLACEMENT: AnimalPlacementDef = AnimalPlacementDef {
     animal_id: AnimalId::PushPop,
@@ -76,25 +232,43 @@ pub fn animal_default_placement(animal_id: AnimalId) -> Option<&'static AnimalPl
     }
 }
 
-/// Rough idle wander rate used for offline catch-up (steps per hour).
-pub const OFFLINE_WANDER_STEPS_PER_HOUR: f32 = 30.0;
+// ---------------------------------------------------------
+// Room tile configs (implemented interiors)
+// ---------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+pub struct RoomTileConfig {
+    pub room_spawn: TilePosition,
+    pub exit_spawn: TilePosition,
+    pub exit_door: TilePosition,
+}
+
+pub const NUTRITION_HOUSE_ROOM: RoomTileConfig = RoomTileConfig {
+    room_spawn: TilePosition { x: 5, y: 2 },
+    exit_spawn: TilePosition { x: 33, y: 12 },
+    exit_door: TilePosition { x: 5, y: 0 },
+};
+
+pub const PUSH_POP_ENCLOSURE_ROOM: RoomTileConfig = RoomTileConfig {
+    room_spawn: TilePosition { x: 6, y: 2 },
+    exit_spawn: TilePosition { x: 40, y: 33 },
+    exit_door: TilePosition { x: 6, y: 0 },
+};
 
 // ---------------------------------------------------------
-// Cleaning / poop (sync with design/rooms/*.json dynamic_spawns)
+// Cleaning / poop
 // ---------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub struct PoopConfig {
-    /// Cleanliness at or below each threshold (0–1000 scale) adds one poop on the floor.
+    /// Cleanliness at or below each threshold ([`STAT_SCALE`] units) adds one poop.
     pub spawn_thresholds: &'static [u32],
-    /// Extra cleanliness units lost per hour per poop on the floor (0–1000 scale).
+    /// Extra cleanliness units lost per hour per poop on the floor.
     pub poop_decay_rate: f32,
     /// Cleanliness restored when a poop is picked up (not when the wheelbarrow is emptied).
     pub cleanliness_restore_per_poop: u32,
     pub spawn_bounds: TileBounds,
 }
-
-pub const WHEELBARROW_CAPACITY: u8 = 10;
 
 const PUSH_POP_POOP_CONFIG: PoopConfig = PoopConfig {
     spawn_thresholds: &[800, 500, 200],
@@ -103,11 +277,7 @@ const PUSH_POP_POOP_CONFIG: PoopConfig = PoopConfig {
     spawn_bounds: PUSH_POP_PLACEMENT.wander_bounds,
 };
 
-/// Static poop tuning for an enclosure.
-///
-/// Exhaustive over [`EnclosureId`]. Placeholder arms copy Push Pop's values for
-/// now so adding a variant fails to compile until the table is consciously
-/// extended.
+/// Exhaustive over [`EnclosureId`]. Placeholder arms copy Push Pop until tuned.
 pub const fn poop_config_for(id: EnclosureId) -> &'static PoopConfig {
     match id {
         EnclosureId::NutritionHousePlaypen => &PUSH_POP_POOP_CONFIG,
@@ -118,7 +288,7 @@ pub const fn poop_config_for(id: EnclosureId) -> &'static PoopConfig {
 }
 
 // ---------------------------------------------------------
-// Cleaning math (pure functions over the poop tables)
+// Cleaning math
 // ---------------------------------------------------------
 
 /// How many poops should be on the floor given current enclosure cleanliness.
@@ -187,7 +357,7 @@ pub fn cleanliness_after_threshold_decay(
     current
 }
 
-/// Total cleanliness units lost over `hours`, accounting for threshold poop acceleration when configured.
+/// Total cleanliness units lost over `hours`, accounting for threshold poop acceleration.
 pub fn enclosure_cleanliness_decay_amount(
     start: u32,
     hours: f32,

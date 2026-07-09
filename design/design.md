@@ -1,9 +1,18 @@
 # Alveus Sanctuary Keeping — Design Specification
 
-> **Status:** Living document · **Engine:** Bevy 0.18 · **Tile Size:** 32×32 px  
-> **Source of truth for all gameplay systems, room layouts, stat formulas, and data schemas.**
+> **Status:** Historical markdown · **Engine:** Bevy 0.18  
+> **Not a contract.** Concrete gameplay numbers live in [`alveus-configs`](../crates/alveus-configs) (Rust + Planned README). Shipping order and lore live in [`ROADMAP.md`](../ROADMAP.md).
 
-This document replaces `concept.md` as the **implementation reference**. Every value, coordinate, formula, and behavior described here is deterministic and machine-verifiable. Companion data files in `design/data/` and schemas in `design/schemas/` provide the canonical definitions that game code must conform to.
+## Authority
+
+| Need | Go to |
+|------|--------|
+| What to build next / lore (Siren parrot memorial) | [`ROADMAP.md`](../ROADMAP.md) |
+| Shipped magic values | [`crates/alveus-configs/src/lib.rs`](../crates/alveus-configs/src/lib.rs) |
+| Not-yet-implemented ballparks | [`crates/alveus-configs/README.md`](../crates/alveus-configs/README.md) |
+| Intent / sketches / copy | This document (and other `design/*.md`) |
+
+Where this file still lists numbers, treat them as **illustrative** — prefer `alveus-configs`. **Siren** is a Blue-fronted Amazon (memorial), not a ball python; snake shed is deferred to Epic 12.
 
 ---
 
@@ -25,7 +34,7 @@ This document replaces `concept.md` as the **implementation reference**. Every v
 14. [Collectibles & Progression](#14-collectibles--progression)
 15. [Neglect Freeze](#15-neglect-freeze)
 16. [Education System](#16-education-system)
-17. [Data File Index](#17-data-file-index)
+17. [Where numbers live now](#17-where-numbers-live-now)
 
 ---
 
@@ -41,32 +50,21 @@ This document replaces `concept.md` as the **implementation reference**. Every v
 | RNG | rand | 0.9 |
 | Language | Rust | 2024 edition |
 
-### Data-Driven Design
+### Content & numbers
 
-All game content is defined in JSON data files validated against JSON Schemas. These values should be further canonicalized and restuctured if needed to match in-code structs. They could be rewritten and loaded via RON https://docs.rs/bevy_ron/latest/bevy_ron/.
+Gameplay numbers are **not** defined by JSON in this folder. Use:
 
 ```
+crates/alveus-configs/
+├── src/lib.rs     ← Shipped runtime constants & tables
+└── README.md      ← Planned ballparks for unshipped systems
+
 design/
-├── design.md                   ← This document
-├── schemas/
-│   ├── room.schema.json        ← Room layout structure
-│   ├── animal.schema.json      ← Animal ambassador definitions
-│   ├── item.schema.json        ← Inventory item definitions
-│   ├── economy.schema.json     ← Economy & shop configuration
-│   ├── overview_map.schema.json← Overview map structure
-│   └── event.schema.json       ← Daily event definitions
-├── data/
-│   ├── animals.json            ← All animal ambassadors
-│   ├── items.json              ← All inventory items
-│   ├── economy.json            ← Coin tiers, caretakers, stamps, decor
-│   ├── events.json             ← Daily event pool
-│   └── overview_map.json       ← Building placements on overview
-└── rooms/
-    ├── nutrition_house.json    ← Nutrition House room layout
-    ├── studio.json             ← The Studio room layout
-    ├── pasture.json            ← The Pasture room layout
-    └── hq_office.json          ← HQ Office room layout
+├── README.md      ← Folder authority (markdown-only)
+└── design.md      ← This document (intent / sketches)
 ```
+
+Ship path: epic in `ROADMAP.md` → agent plan → promote Planned ballparks into `alveus-configs` Rust → code + tests. No schema regeneration gate.
 
 ---
 
@@ -76,7 +74,7 @@ design/
 
 | Constant | Value | Location |
 |---|---|---|
-| `TILE_SIZE` | `32` (pixels) | `crates/alveus-components` / world level |
+| `TILE_SIZE` | see `alveus-configs` | `crates/alveus-configs` (`TILE_SIZE`) |
 | `GRID_SNAP_EPSILON` | `0.05` (pixels) | `crates/alveus-world/src/entrance.rs` |
 | `PLAYER_Z_INDEX` | `2.0` | `crates/alveus-world/src/player.rs` |
 
@@ -175,9 +173,6 @@ pub enum Screen {
 
 ## 4. Overview Map
 
-**Schema:** [`schemas/overview_map.schema.json`](schemas/overview_map.schema.json)  
-**Data:** [`data/overview_map.json`](data/overview_map.json)
-
 ### Terrain
 
 - **Grid Size:** 50×50 tiles (1600×1600 pixels)
@@ -225,8 +220,6 @@ The entrance system (`crates/alveus-world/src/entrance.rs`) works as follows:
 ---
 
 ## 5. Room System
-
-**Schema:** [`schemas/room.schema.json`](schemas/room.schema.json)
 
 ### Room Lifecycle
 
@@ -279,8 +272,6 @@ Each room layout is fully specified in its JSON data file. The following section
 
 ### 6.1 Nutrition House
 
-**Data:** [`rooms/nutrition_house.json`](rooms/nutrition_house.json)
-
 | Property | Value |
 |---|---|
 | Grid Size | 11×11 tiles |
@@ -329,8 +320,6 @@ Y10: [W][W][W][W][W][W][W][W][W][W][W]
 
 ### 6.2 The Studio
 
-**Data:** [`rooms/studio.json`](rooms/studio.json)
-
 | Property | Value |
 |---|---|
 | Grid Size | 15×15 tiles |
@@ -371,13 +360,11 @@ Y10: [W][ ][ ][T][ ][ ][ ][ ][ ][ ][ ][B][ ][ ][W]   T=Tank Water  B=Climbing Br
 | `georgie_tank_clean` | Tank Water | (3,10) | 1×1 | ✓ | ✓ | `clean_tile` → georgie cleanliness |
 | `siren_enrichment_branch` | Climbing Branches | (11,10) | 1×1 | ✓ | ✓ | `enrich_animal` → siren happiness |
 
-**Resident Animals:** Georgie (African Bullfrog) at (4,12), Siren (Ball Python) at (12,12).
+**Resident Animals:** Georgie (African Bullfrog) at (4,12), Siren (Blue-fronted Amazon, memorial) at (12,12).
 
 ---
 
 ### 6.3 The Pasture
-
-**Data:** [`rooms/pasture.json`](rooms/pasture.json)
 
 | Property | Value |
 |---|---|
@@ -414,8 +401,6 @@ Y10: [W][V]                [T][T]                                  [W]   V=Spigo
 
 ### 6.4 HQ Office
 
-**Data:** [`rooms/hq_office.json`](rooms/hq_office.json)
-
 | Property | Value |
 |---|---|
 | Grid Size | 11×11 tiles |
@@ -445,17 +430,18 @@ Y10: [W][W][W][W][W][W][W][W][W][W][W]
 
 ## 7. Animal Ambassadors
 
-**Schema:** [`schemas/animal.schema.json`](schemas/animal.schema.json)  
-**Data:** [`data/animals.json`](data/animals.json)
+**Numbers / species labels:** [`alveus-configs`](../crates/alveus-configs) (`ANIMALS_DATA`).  
+**Lore:** [`ROADMAP.md`](../ROADMAP.md) (Siren parrot memorial).
 
 ### Roster
 
 | ID | Name | Species | Room | Category |
 |---|---|---|---|---|
 | `polly` | Polly | Silkie Chicken (*Gallus gallus domesticus*) | Nutrition House | bird |
+| `push_pop` | Push Pop | Sulcata Tortoise | Push Pop Enclosure | reptile |
 | `stompy` | Stompy | Emu (*Dromaius novaehollandiae*) | Pasture | bird |
 | `georgie` | Georgie | African Bullfrog (*Pyxicephalus adspersus*) | Studio | amphibian |
-| `siren` | Siren | Ball Python (*Python regius*) | Studio | reptile |
+| `siren` | Siren | Blue-fronted Amazon (*Amazona aestiva*) — memorial | Studio | bird |
 
 ### Behavior
 
@@ -471,7 +457,7 @@ Y10: [W][W][W][W][W][W][W][W][W][W][W]
 
 ### Per-Animal Stats
 
-Each animal has three stats normalized to the range `[0.0, 1.0]`:
+Each animal has three stats. Runtime uses integer `0..=STAT_SCALE` (see `alveus-configs`); fractions below are illustrative:
 
 | Stat | Decay Rate | Time to Empty | Restored By |
 |---|---|---|---|
@@ -500,9 +486,6 @@ Where each `mean_*` is the arithmetic mean of that stat across all active (unloc
 ---
 
 ## 9. Inventory (Caretaker Satchel)
-
-**Schema:** [`schemas/item.schema.json`](schemas/item.schema.json)  
-**Data:** [`data/items.json`](data/items.json)
 
 ### Satchel Rules
 
@@ -583,9 +566,6 @@ For multi-tile objects (e.g., Prep Table spanning (4,7)→(6,7)), the player can
 
 ## 11. Passive Economy
 
-**Schema:** [`schemas/economy.schema.json`](schemas/economy.schema.json)  
-**Data:** [`data/economy.json`](data/economy.json)
-
 ### Coin Generation Tiers
 
 Coins accumulate passively (including while offline) based on the Sanctuary Upkeep Score:
@@ -616,8 +596,6 @@ Reward: **50 coins** when all animal stats are at 100% (checked via HQ Clipboard
 
 ## 12. Caretaker Team
 
-**Data:** [`data/economy.json`](data/economy.json) → `caretakers` array
-
 | ID | Name | Color (sRGB) | Cost | Perk |
 |---|---|---|---|---|
 | `maya` | Maya Higa | (0.18, 0.80, 0.44) | Free | **Founder's Focus:** 25% faster feeding/cleaning in Pasture |
@@ -641,9 +619,6 @@ Currently a **colored circle** (`Circle::new(16.)`) using the caretaker's `circl
 ---
 
 ## 13. Daily Events
-
-**Schema:** [`schemas/event.schema.json`](schemas/event.schema.json)  
-**Data:** [`data/events.json`](data/events.json)
 
 ### Event Selection
 
@@ -693,7 +668,7 @@ The Stamp Album is accessed via the `stamp_album_desk` object in the HQ Office. 
 | Stompy's Great Escape | 100 |
 | Leaf Blower Duel | 150 |
 | Georgie's Crown | 200 |
-| Python Scarf | 250 |
+| Siren Memorial Stamp | 250 | (replaces old “Python Scarf”; see ROADMAP Epic 10) |
 | Mico's Rant | 300 |
 
 ### HQ Customizations
@@ -740,7 +715,7 @@ Triggered when **Upkeep Score < 0.30** (typically after ~2 days without playing)
 
 ### Fact Cards
 
-Each animal has an array of `FactCard` objects (defined in `animals.json`). Accessing them:
+Each animal has education fact-card copy (see [`ambassadors.md`](ambassadors.md); ship with ROADMAP Epic 9). Accessing them:
 
 1. Player walks adjacent to an animal NPC.
 2. Presses `Space` (the animal must be directly interactable, not through a tank/enclosure object).
@@ -755,22 +730,13 @@ On completing the daily checklist (all stats at 100%), the HQ Clipboard displays
 
 ---
 
-## 17. Data File Index
+## 17. Where numbers live now
 
-| File | Schema | Description |
-|---|---|---|
-| [`schemas/room.schema.json`](schemas/room.schema.json) | — | Room layout JSON Schema |
-| [`schemas/animal.schema.json`](schemas/animal.schema.json) | — | Animal ambassador JSON Schema |
-| [`schemas/item.schema.json`](schemas/item.schema.json) | — | Inventory item JSON Schema |
-| [`schemas/economy.schema.json`](schemas/economy.schema.json) | — | Economy configuration JSON Schema |
-| [`schemas/overview_map.schema.json`](schemas/overview_map.schema.json) | — | Overview map JSON Schema |
-| [`schemas/event.schema.json`](schemas/event.schema.json) | — | Daily event JSON Schema |
-| [`rooms/nutrition_house.json`](rooms/nutrition_house.json) | `room.schema.json` | Nutrition House room data |
-| [`rooms/studio.json`](rooms/studio.json) | `room.schema.json` | The Studio room data |
-| [`rooms/pasture.json`](rooms/pasture.json) | `room.schema.json` | The Pasture room data |
-| [`rooms/hq_office.json`](rooms/hq_office.json) | `room.schema.json` | HQ Office room data |
-| [`data/animals.json`](data/animals.json) | `animal.schema.json` | All animal ambassadors |
-| [`data/items.json`](data/items.json) | `item.schema.json` | All inventory items |
-| [`data/economy.json`](data/economy.json) | `economy.schema.json` | Economy, caretakers, shops |
-| [`data/events.json`](data/events.json) | `event.schema.json` | Daily event pool |
-| [`data/overview_map.json`](data/overview_map.json) | `overview_map.schema.json` | Overview map buildings |
+| Topic | Location |
+|---|---|
+| Shipped runtime tables | [`crates/alveus-configs/src/lib.rs`](../crates/alveus-configs/src/lib.rs) |
+| Planned ballparks (economy, events, items, future rooms) | [`crates/alveus-configs/README.md`](../crates/alveus-configs/README.md) |
+| Epic backlog / Siren lore | [`ROADMAP.md`](../ROADMAP.md) |
+| Agent workflow | [`AGENTS.md`](../AGENTS.md) |
+
+JSON schemas and `design/data` / `design/rooms` files were removed in Epic 0.

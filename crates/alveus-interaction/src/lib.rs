@@ -4,6 +4,7 @@ use alveus_cleaning::{
     try_pickup_poop,
 };
 use alveus_components::{CurrentTilePosition, Interactable, LastPickupMessage, Player, TilePosition};
+use alveus_configs::SATCHEL_MAX_SLOTS;
 use alveus_content::{ItemId, can_interact, item_display_name};
 use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
 use alveus_types::AnimalId;
@@ -435,7 +436,8 @@ pub fn try_drop_item(satchel: &mut PlayerSatchel) -> Result<ItemId, &'static str
 }
 
 pub fn try_give_item(satchel: &mut PlayerSatchel, item_id: ItemId) -> Result<(), &'static str> {
-    if satchel.item.is_some() {
+    let occupied = u8::from(satchel.item.is_some());
+    if occupied >= SATCHEL_MAX_SLOTS {
         return Err("Satchel is full");
     }
     satchel.item = Some(item_id);

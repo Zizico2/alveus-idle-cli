@@ -282,7 +282,7 @@ fn test_wheelbarrow_persists_in_save() {
 }
 
 #[test]
-fn push_pop_poop_config_matches_design_intent() {
+fn push_pop_poop_config_matches_configs() {
     let config = poop_config_for(EnclosureId::PushPopEnclosure);
     assert_eq!(config.spawn_thresholds, &[800, 500, 200]);
     assert_eq!(config.cleanliness_restore_per_poop, 350);

@@ -16,7 +16,10 @@ fn move_command_sets_player_intent() {
         MovementController::default(),
         alveus_components::CurrentTilePosition::default(),
         alveus_components::DesiredTilePosition::default(),
-        MovementDuration(Timer::from_seconds(0.25, TimerMode::Once)),
+        MovementDuration(Timer::from_seconds(
+            alveus_configs::PLAYER_MOVE_DURATION_SECS,
+            TimerMode::Once,
+        )),
     ));
 
     app.world_mut()

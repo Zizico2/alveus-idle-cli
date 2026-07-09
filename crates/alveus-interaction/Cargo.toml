@@ -8,6 +8,7 @@ description = "Player interaction dispatch (give item, feed animal, poop pickup/
 [dependencies]
 bevy = { workspace = true }
 alveus-types.workspace = true
+alveus-configs.workspace = true
 alveus-content.workspace = true
 alveus-components.workspace = true
 alveus-cleaning.workspace = true

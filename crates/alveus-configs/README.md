@@ -1,0 +1,147 @@
+# alveus-configs
+
+**Source of truth for gameplay numbers** in alveus-idle.
+
+| Kind | Where | Binding? |
+|------|--------|----------|
+| **Shipped** | Rust in [`src/lib.rs`](src/lib.rs) | Yes — runtime reads these |
+| **Planned defaults** | This README (below) | No — ballparks to start from when implementing; promote into Rust, then delete from Planned |
+
+Do **not** add new magic numbers in feature crates. Extend this crate (Rust) or add a Planned row here first.
+
+Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](../../design/) — especially [`ambassadors.md`](../../design/ambassadors.md), [`rooms.md`](../../design/rooms.md), [`copy-notes.md`](../../design/copy-notes.md). What to build next / lore: [`ROADMAP.md`](../../ROADMAP.md).
+
+**Lore:** Siren is a **Blue-fronted Amazon** (memorial / legacy ambassador). Snake shed mechanics belong with future snakes (Noodle / Patchy), not Siren — see ROADMAP lore table.
+
+---
+
+## Shipped (in Rust)
+
+| Domain | Symbols |
+|--------|---------|
+| Stat scale | `STAT_SCALE`, `STAT_FULL` |
+| Timing / feel | `TILE_SIZE`, `PLAYER_MOVE_DURATION_SECS`, `AUTOSAVE_INTERVAL_SECS` |
+| Neglect | `NEGLECT_UPKEEP_THRESHOLD` |
+| Satchel (current) | `SATCHEL_MAX_SLOTS` (= 1) |
+| Overview spawn | `OVERVIEW_PLAYER_SPAWN` |
+| Items (2) | `item_data` / `item_display_name` |
+| Animals | `ANIMALS_DATA`, `animal_data`, `enclosure_for_animal` |
+| Enclosures | `ENCLOSURES_DATA`, `enclosure_data` |
+| Placements | `POLLY_PLACEMENT`, `PUSH_POP_PLACEMENT`, `animal_default_placement` |
+| Rooms | `NUTRITION_HOUSE_ROOM`, `PUSH_POP_ENCLOSURE_ROOM` |
+| Cleaning | `WHEELBARROW_CAPACITY`, `poop_config_for`, cleaning math fns |
+| Offline wander | `OFFLINE_WANDER_STEPS_PER_HOUR` |
+
+**Promotion rule:** When an epic implements a Planned row, move it into Rust, wire call sites, remove it from Planned. Do not leave a second authoritative copy in `design/`.
+
+**Dual source (temporary):** Care restore deltas for feed/give are still authored on Tiled interior objects (`FeedAnimal.delta`, etc.). Epic 1 should centralize restores here; until then treat Planned care restores as the intended SoT for new work.
+
+---
+
+## Planned defaults (ballparks)
+
+Non-binding starting points for playtest tuning. Values below were mined from the old design JSON (now deleted). Prefer **parrot** framing for Siren; shed rows are under **future snakes**.
+
+### Satchel & economy
+
+| Knob | Ballpark | Notes |
+|------|----------|-------|
+| Satchel max slots | **2** | Shipped is `1`; raise in Epic 1 |
+| Coin tier Excellent | ≥ 0.80 upkeep → **20**/hour | |
+| Coin tier Fair | ≥ 0.30 upkeep → **10**/hour | |
+| Coin tier Neglected | &lt; 0.30 → **0**/hour | Aligns with `NEGLECT_UPKEEP_THRESHOLD` |
+| Daily HQ bonus | **50** coins | All stats at 100% when checking clipboard |
+| Upkeep formula | `(avg_hunger + avg_cleanliness + avg_happiness) / 3` | Already used in stats |
+
+### Care restores
+
+Normalized `1.0` → `STAT_SCALE` units when implemented.
+
+| Action | Ballpark restore | Notes |
+|--------|------------------|-------|
+| Feed / clean (typical) | **1.0** (= full bar) | |
+| Stompy clean (partial) | **0.34** | Old design; re-tune in Pasture epic |
+| Georgie enrich (soundboard share) | **0.5** | Shared happiness bump |
+| Prep chop chore | **5** taps | Prep table mini-chore |
+
+### Unimplemented items
+
+Full descriptions: [`design/copy-notes.md`](../../design/copy-notes.md).
+
+| Id | Display name | Category | Notes |
+|----|--------------|----------|-------|
+| `raw_veggie_tub` | Lettuce & Veggie Tub | raw_diet | Prep → `prepared_veggie_diet` |
+| `prepared_veggie_diet` | Prepared Veggie Diet | prepared_diet | Stompy |
+| `cricket_box` | Cricket Box | prepared_diet | Georgie |
+| `carnivore_raw_prep` | *(rework)* | raw_diet | Was snake prey — redesign for **parrot** Siren diet |
+| `prepared_carnivore_diet` | *(rework)* | prepared_diet | Same — parrot-appropriate |
+| `mini_mirror` | Mini Mirror | enrichment_toy | Polly |
+| `shiny_object` | Shiny Object | enrichment_toy | Stompy |
+| `shed_snake_skin` | Shed Snake Skin | collectible | **Future snakes**, not Siren |
+
+Shipped today: `TortoiseLeafyGreens`, `ChickenGrains`.
+
+### Daily events (weights)
+
+Narrative copy: [`design/copy-notes.md`](../../design/copy-notes.md).
+
+| Event | Weight | Room focus | Notes |
+|-------|--------|------------|-------|
+| Rainy Day | 0.20 | Pasture | Disable spigot; towel enrich in shelter |
+| Escaped Crickets | 0.15 | Studio | Catch-3 chore before Georgie feed |
+| Volunteer Day | 0.20 | Multi | +10 coins; help one clean chore |
+| Normal Day | 0.30 | — | No-op |
+| ~~Siren Shed Day~~ | ~~0.15~~ | — | **Deferred** → snake ambassadors (Epic 12); do not ship for parrot Siren |
+
+### Collectibles (stamps)
+
+Shop flavor: [`design/copy-notes.md`](../../design/copy-notes.md).
+
+| Stamp | Cost | Lore note |
+|-------|------|-----------|
+| Stompy's Great Escape | 100 | Stream gag |
+| Leaf Blower Duel | 150 | Maya / dust |
+| Georgie's Crown | 200 | |
+| ~~Python Scarf~~ | ~~250~~ | **Replace** with Siren **memorial** stamp (Epic 10) — not a snake scarf joke |
+| Mico's Rant | 300 | Future macaw |
+
+### HQ decor costs
+
+| Decor | Cost |
+|-------|------|
+| Emu Print Rug | 75 |
+| Plushie Shelf | 150 |
+| Ambient Soundbox | 200 |
+| Sanctuary Plaque | 500 |
+
+Descriptions: [`design/copy-notes.md`](../../design/copy-notes.md).
+
+### Caretaker unlock costs (ballpark)
+
+Perk/lore prose: [`design/copy-notes.md`](../../design/copy-notes.md).
+
+| Caretaker | Unlock | Perk sketch |
+|-----------|--------|-------------|
+| Maya | 0 | Founder's Focus — faster emu/raptor chores |
+| Kayla | 150 | Studio enrich bonus (re-tune for parrot + frog) |
+| Connor | 250 | Cleaning speed |
+
+### Future room tiles (ballpark)
+
+Object lists: [`design/rooms.md`](../../design/rooms.md). Care/education: [`design/ambassadors.md`](../../design/ambassadors.md).
+
+| Room | Grid | Spawn | Exit door | Exit → overview |
+|------|------|-------|-----------|-----------------|
+| Studio | 15×15 | (7, 2) | (7, 0) | (15, 14) — verify vs Tiled when building |
+| Pasture | 21×21 | (10, 2) | (10, 0) | (20, 24) |
+| HQ Office | 11×11 | (5, 2) | (5, 0) | (25, 9) |
+
+Siren Studio care (intent): parrot feeding, cleaning, foraging/vocal enrichment — **not** mist/shed. Memorial framing per ROADMAP Epic 7.
+
+### Snake shed (Epic 12 — Noodle / Patchy)
+
+| Knob | Ballpark |
+|------|----------|
+| Extra mist interactions on shed day | **3** |
+| Reward | `shed_snake_skin` collectible → HQ display |
+| Event weight | ~0.15 (was old Siren shed) |

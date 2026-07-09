@@ -12,6 +12,20 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
 
 ---
 
+## 0. Design docs (three-layer SoT)
+
+| Layer | Owns |
+|-------|------|
+| [`ROADMAP.md`](ROADMAP.md) | Epic backlog, handoff briefs, lore corrections (Siren parrot memorial) |
+| [`crates/alveus-configs`](crates/alveus-configs) | **All gameplay numbers** — Rust for shipped; crate `README.md` Planned section for ballparks |
+| [`design/`](design/) | Markdown-only historical intent / copy — **not** binding; no JSON |
+
+**Workflow:** pick an epic from the roadmap → write an implementation plan → put new numbers in `alveus-configs` (promote from Planned into Rust) → code + tests. Do **not** invent magic locals in feature crates, and do not regenerate design JSON (there is none). Re-read code and configs; do not trust stale coords in old markdown sketches.
+
+**Siren:** Blue-fronted Amazon, memorial/legacy — not a ball python. Snake shed → Epic 12 (Noodle/Patchy).
+
+---
+
 ## 1. Golden rules
 
 1. **Play like a player.** Drive the game only through the [`GameCommand`] verb
@@ -184,7 +198,7 @@ correct.
 | Push Pop Enclosure entrance tiles | `x = 38..=41`, `y = 11..=12` | same as above |
 | Nutrition House exit spawn (overview) | `(33, 12)` | `NutritionHousePlugin` `RoomConfig` in `crates/alveus-world/src/room.rs` |
 | Push Pop exit spawn (overview) | `(40, 33)` | `PushPopEnclosurePlugin` `RoomConfig` in `crates/alveus-world/src/room.rs` |
-| One tile step (sim time) | ~0.25s | `MovementDuration` in `crates/alveus-world/src/player.rs` |
+| One tile step (sim time) | ~`PLAYER_MOVE_DURATION_SECS` | `alveus_configs::PLAYER_MOVE_DURATION_SECS` |
 
 ### Minimal script skeleton
 

@@ -1,20 +1,23 @@
-//! Hardcoded game content synced with `design/data/*.json` and `design/rooms/*.json`.
-//! Placement for room objects and animals comes from Tiled maps; interaction rules live here.
+//! Interaction helpers and room-object ids.
 //!
-//! Static data tables (items, animal placements) live in [`alveus_configs`] and
-//! are re-exported here so callers have a single content entry point.
+//! Static gameplay tables (items, animals, placements, economy knobs) live in
+//! [`alveus_configs`] and are re-exported here so callers have a single content
+//! entry point. Placement for room objects comes from Tiled maps.
 
-use alveus_types::{AnimalId, EnclosureId};
+use alveus_types::AnimalId;
 use bevy::prelude::*;
 
 pub use alveus_configs::{
-    AnimalPlacementDef, ItemStaticData, OFFLINE_WANDER_STEPS_PER_HOUR, POLLY_PLACEMENT,
-    PUSH_POP_PLACEMENT, animal_default_placement, item_data, item_display_name,
+    ANIMALS_DATA, AnimalPlacementDef, AnimalStaticData, ENCLOSURES_DATA, EnclosureStaticData,
+    ItemStaticData, NUTRITION_HOUSE_ROOM, OFFLINE_WANDER_STEPS_PER_HOUR, OVERVIEW_PLAYER_SPAWN,
+    POLLY_PLACEMENT, PUSH_POP_ENCLOSURE_ROOM, PUSH_POP_PLACEMENT, RoomTileConfig, STAT_FULL,
+    STAT_SCALE, animal_data, animal_default_placement, enclosure_data, enclosure_for_animal,
+    item_data, item_display_name,
 };
 pub use alveus_types::{ItemId, TileBounds, TilePosition};
 
 // ---------------------------------------------------------
-// Room objects & interactions (sync with design/rooms/*.json)
+// Room objects & interactions (Tiled-authored object ids)
 // ---------------------------------------------------------
 
 /// Identifies an interactable room object. Authored on interior tiles via Tiled custom properties.
@@ -34,19 +37,6 @@ pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
         RoomObjectId::SeedChest => "Seed Chest",
         RoomObjectId::PushPopFeedingDish => "Push Pop's Feeding Dish",
         RoomObjectId::CompostBin => "Compost Bin",
-    }
-}
-
-// ---------------------------------------------------------
-// Derived lookups over the shared placement tables
-// ---------------------------------------------------------
-
-pub fn enclosure_for_animal(animal_id: AnimalId) -> EnclosureId {
-    match animal_id {
-        AnimalId::Polly => EnclosureId::NutritionHousePlaypen,
-        AnimalId::PushPop => EnclosureId::PushPopEnclosure,
-        AnimalId::Stompy => EnclosureId::Pasture,
-        AnimalId::Georgie | AnimalId::Siren => EnclosureId::ReptileEnclosure,
     }
 }
 

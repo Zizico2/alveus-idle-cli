@@ -3,7 +3,7 @@ name = "alveus-configs"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Static game-design tables (poop configs, animal placements, items) and cleaning math for alveus-idle"
+description = "Canonical gameplay numbers (stats, rooms, items, cleaning) for alveus-idle"
 
 [dependencies]
 alveus-types.workspace = true

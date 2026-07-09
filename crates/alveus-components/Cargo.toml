@@ -8,6 +8,7 @@ description = "Shared ECS components, markers, and cross-feature state for alveu
 [dependencies]
 bevy = { workspace = true }
 alveus-types.workspace = true
+alveus-configs.workspace = true
 
 [lints]
 workspace = true

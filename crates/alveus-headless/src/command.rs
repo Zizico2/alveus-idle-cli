@@ -40,7 +40,8 @@ use crate::camera::HeadlessRenderTarget;
 pub enum GameCommand {
     /// Start (or change) the player walking one direction. The player keeps
     /// walking tile-by-tile until [`GameCommand::MoveStop`] is sent or movement
-    /// is blocked by an obstacle. One in-flight tile step takes ~0.25s of sim
+    /// is blocked by an obstacle. One in-flight tile step takes
+    /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
     /// to advance a single tile predictably.
     Move(MovementIntent),
