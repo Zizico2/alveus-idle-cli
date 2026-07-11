@@ -541,9 +541,13 @@ pub struct RequiredCollisionMapHandles {
     pub entries: Vec<(CollisionMapKey, Handle<TiledMapAsset>)>,
 }
 
-/// Keys that were reloaded this Loading visit and should not be re-recorded as
-/// failed until their load state leaves `Failed` at least once (Bevy keeps the
-/// previous Failed state until the reload task starts).
+/// Tracks in-flight [`AssetServer::reload`] attempts for failed collision maps.
+///
+/// Bevy often keeps `RecursiveDependencyLoadState::Failed` through a failed
+/// reload (no intermediate non-Failed state). Gating on "state left Failed"
+/// would suppress the diagnostic forever and fall through to the Loading
+/// timeout. Completion is therefore driven by reload-attempt signals:
+/// [`AssetLoadFailedEvent`] or reaching `Loaded`.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct CollisionReloadGate {
     pub awaiting_retry: HashSet<CollisionMapKey>,
@@ -552,6 +556,10 @@ pub struct CollisionReloadGate {
 impl CollisionReloadGate {
     pub fn clear(&mut self) {
         self.awaiting_retry.clear();
+    }
+
+    pub fn is_awaiting(&self, key: CollisionMapKey) -> bool {
+        self.awaiting_retry.contains(&key)
     }
 }
 
@@ -566,12 +574,25 @@ impl RequiredCollisionMapHandles {
     }
 }
 
+/// Map a Bevy asset path back to a required collision key, if any.
+pub fn collision_map_key_for_asset_path(path: &bevy::asset::AssetPath<'_>) -> Option<CollisionMapKey> {
+    let path_str = path.path().to_string_lossy();
+    REQUIRED_COLLISION_KEYS
+        .iter()
+        .copied()
+        .find(|key| key.asset_path() == path_str)
+}
+
 /// Re-request any required maps that are currently in a Failed load state.
 ///
 /// Call this when starting a fresh Loading attempt so Play can recover after
 /// assets are repaired on disk (or in the test memory store). Keys that were
-/// reloaded are recorded in [`CollisionReloadGate`] so the previous Failed
-/// state is not immediately re-recorded before the reload starts.
+/// reloaded are recorded in [`CollisionReloadGate`] until that attempt
+/// completes (see [`advance_collision_reload_gate`]).
+///
+/// Callers should drain pending [`AssetLoadFailedEvent`]s for `TiledMapAsset`
+/// before invoking this so a prior attempt's failure does not immediately
+/// complete the new gate.
 pub fn reload_failed_collision_maps(
     asset_server: &AssetServer,
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
@@ -594,11 +615,51 @@ pub fn reload_failed_collision_maps(
     }
 }
 
+/// Mark reload attempts complete when Bevy reports a new failure or a Loaded map.
+///
+/// Must run before [`record_failed_collision_map_loads`] each frame while Loading.
+pub fn advance_collision_reload_gate<'a>(
+    asset_server: &AssetServer,
+    handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
+    gate: &mut CollisionReloadGate,
+    failed_events: impl IntoIterator<Item = &'a bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>,
+) {
+    use bevy::asset::RecursiveDependencyLoadState;
+
+    // Always walk the events so the caller's MessageReader advances, even when
+    // nothing is gated.
+    for event in failed_events {
+        if let Some(key) = collision_map_key_for_asset_path(&event.path) {
+            gate.awaiting_retry.remove(&key);
+        }
+        for &(key, ref handle) in handles {
+            if handle.id() == event.id {
+                gate.awaiting_retry.remove(&key);
+            }
+        }
+    }
+
+    for &(key, ref handle) in handles {
+        if !gate.awaiting_retry.contains(&key) {
+            continue;
+        }
+        if matches!(
+            asset_server.get_recursive_dependency_load_state(handle),
+            Some(RecursiveDependencyLoadState::Loaded)
+        ) {
+            gate.awaiting_retry.remove(&key);
+        }
+    }
+}
+
 /// Detect required Tiled maps that failed to load and record them once per key.
 ///
 /// Inspects pre-requested handles from [`RequiredCollisionMapHandles`] (or the
 /// live [`LevelAssets`] / [`InteriorAssets`] handles). Does **not** call
 /// [`AssetServer::load`] — repeated loads of a failing path can stall in `Loading`.
+///
+/// Keys listed in [`CollisionReloadGate`] are skipped until
+/// [`advance_collision_reload_gate`] marks that reload attempt complete.
 ///
 /// Logging is a side effect of recording a *new* failure. Deduplicates by
 /// [`CollisionMapKey`]. Full Bevy load-state details go to the log; the resource
@@ -607,26 +668,17 @@ pub fn record_failed_collision_map_loads(
     asset_server: &AssetServer,
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
     failures: &mut CollisionLoadFailures,
-    gate: &mut CollisionReloadGate,
+    gate: &CollisionReloadGate,
 ) {
     use bevy::asset::RecursiveDependencyLoadState;
 
     for &(key, ref handle) in handles {
-        if failures.contains_key(key) {
+        if failures.contains_key(key) || gate.is_awaiting(key) {
             continue;
         }
         let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
             continue;
         };
-
-        if gate.awaiting_retry.contains(&key) {
-            // Still seeing the pre-reload Failed result — wait until the reload
-            // advances the state, then allow a fresh Failed to be recorded.
-            if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
-                continue;
-            }
-            gate.awaiting_retry.remove(&key);
-        }
 
         if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
             let failure = CollisionLoadFailure {

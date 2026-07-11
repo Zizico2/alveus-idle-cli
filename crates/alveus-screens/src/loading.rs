@@ -10,9 +10,9 @@ use alveus_app::Screen;
 use alveus_asset_tracking::ResourceHandles;
 use alveus_collision::{
     CollisionLoadFailures, CollisionMasks, CollisionReloadGate, InteriorAssets, LevelAssets,
-    REQUIRED_COLLISION_KEYS, RequiredCollisionMapHandles, build_all_collision_masks,
-    collision_ready, record_failed_collision_map_loads, reload_failed_collision_maps,
-    required_collision_handles,
+    REQUIRED_COLLISION_KEYS, RequiredCollisionMapHandles, advance_collision_reload_gate,
+    build_all_collision_masks, collision_ready, record_failed_collision_map_loads,
+    reload_failed_collision_maps, required_collision_handles,
 };
 use alveus_configs::{LOADING_FAILURE_RETURN_SECS, LOADING_TIMEOUT_SECS};
 use alveus_theme::prelude::*;
@@ -96,7 +96,10 @@ pub(super) fn plugin(app: &mut App) {
             // `Loading` and hide `Failed` from failure detection.
             build_collision_masks_during_loading
                 .run_if(in_state(Screen::Loading).and_then(all_required_collision_maps_terminal)),
-            detect_collision_load_failures_during_loading.run_if(in_state(Screen::Loading)),
+            advance_collision_reload_gate_during_loading.run_if(in_state(Screen::Loading)),
+            detect_collision_load_failures_during_loading
+                .after(advance_collision_reload_gate_during_loading)
+                .run_if(in_state(Screen::Loading)),
             update_loading_status_label
                 .after(detect_collision_load_failures_during_loading)
                 .run_if(in_state(Screen::Loading)),
@@ -121,12 +124,17 @@ fn clear_loading_diagnostics(
     mut failures: ResMut<CollisionLoadFailures>,
     mut timeout: ResMut<LoadingTimeoutDiagnostic>,
     mut gate: ResMut<CollisionReloadGate>,
+    mut failed_messages: ResMut<Messages<bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>>,
     asset_server: Res<AssetServer>,
     required: Res<RequiredCollisionMapHandles>,
     level_assets: Option<Res<LevelAssets>>,
     interior_assets: Option<Res<InteriorAssets>>,
     mut commands: Commands,
 ) {
+    // Drop failure events from earlier attempts so they cannot immediately
+    // complete the gate for this Loading visit's reload.
+    failed_messages.clear();
+
     let handles = required_collision_handles(
         &required,
         level_assets.as_deref(),
@@ -210,20 +218,36 @@ fn build_collision_masks_during_loading(
     }
 }
 
-fn detect_collision_load_failures_during_loading(
+fn advance_collision_reload_gate_during_loading(
     asset_server: Res<AssetServer>,
     required: Res<RequiredCollisionMapHandles>,
     level_assets: Option<Res<LevelAssets>>,
     interior_assets: Option<Res<InteriorAssets>>,
-    mut failures: ResMut<CollisionLoadFailures>,
     mut gate: ResMut<CollisionReloadGate>,
+    mut failed_events: MessageReader<bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>,
 ) {
     let handles = required_collision_handles(
         &required,
         level_assets.as_deref(),
         interior_assets.as_deref(),
     );
-    record_failed_collision_map_loads(&asset_server, &handles, &mut failures, &mut gate);
+    advance_collision_reload_gate(&asset_server, &handles, &mut gate, failed_events.read());
+}
+
+fn detect_collision_load_failures_during_loading(
+    asset_server: Res<AssetServer>,
+    required: Res<RequiredCollisionMapHandles>,
+    level_assets: Option<Res<LevelAssets>>,
+    interior_assets: Option<Res<InteriorAssets>>,
+    mut failures: ResMut<CollisionLoadFailures>,
+    gate: Res<CollisionReloadGate>,
+) {
+    let handles = required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    record_failed_collision_map_loads(&asset_server, &handles, &mut failures, &gate);
 }
 
 fn update_loading_status_label(

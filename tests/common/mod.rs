@@ -189,15 +189,24 @@ pub fn cleanup_save(save_path: &str) {
     let _ = std::fs::remove_file(save_path);
 }
 
+/// When present, the loading diagnostic harness never builds masks / enters
+/// Gameplay, so the timeout watchdog can be exercised with fast-loading assets.
+#[derive(Resource, Debug, Default, Clone, Copy)]
+pub struct StallLoadingForTimeoutTest;
+
 fn test_clear_loading_diagnostics(
     mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
     mut timeout: ResMut<alveus_screens::LoadingTimeoutDiagnostic>,
     mut gate: ResMut<alveus_collision::CollisionReloadGate>,
+    mut failed_messages: ResMut<
+        Messages<bevy::asset::AssetLoadFailedEvent<bevy_ecs_tiled::prelude::TiledMapAsset>>,
+    >,
     asset_server: Res<AssetServer>,
     required: Res<alveus_collision::RequiredCollisionMapHandles>,
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
 ) {
+    failed_messages.clear();
     let handles = alveus_collision::required_collision_handles(
         &required,
         level_assets.as_deref(),
@@ -234,8 +243,13 @@ fn test_build_masks_during_loading(
     map_assets: Res<Assets<bevy_ecs_tiled::prelude::TiledMapAsset>>,
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+    stall: Option<Res<StallLoadingForTimeoutTest>>,
 ) {
     use alveus_collision::{build_all_collision_masks, collision_ready};
+
+    if stall.is_some() {
+        return;
+    }
 
     if let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets)
         && !collision_ready(&masks)
@@ -244,13 +258,36 @@ fn test_build_masks_during_loading(
     }
 }
 
+fn test_advance_collision_reload_gate(
+    asset_server: Res<AssetServer>,
+    required: Res<alveus_collision::RequiredCollisionMapHandles>,
+    level_assets: Option<Res<alveus_collision::LevelAssets>>,
+    interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+    mut gate: ResMut<alveus_collision::CollisionReloadGate>,
+    mut failed_events: MessageReader<
+        bevy::asset::AssetLoadFailedEvent<bevy_ecs_tiled::prelude::TiledMapAsset>,
+    >,
+) {
+    let handles = alveus_collision::required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    alveus_collision::advance_collision_reload_gate(
+        &asset_server,
+        &handles,
+        &mut gate,
+        failed_events.read(),
+    );
+}
+
 fn test_detect_collision_failures(
     asset_server: Res<AssetServer>,
     required: Res<alveus_collision::RequiredCollisionMapHandles>,
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
     mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
-    mut gate: ResMut<alveus_collision::CollisionReloadGate>,
+    gate: Res<alveus_collision::CollisionReloadGate>,
 ) {
     let handles = alveus_collision::required_collision_handles(
         &required,
@@ -261,7 +298,7 @@ fn test_detect_collision_failures(
         &asset_server,
         &handles,
         &mut failures,
-        &mut gate,
+        &gate,
     );
 }
 
@@ -327,13 +364,17 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
         (
             test_build_masks_during_loading
                 .run_if(in_state(Screen::Loading).and_then(test_all_required_maps_terminal)),
-            test_detect_collision_failures.run_if(in_state(Screen::Loading)),
+            test_advance_collision_reload_gate.run_if(in_state(Screen::Loading)),
+            test_detect_collision_failures
+                .after(test_advance_collision_reload_gate)
+                .run_if(in_state(Screen::Loading)),
             move |resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
                   masks: Res<CollisionMasks>,
                   failures: Res<CollisionLoadFailures>,
+                  stall: Option<Res<StallLoadingForTimeoutTest>>,
                   screen: Res<State<Screen>>,
                   mut next_screen: ResMut<NextState<Screen>>| {
-                if *screen.get() != Screen::Loading {
+                if stall.is_some() || *screen.get() != Screen::Loading {
                     return;
                 }
                 if failures.is_empty()

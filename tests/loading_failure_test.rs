@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use alveus_app::Screen;
 use alveus_collision::{
     COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED, CollisionLoadFailures, CollisionMapKey,
-    CollisionMasks,
 };
 use alveus_menus::PlayClickEvent;
 use alveus_screens::{LoadingTimeoutDiagnostic, LoadingTiming};
@@ -143,8 +142,82 @@ fn loading_retry_recovers_after_asset_is_repaired() {
 }
 
 #[test]
+fn loading_retry_while_still_broken_records_failure_again() {
+    let mut app = common::loading_diagnostic_app(&[("maps/overview/map.tmx", CORRUPT_TMX)]);
+    // Long timeout: a permanently gated Failed must not be misreported as timeout.
+    app.insert_resource(LoadingTiming {
+        timeout_secs: 30.0,
+        failure_return_secs: 0.05,
+    });
+
+    app.world_mut().trigger(PlayClickEvent);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        app.update();
+        if *app.world().resource::<State<Screen>>().get() == Screen::Title
+            && !app.world().resource::<CollisionLoadFailures>().is_empty()
+        {
+            break;
+        }
+    }
+    assert!(
+        !app.world().resource::<CollisionLoadFailures>().is_empty(),
+        "first Play must record an explicit collision load failure"
+    );
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Title
+    );
+
+    // Play again without repairing — reload stays Failed with no intermediate
+    // non-Failed state. The gate must still complete so we re-record failure.
+    app.world_mut().trigger(PlayClickEvent);
+    app.update();
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Loading
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut saw_failure_again = false;
+    while Instant::now() < deadline {
+        app.update();
+        let timeout = app.world().resource::<LoadingTimeoutDiagnostic>();
+        assert!(
+            !timeout.timed_out,
+            "still-broken retry must not fall through to the Loading timeout"
+        );
+        let failures = app.world().resource::<CollisionLoadFailures>();
+        if !failures.is_empty() {
+            saw_failure_again = true;
+            assert!(
+                failures.contains_key(CollisionMapKey::Overview),
+                "expected Overview failure on retry, got {:?}",
+                failures.entries
+            );
+        }
+        if *app.world().resource::<State<Screen>>().get() == Screen::Title && saw_failure_again {
+            return;
+        }
+        assert_ne!(
+            *app.world().resource::<State<Screen>>().get(),
+            Screen::Gameplay,
+            "still-broken retry must not enter Gameplay"
+        );
+    }
+
+    panic!(
+        "expected Title with CollisionLoadFailures after still-broken retry; screen={:?}, failures={:?}, timeout={:?}",
+        app.world().resource::<State<Screen>>().get(),
+        app.world().resource::<CollisionLoadFailures>(),
+        app.world().resource::<LoadingTimeoutDiagnostic>()
+    );
+}
+
+#[test]
 fn pending_assets_timeout_records_distinct_diagnostic() {
     let mut app = common::loading_diagnostic_app(&[]);
+    app.insert_resource(common::StallLoadingForTimeoutTest);
     app.insert_resource(LoadingTiming {
         timeout_secs: 0.05,
         failure_return_secs: 60.0,
@@ -155,7 +228,6 @@ fn pending_assets_timeout_records_distinct_diagnostic() {
 
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
-        *app.world_mut().resource_mut::<CollisionMasks>() = CollisionMasks::default();
         app.update();
         match *app.world().resource::<State<Screen>>().get() {
             Screen::Title => {
