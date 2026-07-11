@@ -3,3 +3,4 @@
 # This file contains environment-specific configuration like linker settings
 .cargo/config.toml
 assets/maps/overview/alveus-idle.tiled-session
+save.ron
