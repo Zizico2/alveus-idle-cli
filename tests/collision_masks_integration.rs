@@ -59,23 +59,14 @@ fn overview_compost_bin_blocked_in_collision_mask() {
 
 #[test]
 fn all_required_collision_maps_load_without_failures() {
-    use alveus_collision::{CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks};
+    use alveus_collision::{
+        CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks,
+    };
     use alveus_types::EnclosureId;
 
     let mut app = common::headless_tiled_test_app();
     app.init_resource::<CollisionMasks>();
     app.init_resource::<CollisionLoadFailures>();
-    {
-        let handles = alveus_collision::RequiredCollisionMapHandles::from_asset_server(
-            app.world().resource::<AssetServer>(),
-        );
-        app.insert_resource(handles);
-    }
-
-    // Warm the same paths LevelAssets / InteriorAssets use.
-    for key in REQUIRED_COLLISION_KEYS {
-        let _ = common::load_tiled_map(&mut app, key.asset_path());
-    }
 
     let (level, interior) = {
         let server = app.world().resource::<AssetServer>();
@@ -95,23 +86,26 @@ fn all_required_collision_maps_load_without_failures() {
     app.insert_resource(level);
     app.insert_resource(interior);
 
-    app.world_mut().resource_scope(|world, mut masks: Mut<CollisionMasks>| {
-        let map_assets = world.resource::<Assets<TiledMapAsset>>();
-        let level_assets = world.resource::<LevelAssets>();
-        let interior_assets = world.resource::<InteriorAssets>();
-        build_all_collision_masks(&mut masks, map_assets, level_assets, interior_assets);
-    });
+    // Warm the paths after retaining the same strong handles production keeps.
+    for key in REQUIRED_COLLISION_KEYS {
+        let _ = common::load_tiled_map(&mut app, key.asset_path());
+    }
+
+    app.world_mut()
+        .resource_scope(|world, mut masks: Mut<CollisionMasks>| {
+            let map_assets = world.resource::<Assets<TiledMapAsset>>();
+            let level_assets = world.resource::<LevelAssets>();
+            let interior_assets = world.resource::<InteriorAssets>();
+            build_all_collision_masks(&mut masks, map_assets, level_assets, interior_assets);
+        });
 
     app.world_mut()
         .resource_scope(|world, mut failures: Mut<CollisionLoadFailures>| {
             let asset_server = world.resource::<AssetServer>();
-            let required = world.resource::<alveus_collision::RequiredCollisionMapHandles>();
-            let level = world.get_resource::<LevelAssets>();
-            let interior = world.get_resource::<InteriorAssets>();
-            let handles =
-                alveus_collision::required_collision_handles(required, level, interior);
-            let mut gate = alveus_collision::CollisionReloadGate::default();
-            record_failed_collision_map_loads(asset_server, &handles, &mut failures, &gate);
+            let level = world.resource::<LevelAssets>();
+            let interior = world.resource::<InteriorAssets>();
+            let handles = alveus_collision::required_collision_handles(level, interior);
+            record_failed_collision_map_loads(asset_server, &handles, &mut failures);
         });
 
     let masks = app.world().resource::<CollisionMasks>();

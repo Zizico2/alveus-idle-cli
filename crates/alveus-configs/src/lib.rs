@@ -35,12 +35,6 @@ pub const AUTOSAVE_INTERVAL_SECS: f32 = 5.0;
 /// Wall-clock seconds before Loading aborts back to Title.
 pub const LOADING_TIMEOUT_SECS: f32 = 15.0;
 
-/// Wall-clock seconds after a required collision map fails before returning to Title.
-///
-/// Shorter than [`LOADING_TIMEOUT_SECS`] so explicit asset failures do not wait out
-/// the full hang watchdog.
-pub const LOADING_FAILURE_RETURN_SECS: f32 = 1.5;
-
 /// Upkeep score at or below this shows the neglect banner (and related Epic 5 effects).
 pub const NEGLECT_UPKEEP_THRESHOLD: f32 = 0.30;
 

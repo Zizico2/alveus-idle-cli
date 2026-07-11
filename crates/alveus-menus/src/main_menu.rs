@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use alveus_app::{Menu, Screen};
 use alveus_asset_tracking::ResourceHandles;
-use alveus_collision::{CollisionMasks, collision_ready};
+use alveus_collision::{CollisionLoadFailures, CollisionMasks, collision_ready};
 use alveus_theme::widget;
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
@@ -43,17 +43,23 @@ fn enter_loading_or_gameplay_screen(_: On<Pointer<Click>>, mut commands: Command
 pub fn handle_play_click(
     _: On<PlayClickEvent>,
     resource_handles: Res<ResourceHandles>,
+    screen: Res<State<Screen>>,
     masks: Option<Res<CollisionMasks>>,
+    failures: Option<Res<CollisionLoadFailures>>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    // LevelAssets/InteriorAssets may insert before Tiled maps finish (they are not
-    // `#[dependency]`-gated). When CollisionMasks is present, require masks before
-    // skipping Loading; when absent (minimal tests without CollisionPlugin), do not gate.
+    if *screen.get() == Screen::FatalError {
+        return;
+    }
+    // Handle collections exist before their maps finish. Require current masks and
+    // no previous load failure before skipping Loading; a failed attempt must visit
+    // Loading again so its map can be reloaded.
     let collision_ok = match masks.as_deref() {
         None => true,
         Some(m) => collision_ready(m),
     };
-    if resource_handles.is_all_done() && collision_ok {
+    let collision_failed = failures.is_some_and(|failures| !failures.is_empty());
+    if resource_handles.is_all_done() && collision_ok && !collision_failed {
         next_screen.set(Screen::Gameplay);
     } else {
         next_screen.set(Screen::Loading);

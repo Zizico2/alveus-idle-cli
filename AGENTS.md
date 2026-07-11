@@ -58,10 +58,79 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
    spawned poop piles, etc.) can block the intended tile. Tile-counting is
    useful for planning routes; it is never a substitute for reading position
    back from the ECS.
+8. **Delegate mundane verbose work** when you are a high-cost lead agent.
+   See [Cost-tier delegation](#cost-tier-delegation) below.
 
 ---
 
-## 2. The verb set (what an agent may do)
+## Cost-tier delegation
+
+High-cost lead agents should **not** burn context on long, mechanical, or
+high-volume chores. Spawn a cheaper worker subagent for those, keep the
+reasoning/design loop on the lead, and **require a fixed summary shape** so the
+lead never has to re-ingest raw logs.
+
+### Who this applies to (leads)
+
+| Family | Lead (expensive) — do design / judgment here |
+|--------|-----------------------------------------------|
+| Claude | Fable, Opus |
+| Codex / GPT | 5.6 Sol, 5.6 Terra |
+| Grok | 4.5 |
+
+### Prefer these workers
+
+| Lead | Delegate mundane work to |
+|------|--------------------------|
+| Claude Fable / Opus | Claude Sonnet 5 medium (or similar mid-tier Sonnet) |
+| Codex / GPT 5.6 Sol or Terra | GPT 5.6 Luna medium |
+| Grok 4.5 | Composer 2.5 |
+
+If the exact mid-tier slug is unavailable in the product UI, pick the cheapest
+capable model in the same family — do not run the chore on the lead.
+
+### Delegate these (non-exhaustive)
+
+- Running tests (`cargo test`, feature matrices, flaky re-runs)
+- Builds / checks (`cargo build`, `cargo check`, clippy)
+- Formatting (`cargo fmt`, similar)
+- Wide file scraping (bulk `grep`/`rg`, reading many files for inventory)
+- Collecting long command output, CI logs, or compile error dumps
+- Other high-token, low-judgment chores where the lead only needs a verdict
+
+**Keep on the lead:** architecture choices, GameCommand / ECS design, BRP
+semantics, non-obvious debugging, writing the plan, and interpreting worker
+summaries into the next change.
+
+### Required worker summary structure
+
+When launching a worker, tell it to return **only** this shape (no raw log
+dumps unless a short excerpt is necessary to unblock the lead):
+
+```markdown
+## Result
+pass | fail | partial
+
+## What ran
+- <command or task> → <exit / outcome>
+
+## Key findings
+- <1–5 bullets; facts only>
+
+## Failures / warnings
+- <none, or short verbatim excerpt + file:line if known>
+
+## Paths
+- <files or crates that matter for the next lead step>
+
+## Suggested next step for lead
+- <one concrete action>
+```
+
+Workers must not paste full test suites, full `cargo` trees, or entire files
+back to the lead. Prefer counts, names of failing tests, and the first
+actionable error.
+
 
 The authoritative list lives in `crates/alveus-headless/src/command.rs` (`GameCommand`), fully
 documented per-variant in that enum's doc comments. Do not treat line-number
@@ -389,6 +458,7 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 | Fast, logic-only test | `MinimalPlugins` unit test (`tests/common`) |
 | Protocol-level test | in-process `BrpSender` e2e (`tests/brp_tests.rs`) |
 | Live exploration/debugging | Python driver in `scripts/` against `--realtime` |
+| Mundane builds/tests/scrapes on a costly lead | Delegate to a mid-tier worker; require the fixed summary (Cost-tier delegation) |
 
 BRP event path: `alveus_headless::command::GameCommand` (defined in
 `crates/alveus-headless/src/command.rs`). Default port: `15702` (`DEFAULT_BRP_PORT` in

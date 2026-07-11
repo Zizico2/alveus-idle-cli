@@ -648,14 +648,13 @@ fn brp_collision_load_failures_resource_is_queryable() {
     let save_path = "brp_collision_load_failures.ron";
     let mut app = care_brp_app(save_path);
 
-    app.world_mut()
-        .insert_resource(CollisionLoadFailures {
-            entries: vec![CollisionLoadFailure {
-                key: CollisionMapKey::Overview,
-                asset_path: CollisionMapKey::Overview.asset_path().to_string(),
-                reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
-            }],
-        });
+    app.world_mut().insert_resource(CollisionLoadFailures {
+        entries: vec![CollisionLoadFailure {
+            key: CollisionMapKey::Overview,
+            asset_path: CollisionMapKey::Overview.asset_path().to_string(),
+            reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
+        }],
+    });
 
     let result = brp_request(
         &mut app,

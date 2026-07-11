@@ -27,13 +27,13 @@ use alveus_types::{AnimalId, EnclosureId};
 // Level assets (Tiled map handles)
 // ---------------------------------------------------------
 
-#[derive(Resource, Asset, Clone, Reflect)]
+/// Handles used by the overview world.
+///
+/// This resource is available immediately; callers inspect the referenced map's
+/// root and dependency load states before using it.
+#[derive(Resource, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct LevelAssets {
-    // Intentionally not `#[dependency]`: wrapping the map handle as a dependency of
-    // this asset can stall a failed Tiled load in `Loading` forever, which hides
-    // failures from [`record_failed_collision_map_loads`]. Readiness is gated by
-    // [`collision_ready`] / Loading instead.
     pub map: Handle<TiledMapAsset>,
 }
 
@@ -46,10 +46,10 @@ impl FromWorld for LevelAssets {
     }
 }
 
-#[derive(Resource, Asset, Clone, Reflect)]
+/// Handles used by interior worlds. See [`LevelAssets`].
+#[derive(Resource, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct InteriorAssets {
-    // See [`LevelAssets`] — no `#[dependency]` so Failed map loads stay observable.
     pub nutrition_house: Handle<TiledMapAsset>,
     pub push_pop_enclosure: Handle<TiledMapAsset>,
 }
@@ -126,8 +126,8 @@ impl CollisionMapKey {
 
 /// Stable reason category when a required collision map fails to load.
 /// Full Bevy load-state debug details stay in logs (not reflected).
-pub const COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED: &str =
-    "recursive_dependency_failed";
+pub const COLLISION_LOAD_REASON_ROOT_ASSET_FAILED: &str = "root_asset_failed";
+pub const COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED: &str = "recursive_dependency_failed";
 
 /// One failed required collision map, observable via BRP `world.get_resources`.
 #[derive(Reflect, Debug, Clone, PartialEq, Eq)]
@@ -170,10 +170,7 @@ impl CollisionLoadFailures {
     pub fn toast_message(&self) -> String {
         match self.entries.len() {
             0 => String::new(),
-            1 => format!(
-                "Could not load map ({:?}). See log.",
-                self.entries[0].key
-            ),
+            1 => format!("Could not load map ({:?}). See log.", self.entries[0].key),
             n => format!("Could not load {n} maps. See log."),
         }
     }
@@ -184,8 +181,7 @@ impl CollisionLoadFailures {
             return String::new();
         }
 
-        let mut msg =
-            String::from("Could not load a required map. Returning to title…");
+        let mut msg = String::from("Could not load a required map. Returning to title…");
 
         #[cfg(debug_assertions)]
         {
@@ -214,7 +210,10 @@ const MAX_UI_MESSAGE_CHARS: usize = 400;
 
 fn truncate_ui_message(mut msg: String) -> String {
     if msg.chars().count() > MAX_UI_MESSAGE_CHARS {
-        msg = msg.chars().take(MAX_UI_MESSAGE_CHARS.saturating_sub(1)).collect();
+        msg = msg
+            .chars()
+            .take(MAX_UI_MESSAGE_CHARS.saturating_sub(1))
+            .collect();
         msg.push('…');
     }
     msg
@@ -275,6 +274,10 @@ impl CollisionMasks {
 
     pub fn set_static_mask(&mut self, key: CollisionMapKey, blocked: HashSet<TilePosition>) {
         self.static_blocked.insert(key, blocked);
+    }
+
+    pub fn remove(&mut self, key: CollisionMapKey) {
+        self.static_blocked.remove(&key);
     }
 
     pub fn is_statically_walkable(&self, key: CollisionMapKey, tile: TilePosition) -> bool {
@@ -415,18 +418,8 @@ pub struct CollisionPlugin;
 
 impl Plugin for CollisionPlugin {
     fn build(&self, app: &mut App) {
-        // Request required maps once up front and retain the handles. Do not call
-        // `AssetServer::load` on these paths every frame — that can stall Failed
-        // loads in `Loading` indefinitely.
-        let required_handles = {
-            let server = app.world().resource::<AssetServer>();
-            RequiredCollisionMapHandles::from_asset_server(server)
-        };
-
-        app.insert_resource(required_handles)
-            .init_resource::<CollisionMasks>()
+        app.init_resource::<CollisionMasks>()
             .init_resource::<CollisionLoadFailures>()
-            .init_resource::<CollisionReloadGate>()
             .register_type::<CollisionMapKey>()
             .register_type::<CollisionLoadFailure>()
             .register_type::<CollisionLoadFailures>()
@@ -532,146 +525,57 @@ pub fn build_all_collision_masks(
     }
 }
 
-/// Handles for required collision maps, requested once at plugin build.
-///
-/// [`AssetServer::load`] must not be called every frame on a failing path — that
-/// can stall the asset in `Loading` forever. Inspect these handles instead.
-#[derive(Resource, Debug, Clone)]
-pub struct RequiredCollisionMapHandles {
-    pub entries: Vec<(CollisionMapKey, Handle<TiledMapAsset>)>,
+/// Combined state of a root map and all of its recursive dependencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequiredCollisionMapState {
+    Pending,
+    Loaded,
+    Failed,
 }
 
-/// Tracks in-flight [`AssetServer::reload`] attempts for failed collision maps.
-///
-/// Bevy often keeps `RecursiveDependencyLoadState::Failed` through a failed
-/// reload (no intermediate non-Failed state). Gating on "recursive state left
-/// Failed" would suppress the diagnostic forever and fall through to the
-/// Loading timeout. Completion is therefore driven by root-map reload signals:
-/// [`AssetLoadFailedEvent`] or a new root-map [`AssetEvent::Added`] /
-/// [`AssetEvent::Modified`]. Those events deliberately ignore recursive
-/// dependencies so their fresh failure can be recorded by
-/// [`record_failed_collision_map_loads`].
-#[derive(Resource, Debug, Default, Clone)]
-pub struct CollisionReloadGate {
-    pub awaiting_retry: HashSet<CollisionMapKey>,
-}
+pub fn required_collision_map_state(
+    asset_server: &AssetServer,
+    handle: &Handle<TiledMapAsset>,
+) -> RequiredCollisionMapState {
+    use bevy::asset::{LoadState, RecursiveDependencyLoadState};
 
-impl CollisionReloadGate {
-    pub fn clear(&mut self) {
-        self.awaiting_retry.clear();
-    }
-
-    pub fn is_awaiting(&self, key: CollisionMapKey) -> bool {
-        self.awaiting_retry.contains(&key)
-    }
-}
-
-impl RequiredCollisionMapHandles {
-    pub fn from_asset_server(asset_server: &AssetServer) -> Self {
-        Self {
-            entries: REQUIRED_COLLISION_KEYS
-                .iter()
-                .map(|&key| (key, asset_server.load(key.asset_path())))
-                .collect(),
+    match asset_server.get_load_states(handle) {
+        Some((LoadState::Failed(_), _, _))
+        | Some((_, _, RecursiveDependencyLoadState::Failed(_))) => {
+            RequiredCollisionMapState::Failed
         }
+        Some((LoadState::Loaded, _, RecursiveDependencyLoadState::Loaded)) => {
+            RequiredCollisionMapState::Loaded
+        }
+        _ => RequiredCollisionMapState::Pending,
     }
 }
 
-/// Map a Bevy asset path back to a required collision key, if any.
-pub fn collision_map_key_for_asset_path(path: &bevy::asset::AssetPath<'_>) -> Option<CollisionMapKey> {
-    let path_str = path.path().to_string_lossy();
-    REQUIRED_COLLISION_KEYS
-        .iter()
-        .copied()
-        .find(|key| key.asset_path() == path_str)
+fn collision_load_failure_reason(
+    asset_server: &AssetServer,
+    handle: &Handle<TiledMapAsset>,
+) -> Option<&'static str> {
+    use bevy::asset::{LoadState, RecursiveDependencyLoadState};
+
+    match asset_server.get_load_states(handle) {
+        Some((LoadState::Failed(_), _, _)) => Some(COLLISION_LOAD_REASON_ROOT_ASSET_FAILED),
+        Some((_, _, RecursiveDependencyLoadState::Failed(_))) => {
+            Some(COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED)
+        }
+        _ => None,
+    }
 }
 
-/// Re-request any required maps that are currently in a Failed load state.
-///
-/// Call this when starting a fresh Loading attempt so Play can recover after
-/// assets are repaired on disk (or in the test memory store). Keys that were
-/// reloaded are recorded in [`CollisionReloadGate`] until that attempt
-/// completes (see [`advance_collision_reload_gate`]).
-///
-/// Callers should drain pending [`AssetLoadFailedEvent`]s for `TiledMapAsset`
-/// before invoking this so a prior attempt's failure does not immediately
-/// complete the new gate.
-pub fn reload_failed_collision_maps(
+pub fn required_collision_maps_terminal(
     asset_server: &AssetServer,
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
-    gate: &mut CollisionReloadGate,
-) {
-    gate.clear();
-    for &(key, ref handle) in handles {
-        let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
-            continue;
-        };
-        if matches!(state, bevy::asset::RecursiveDependencyLoadState::Failed(_)) {
-            info!(
-                "Reloading failed collision map {:?} ({})",
-                key,
-                key.asset_path()
-            );
-            asset_server.reload(key.asset_path());
-            gate.awaiting_retry.insert(key);
-        }
-    }
-}
-
-/// Mark reload attempts complete when Bevy reports a new root-map failure or a
-/// new root-map value.
-///
-/// A successfully reloaded TMX may still have a failed image or other recursive
-/// dependency. Its `Added` / `Modified` event opens the gate once the root load
-/// completes, allowing [`record_failed_collision_map_loads`] to report the new
-/// recursive result. Using the current direct load state would be incorrect: it
-/// may still be `Loaded` from the previous failed-dependency attempt before the
-/// asynchronous reload starts.
-///
-/// Must run before [`record_failed_collision_map_loads`] each frame while Loading.
-pub fn advance_collision_reload_gate<'a, 'b>(
-    handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
-    gate: &mut CollisionReloadGate,
-    failed_events: impl IntoIterator<Item = &'a bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>,
-    map_events: impl IntoIterator<Item = &'b AssetEvent<TiledMapAsset>>,
-) {
-    // Always walk the events so the caller's MessageReader advances, even when
-    // nothing is gated.
-    for event in failed_events {
-        if let Some(key) = collision_map_key_for_asset_path(&event.path) {
-            gate.awaiting_retry.remove(&key);
-        }
-        for &(key, ref handle) in handles {
-            if handle.id() == event.id {
-                gate.awaiting_retry.remove(&key);
-            }
-        }
-    }
-
-    // Added/Modified means the root TMX loader completed this attempt. Recursive
-    // dependencies may still be Loading or Failed, which the regular detector
-    // handles after this gate opens.
-    for event in map_events {
-        let id = match event {
-            AssetEvent::Added { id } | AssetEvent::Modified { id } => *id,
-            _ => continue,
-        };
-        for &(key, ref handle) in handles {
-            if handle.id() == id {
-                gate.awaiting_retry.remove(&key);
-            }
-        }
-    }
+) -> bool {
+    handles.iter().all(|(_, handle)| {
+        required_collision_map_state(asset_server, handle) != RequiredCollisionMapState::Pending
+    })
 }
 
 /// Detect required Tiled maps that failed to load and record them once per key.
-///
-/// Inspects pre-requested handles from [`RequiredCollisionMapHandles`] (or the
-/// live [`LevelAssets`] / [`InteriorAssets`] handles). Does **not** call
-/// [`AssetServer::load`] — repeated loads of a failing path can stall in `Loading`.
-///
-/// Keys listed in [`CollisionReloadGate`] are skipped until
-/// [`advance_collision_reload_gate`] marks that reload attempt complete.
 ///
 /// Logging is a side effect of recording a *new* failure. Deduplicates by
 /// [`CollisionMapKey`]. Full Bevy load-state details go to the log; the resource
@@ -680,50 +584,42 @@ pub fn record_failed_collision_map_loads(
     asset_server: &AssetServer,
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
     failures: &mut CollisionLoadFailures,
-    gate: &CollisionReloadGate,
 ) {
-    use bevy::asset::RecursiveDependencyLoadState;
-
     for &(key, ref handle) in handles {
-        if failures.contains_key(key) || gate.is_awaiting(key) {
+        if failures.contains_key(key) {
             continue;
         }
-        let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
-            continue;
-        };
 
-        if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
+        if required_collision_map_state(asset_server, handle) == RequiredCollisionMapState::Failed {
             let failure = CollisionLoadFailure {
                 key,
                 asset_path: key.asset_path().to_string(),
-                reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
+                reason: collision_load_failure_reason(asset_server, handle)
+                    .expect("Failed state has a stable reason")
+                    .to_string(),
             };
             if failures.record(failure) {
+                let states = asset_server.get_load_states(handle);
                 error!(
-                    "Collision mask for {:?} cannot be built: TiledMapAsset {:?} failed to load ({state:?})",
-                    key, handle
+                    "Collision mask for {:?} cannot be built: TiledMapAsset {:?} failed to load ({states:?})",
+                    key, handle,
                 );
             }
         }
     }
 }
 
-/// Collect required map handles from live assets when present, else from the
-/// one-shot [`RequiredCollisionMapHandles`] resource.
-pub fn required_collision_handles<'a>(
-    required: &'a RequiredCollisionMapHandles,
-    level_assets: Option<&'a LevelAssets>,
-    interior_assets: Option<&'a InteriorAssets>,
+/// Collect the small fixed set of map handles required before gameplay.
+pub fn required_collision_handles(
+    level_assets: &LevelAssets,
+    interior_assets: &InteriorAssets,
 ) -> Vec<(CollisionMapKey, Handle<TiledMapAsset>)> {
-    if let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets) {
-        let mut out = Vec::with_capacity(REQUIRED_COLLISION_KEYS.len());
-        out.push((CollisionMapKey::Overview, level_assets.map.clone()));
-        for (id, handle) in interior_assets.collision_entries() {
-            out.push((CollisionMapKey::Enclosure(id), handle));
-        }
-        return out;
+    let mut out = Vec::with_capacity(REQUIRED_COLLISION_KEYS.len());
+    out.push((CollisionMapKey::Overview, level_assets.map.clone()));
+    for (id, handle) in interior_assets.collision_entries() {
+        out.push((CollisionMapKey::Enclosure(id), handle));
     }
-    required.entries.clone()
+    out
 }
 
 fn build_collision_masks_on_gameplay_enter(
