@@ -1,6 +1,7 @@
 use alveus_headless::{GameCommand, register_headless_types};
-use alveus_interaction::PlayerSatchel;
+use alveus_interaction::{CleanAnimal, PlayerSatchel};
 use alveus_stats::SanctuaryUpkeep;
+use alveus_types::{CleanStat, EnrichStat, FeedStat, Stat};
 use bevy::prelude::*;
 
 #[test]
@@ -16,6 +17,11 @@ fn reflect_registry_exposes_headless_control_types() {
         std::any::TypeId::of::<GameCommand>(),
         std::any::TypeId::of::<PlayerSatchel>(),
         std::any::TypeId::of::<SanctuaryUpkeep>(),
+        std::any::TypeId::of::<Stat>(),
+        std::any::TypeId::of::<FeedStat>(),
+        std::any::TypeId::of::<EnrichStat>(),
+        std::any::TypeId::of::<CleanStat>(),
+        std::any::TypeId::of::<CleanAnimal>(),
     ] {
         assert!(
             registry.get(type_id).is_some(),

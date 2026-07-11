@@ -1,6 +1,7 @@
-use alveus_menus::PlayClickEvent;
 use alveus_app::Screen;
+use alveus_menus::PlayClickEvent;
 use alveus_stats::{SavePath, StatsPlugin};
+use alveus_types::Stat;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 use moonshine_save::prelude::SaveWorld;
@@ -108,10 +109,7 @@ fn test_save_exclude_and_hydration() {
         .query_filtered::<Entity, With<alveus_stats::AnimalId>>()
         .iter(app.world())
         .find(|&e| {
-            *app.world()
-                .get::<alveus_stats::AnimalId>(e)
-                .unwrap()
-                == alveus_stats::AnimalId::Polly
+            *app.world().get::<alveus_stats::AnimalId>(e).unwrap() == alveus_stats::AnimalId::Polly
         })
         .expect("Polly should exist");
 
@@ -132,7 +130,7 @@ fn test_save_exclude_and_hydration() {
             .world_mut()
             .get_mut::<alveus_stats::AnimalStats>(polly_entity)
             .unwrap();
-        stats.hunger = 450;
+        stats.hunger = Stat(450);
     }
 
     // Now let's trigger a save.
@@ -213,10 +211,7 @@ fn test_save_exclude_and_hydration() {
         .query_filtered::<Entity, With<alveus_stats::AnimalId>>()
         .iter(app.world())
         .find(|&e| {
-            *app.world()
-                .get::<alveus_stats::AnimalId>(e)
-                .unwrap()
-                == alveus_stats::AnimalId::Polly
+            *app.world().get::<alveus_stats::AnimalId>(e).unwrap() == alveus_stats::AnimalId::Polly
         })
         .expect("Loaded Polly should exist");
 
@@ -225,7 +220,7 @@ fn test_save_exclude_and_hydration() {
         .world()
         .get::<alveus_stats::AnimalStats>(loaded_polly_entity)
         .expect("Stats missing");
-    assert_eq!(stats.hunger, 450, "Hunger stat should be restored");
+    assert_eq!(stats.hunger, Stat(450), "Hunger stat should be restored");
 
     // Check static components are hydrated!
     let name = app

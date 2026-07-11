@@ -5,6 +5,9 @@ use bevy_reflect::Reflect;
 pub enum ItemId {
     TortoiseLeafyGreens,
     ChickenGrains,
+    RawVeggieTub,
+    PreparedVeggieDiet,
+    MiniMirror,
 }
 
 impl ItemId {
@@ -12,6 +15,9 @@ impl ItemId {
         match self {
             ItemId::TortoiseLeafyGreens => "tortoise_leafy_greens",
             ItemId::ChickenGrains => "chicken_grains",
+            ItemId::RawVeggieTub => "raw_veggie_tub",
+            ItemId::PreparedVeggieDiet => "prepared_veggie_diet",
+            ItemId::MiniMirror => "mini_mirror",
         }
     }
 }

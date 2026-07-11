@@ -1,11 +1,14 @@
-use alveus_app::{AppSystems, InRoom, Screen};
+use alveus_app::{AppSystems, InRoom, Menu, Screen};
 use alveus_cleaning::{PoopDump, PoopPile, PoopWheelbarrow, WHEELBARROW_CAPACITY};
-use alveus_components::LastPickupMessage;
+use alveus_components::{CareHudPulse, LastPickupMessage};
 use alveus_configs::{ANIMALS_DATA, NEGLECT_UPKEEP_THRESHOLD, STAT_SCALE};
 use alveus_content::item_display_name;
-use alveus_interaction::{ActiveInteractionTarget, FeedAnimal, GiveItem, PlayerSatchel};
+use alveus_interaction::{
+    ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem,
+    MiniChore, OpenMenu, PlayerSatchel,
+};
 use alveus_stats::{AnimalEnclosure, AnimalStat, AnimalStats, EnclosureStats, SanctuaryUpkeep};
-use alveus_types::{AnimalId, EnclosureId};
+use alveus_types::{AnimalId, EnclosureId, Stat};
 use bevy::prelude::*;
 
 // ---------------------------------------------------------
@@ -73,11 +76,13 @@ impl Plugin for HudPlugin {
         // Update systems run when player is actively playing
         app.add_systems(
             Update,
-            (
-                update_hud_system,
-                update_room_feedback_hud_system,
-                animate_neglect_banner_system,
-            )
+            (update_hud_system, animate_neglect_banner_system)
+                .in_set(AppSystems::UiUpdate)
+                .run_if(in_gameplay_or_room),
+        );
+        app.add_systems(
+            Update,
+            update_room_feedback_hud_system
                 .in_set(AppSystems::UiUpdate)
                 .run_if(in_gameplay_or_room),
         );
@@ -92,7 +97,11 @@ fn in_gameplay_or_room(screen_state: Res<State<Screen>>) -> bool {
 // Spawning HUD UI
 // ---------------------------------------------------------
 
-fn spawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi>>) {
+fn spawn_hud_system(
+    mut commands: Commands,
+    query: Query<Entity, With<StatsHudUi>>,
+    satchel: Res<PlayerSatchel>,
+) {
     // Avoid double-spawning if HUD already exists
     if !query.is_empty() {
         return;
@@ -226,10 +235,9 @@ fn spawn_hud_system(mut commands: Commands, query: Query<Entity, With<StatsHudUi
                         TextColor(Color::srgb(0.5, 0.8, 0.7)),
                     ));
                     card.spawn((
-                        Text::new("Empty"),
+                        Text::new(satchel_slots_label(&satchel)),
                         TextFont::from_font_size(14.0),
                         TextColor(Color::WHITE),
-                        TextLayout::no_wrap(),
                         SatchelBodyText,
                     ));
                 });
@@ -548,7 +556,7 @@ fn update_hud_system(
     }
 
     // Helper to resolve the value of a stat for a given animal_id
-    let resolve_stat = |animal_id: AnimalId, stat: AnimalStat| -> Option<u32> {
+    let resolve_stat = |animal_id: AnimalId, stat: AnimalStat| -> Option<Stat> {
         match stat {
             AnimalStat::Hunger => animal_stats_map.get(&animal_id).map(|s| s.hunger),
             AnimalStat::Happiness => animal_stats_map.get(&animal_id).map(|s| s.happiness),
@@ -564,7 +572,7 @@ fn update_hud_system(
         if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
             txt.0 = format!(
                 "{}%",
-                ((val as f32 / STAT_SCALE as f32) * 100.0).round() as i32
+                ((val.get() as f32 / STAT_SCALE.get() as f32) * 100.0).round() as i32
             );
         }
     }
@@ -572,7 +580,7 @@ fn update_hud_system(
     // 4. Update Individual Stat Progress Bars
     for (mut node, marker) in &mut stat_bar_query {
         if let Some(val) = resolve_stat(marker.animal_id, marker.stat) {
-            node.width = Val::Percent((val as f32 / STAT_SCALE as f32) * 100.0);
+            node.width = Val::Percent((val.get() as f32 / STAT_SCALE.get() as f32) * 100.0);
         }
     }
 
@@ -589,103 +597,49 @@ fn update_hud_system(
     }
 }
 
-fn update_room_feedback_hud_system(
-    screen: Res<State<Screen>>,
-    satchel: Res<PlayerSatchel>,
-    wheelbarrow: Res<PoopWheelbarrow>,
-    pickup_message: Res<LastPickupMessage>,
-    active: Res<ActiveInteractionTarget>,
-    give_query: Query<&GiveItem>,
-    feed_query: Query<&FeedAnimal>,
-    poop_query: Query<&PoopPile>,
-    dump_query: Query<&PoopDump>,
-    mut interaction_root: Query<
-        &mut Node,
-        (
-            With<InteractionPromptRoot>,
-            Without<SatchelHudRoot>,
-            Without<WheelbarrowHudRoot>,
-            Without<UpkeepBarFill>,
-            Without<AnimalStatBarFill>,
-        ),
-    >,
-    mut interaction_text: Query<
-        &mut Text,
-        (
-            With<InteractionPromptText>,
-            Without<UpkeepText>,
-            Without<AnimalStatText>,
-            Without<SatchelBodyText>,
-            Without<WheelbarrowBodyText>,
-        ),
-    >,
-    mut satchel_root: Query<
-        &mut Node,
-        (
-            With<SatchelHudRoot>,
-            Without<InteractionPromptRoot>,
-            Without<WheelbarrowHudRoot>,
-            Without<UpkeepBarFill>,
-            Without<AnimalStatBarFill>,
-        ),
-    >,
-    mut satchel_body: Query<
-        &mut Text,
-        (
-            With<SatchelBodyText>,
-            Without<UpkeepText>,
-            Without<AnimalStatText>,
-            Without<InteractionPromptText>,
-            Without<WheelbarrowBodyText>,
-        ),
-    >,
-    mut wheelbarrow_root: Query<
-        &mut Node,
-        (
-            With<WheelbarrowHudRoot>,
-            Without<InteractionPromptRoot>,
-            Without<SatchelHudRoot>,
-            Without<UpkeepBarFill>,
-            Without<AnimalStatBarFill>,
-        ),
-    >,
-    mut wheelbarrow_body: Query<
-        &mut Text,
-        (
-            With<WheelbarrowBodyText>,
-            Without<UpkeepText>,
-            Without<AnimalStatText>,
-            Without<InteractionPromptText>,
-            Without<SatchelBodyText>,
-        ),
-    >,
-) {
-    let allows_tile_interaction = matches!(
-        screen.get(),
-        Screen::Gameplay | Screen::InRoom(_)
-    );
-    let in_cleaning_room = matches!(
-        screen.get(),
-        Screen::InRoom(InRoom::PushPopEnclosure)
-    );
+fn update_room_feedback_hud_system(world: &mut World) {
+    let screen = *world.resource::<State<Screen>>().get();
+    let menu = *world.resource::<State<Menu>>().get();
+    let satchel = *world.resource::<PlayerSatchel>();
+    let wheelbarrow_count = world.resource::<PoopWheelbarrow>().count();
+    let care_menu = world.resource::<CareMenuState>().clone();
+    let pulse_active = world.resource::<CareHudPulse>().is_active();
+    let pickup_message = world.resource::<LastPickupMessage>().clone();
+    let active_entity = world.resource::<ActiveInteractionTarget>().interactable;
 
-    let prompt_message = if allows_tile_interaction {
-        active.interactable.and_then(|entity| {
-            if let Ok(give) = give_query.get(entity) {
+    let allows_tile_interaction =
+        matches!(screen, Screen::Gameplay | Screen::InRoom(_)) && menu != Menu::CareItemPicker;
+    let in_cleaning_room = matches!(screen, Screen::InRoom(InRoom::PushPopEnclosure));
+
+    let prompt_message = if menu == Menu::CareItemPicker {
+        Some(care_menu_prompt(&care_menu))
+    } else if allows_tile_interaction {
+        active_entity.and_then(|entity| {
+            if let Some(give) = world.get::<GiveItem>(entity) {
                 return Some(format!("Press [Space] to {}", give.prompt));
             }
-            if let Ok(feed) = feed_query.get(entity) {
+            if let Some(feed) = world.get::<FeedAnimal>(entity) {
                 return Some(format!("Press [Space] to {}", feed.prompt));
             }
-            if poop_query.get(entity).is_ok() {
+            if let Some(enrich) = world.get::<EnrichAnimal>(entity) {
+                return Some(format!("Press [Space] to {}", enrich.prompt));
+            }
+            if let Some(clean) = world.get::<CleanAnimal>(entity) {
+                return Some(format!("Press [Space] to {}", clean.prompt));
+            }
+            if let Some(chore) = world.get::<MiniChore>(entity) {
+                return Some(format!("Press [Space] to {}", chore.prompt));
+            }
+            if let Some(open) = world.get::<OpenMenu>(entity) {
+                return Some(format!("Press [Space] to {}", open.prompt));
+            }
+            if world.get::<PoopPile>(entity).is_some() {
                 return Some("Press [Space] to Pick up poop".to_string());
             }
-            if let Ok(dump) = dump_query.get(entity) {
+            if let Some(dump) = world.get::<PoopDump>(entity) {
                 return Some(format!(
                     "Press [Space] to {} ({}/{})",
-                    dump.prompt,
-                    wheelbarrow.count(),
-                    WHEELBARROW_CAPACITY
+                    dump.prompt, wheelbarrow_count, WHEELBARROW_CAPACITY
                 ));
             }
             None
@@ -700,14 +654,16 @@ fn update_room_feedback_hud_system(
         Display::None
     };
 
-    for mut node in &mut interaction_root {
+    let mut root_q = world.query_filtered::<&mut Node, With<InteractionPromptRoot>>();
+    for mut node in root_q.iter_mut(world) {
         if node.display != prompt_display {
             node.display = prompt_display;
         }
     }
 
     if let Some(message) = &prompt_message {
-        for mut txt in &mut interaction_text {
+        let mut text_q = world.query_filtered::<&mut Text, With<InteractionPromptText>>();
+        for mut txt in text_q.iter_mut(world) {
             if txt.as_str() != message {
                 txt.0 = message.clone();
             }
@@ -715,38 +671,53 @@ fn update_room_feedback_hud_system(
     }
 
     let in_interactive_room = matches!(
-        screen.get(),
+        screen,
         Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
     );
-    let on_overview_with_item = matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some();
-    let show_satchel = in_interactive_room || on_overview_with_item;
+    let on_overview = matches!(screen, Screen::Gameplay);
+    let show_satchel = in_interactive_room || on_overview;
     let satchel_display = if show_satchel {
         Display::Flex
     } else {
         Display::None
     };
 
-    for mut node in &mut satchel_root {
+    let pulse_color = if pulse_active {
+        Color::srgba(0.25, 0.55, 0.35, 0.85)
+    } else {
+        Color::srgba(0.1, 0.1, 0.12, 0.75)
+    };
+
+    let mut satchel_root_q =
+        world.query_filtered::<(&mut Node, &mut BackgroundColor), With<SatchelHudRoot>>();
+    for (mut node, mut bg) in satchel_root_q.iter_mut(world) {
         if node.display != satchel_display {
             node.display = satchel_display;
         }
+        if bg.0 != pulse_color {
+            bg.0 = pulse_color;
+        }
     }
 
-    let body_label = satchel_body_label(&pickup_message, &satchel);
-    for mut txt in &mut satchel_body {
+    // Slots stay visible at all times. Inventory / care feedback uses a
+    // separate trailing line so transient messages never replace either slot.
+    let body_label = satchel_body_label(&satchel, &pickup_message);
+    let mut satchel_body_q = world.query_filtered::<&mut Text, With<SatchelBodyText>>();
+    for mut txt in satchel_body_q.iter_mut(world) {
         if txt.as_str() != body_label {
             txt.0 = body_label.clone();
         }
     }
 
-    let show_wheelbarrow = in_cleaning_room || wheelbarrow.count() > 0;
+    let show_wheelbarrow = in_cleaning_room || wheelbarrow_count > 0;
     let wheelbarrow_display = if show_wheelbarrow {
         Display::Flex
     } else {
         Display::None
     };
 
-    for mut node in &mut wheelbarrow_root {
+    let mut wheelbarrow_root_q = world.query_filtered::<&mut Node, With<WheelbarrowHudRoot>>();
+    for mut node in wheelbarrow_root_q.iter_mut(world) {
         if node.display != wheelbarrow_display {
             node.display = wheelbarrow_display;
         }
@@ -754,25 +725,56 @@ fn update_room_feedback_hud_system(
 
     let wheelbarrow_label = format!(
         "Wheelbarrow: {}/{}",
-        wheelbarrow.count(), WHEELBARROW_CAPACITY
+        wheelbarrow_count, WHEELBARROW_CAPACITY
     );
-    for mut txt in &mut wheelbarrow_body {
+    let mut wheelbarrow_body_q = world.query_filtered::<&mut Text, With<WheelbarrowBodyText>>();
+    for mut txt in wheelbarrow_body_q.iter_mut(world) {
         if txt.as_str() != wheelbarrow_label {
             txt.0 = wheelbarrow_label.clone();
         }
     }
 }
 
-fn satchel_body_label(pickup_message: &LastPickupMessage, satchel: &PlayerSatchel) -> String {
+fn care_menu_prompt(care_menu: &CareMenuState) -> String {
+    if care_menu.options.is_empty() {
+        return "Fridge empty — [Esc] to close".to_string();
+    }
+    let mut lines = vec!["Fridge — Up/Down, Space to take, Esc to close".to_string()];
+    for (i, item) in care_menu.options.iter().enumerate() {
+        let marker = if i == care_menu.cursor { ">" } else { " " };
+        lines.push(format!("{marker} {}", item_display_name(*item)));
+    }
+    lines.join("\n")
+}
+
+/// Format the satchel card body: always both slots (+ drop hint when non-empty).
+///
+/// Care outcomes and other transient copy use the toast (`CareFeedbackEvent`),
+/// not this card.
+pub fn satchel_slots_label(satchel: &PlayerSatchel) -> String {
+    let mut lines = Vec::with_capacity(3);
+    for (i, slot) in satchel.slots.iter().enumerate() {
+        let label = match slot {
+            Some(item) => item_display_name(*item).to_string(),
+            None => "-".to_string(),
+        };
+        lines.push(format!("Slot {}: {}", i + 1, label));
+    }
+    if !satchel.is_empty() {
+        lines.push("Press [K] to drop".to_string());
+    }
+    lines.join("\n")
+}
+
+/// Format the complete satchel card without allowing transient feedback to
+/// replace either inventory slot.
+pub fn satchel_body_label(satchel: &PlayerSatchel, pickup_message: &LastPickupMessage) -> String {
+    let mut label = satchel_slots_label(satchel);
     if let Some(message) = &pickup_message.text {
-        return message.clone();
+        label.push_str("\n\n");
+        label.push_str(message);
     }
-
-    if let Some(item) = satchel.item {
-        return format!("Carrying: {}\nPress [K] to drop", item_display_name(item));
-    }
-
-    "Empty".to_string()
+    label
 }
 
 /// Animate the Neglect Banner with a pulsating glow/alpha transition.
@@ -787,5 +789,47 @@ fn animate_neglect_banner_system(
         // Compute pulsating alpha value
         let pulse = (time.elapsed_secs() * 4.0).sin().abs() * 0.35 + 0.65;
         bg.0.set_alpha(pulse);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alveus_content::ItemId;
+    use alveus_interaction::try_give_item;
+
+    #[test]
+    fn satchel_slots_label_always_shows_both_slots() {
+        let mut satchel = PlayerSatchel::default();
+        try_give_item(&mut satchel, ItemId::ChickenGrains).unwrap();
+        try_give_item(&mut satchel, ItemId::MiniMirror).unwrap();
+        let label = satchel_slots_label(&satchel);
+        assert!(label.contains("Slot 1:"), "{label}");
+        assert!(label.contains("Slot 2:"), "{label}");
+        assert!(label.contains("Chicken Grains"), "{label}");
+        assert!(label.contains("Mini Mirror"), "{label}");
+        assert!(!label.contains("Enriched"), "{label}");
+        assert!(!label.contains("Fed"), "{label}");
+    }
+
+    #[test]
+    fn satchel_slots_label_empty_shows_dashes() {
+        let satchel = PlayerSatchel::default();
+        let label = satchel_slots_label(&satchel);
+        assert_eq!(label, "Slot 1: -\nSlot 2: -");
+    }
+
+    #[test]
+    fn satchel_body_label_keeps_slots_when_showing_feedback() {
+        let satchel = PlayerSatchel::default();
+        let pickup_message = LastPickupMessage {
+            text: Some("Prepared Veggie Diet".to_string()),
+            timer: Timer::default(),
+        };
+
+        let label = satchel_body_label(&satchel, &pickup_message);
+        assert!(label.contains("Slot 1: -"), "{label}");
+        assert!(label.contains("Slot 2: -"), "{label}");
+        assert!(label.contains("Prepared Veggie Diet"), "{label}");
     }
 }

@@ -1,13 +1,19 @@
-use alveus_app::Screen;
+//! Player care interaction dispatch: give, feed, enrich, clean, mini-chore,
+//! open menu, and cleaning hand-off (poop pickup/dump).
+
+use alveus_app::{Menu, Screen};
 use alveus_cleaning::{
-    PoopDump, PoopDumpedEvent, PoopPile, PoopPickedUpEvent, PoopWheelbarrow, try_dump_poop,
+    PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow, try_dump_poop,
     try_pickup_poop,
 };
-use alveus_components::{CurrentTilePosition, Interactable, LastPickupMessage, Player, TilePosition};
-use alveus_configs::SATCHEL_MAX_SLOTS;
-use alveus_content::{ItemId, can_interact, item_display_name};
+use alveus_components::{
+    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage, Player,
+    TilePosition,
+};
+use alveus_configs::{SATCHEL_MAX_SLOTS, care_menu_options, item_display_name, prep_recipe_for};
+use alveus_content::{ItemId, can_interact};
 use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
-use alveus_types::AnimalId;
+use alveus_types::{AnimalId, CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat};
 use bevy::prelude::*;
 
 pub struct InteractionPlugin;
@@ -15,40 +21,54 @@ pub struct InteractionPlugin;
 impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ItemId>()
+            .register_type::<ChoreId>()
+            .register_type::<CareMenuId>()
             .register_type::<Interactable>()
             .register_type::<GiveItem>()
             .register_type::<FeedAnimal>()
-            .init_resource::<PlayerSatchel>()
+            .register_type::<EnrichAnimal>()
+            .register_type::<CleanAnimal>()
+            .register_type::<MiniChore>()
+            .register_type::<OpenMenu>()
+            .register_type::<PlayerSatchel>()
+            .register_type::<ActiveInteractionTarget>()
+            .register_type::<CareMenuState>()
+            .register_type::<AnimalFedEvent>()
+            .register_type::<AnimalEnrichedEvent>()
+            .register_type::<AnimalCleanedEvent>()
+            .register_type::<CareFeedbackEvent>()
+            .register_type::<CareHudPulse>();
+        if !app.world().contains_resource::<State<Menu>>() {
+            app.init_state::<Menu>();
+        }
+        app.init_resource::<PlayerSatchel>()
             .init_resource::<ActiveInteractionTarget>()
+            .init_resource::<CareMenuState>()
             .init_resource::<LastPickupMessage>()
+            .init_resource::<CareHudPulse>()
             .add_systems(
                 Update,
-                (
-                    update_interaction_target,
-                    handle_drop_input,
-                    handle_interaction_input,
-                    decay_pickup_message,
-                )
+                (update_interaction_target, decay_pickup_message)
                     .chain()
                     .run_if(allows_tile_interaction),
             )
-            .add_systems(
-                Update,
-                handle_drop_input.run_if(on_overview_with_satchel_item),
-            )
-            .add_observer(apply_animal_fed);
+            .add_systems(Update, tick_care_hud_pulse.run_if(allows_tile_interaction))
+            .add_observer(apply_animal_fed)
+            .add_observer(apply_animal_enriched)
+            .add_observer(apply_animal_cleaned);
     }
 }
 
-fn on_overview_with_satchel_item(screen: Res<State<Screen>>, satchel: Res<PlayerSatchel>) -> bool {
-    matches!(screen.get(), Screen::Gameplay) && satchel.item.is_some()
+fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
+    matches!(screen.get(), Screen::Gameplay | Screen::InRoom(_))
 }
 
 /// Gives the player an item when interacted with.
 ///
-/// An entity must not also have [`FeedAnimal`]. Bevy does not yet enforce
-/// mutually exclusive components ([bevy#23569](https://github.com/bevyengine/bevy/issues/23569)).
-/// Until that lands, authoring should ensure only one interaction component per tile.
+/// An entity must not also have another care interaction component. Bevy does
+/// not yet enforce mutually exclusive components
+/// ([bevy#23569](https://github.com/bevyengine/bevy/issues/23569)). Until that
+/// lands, authoring should ensure only one interaction component per tile.
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Interactable)]
@@ -58,25 +78,92 @@ pub struct GiveItem {
 }
 
 /// Feeds an animal when the player interacts with the correct item.
-///
-/// An entity must not also have [`GiveItem`]. Bevy does not yet enforce
-/// mutually exclusive components ([bevy#23569](https://github.com/bevyengine/bevy/issues/23569)).
-/// Until that lands, authoring should ensure only one interaction component per tile.
+/// Always restores hunger; the amount is a [`FeedStat`].
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 #[require(Interactable)]
 pub struct FeedAnimal {
     pub animal_id: AnimalId,
     pub required_item: ItemId,
-    pub stat: AnimalStat,
-    pub delta: u32,
+    pub delta: FeedStat,
     pub prompt: String,
 }
 
-#[derive(Resource, Debug, Clone, Copy, Default, Reflect)]
+/// Enriches an animal (happiness). Optional required item.
+/// Always restores happiness; the amount is an [`EnrichStat`].
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Interactable)]
+pub struct EnrichAnimal {
+    pub animal_id: AnimalId,
+    pub required_item: Option<ItemId>,
+    pub delta: EnrichStat,
+    pub prompt: String,
+}
+
+/// Cleans an animal's enclosure. Optional required item.
+/// Always restores enclosure cleanliness; the amount is a [`CleanStat`].
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Interactable)]
+pub struct CleanAnimal {
+    pub animal_id: AnimalId,
+    pub required_item: Option<ItemId>,
+    pub delta: CleanStat,
+    pub prompt: String,
+}
+
+/// One-shot prep / transform chore (e.g. chop veggies at the prep table).
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Interactable)]
+pub struct MiniChore {
+    pub chore_id: ChoreId,
+    pub required_item: Option<ItemId>,
+    pub output_item: Option<ItemId>,
+    pub prompt: String,
+}
+
+/// Opens a care item-picker menu identified by [`CareMenuId`].
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+#[require(Interactable)]
+pub struct OpenMenu {
+    pub menu_id: CareMenuId,
+    pub prompt: String,
+}
+
+/// Two-slot caretaker satchel. Fill first empty slot; drop removes the first occupied.
+#[derive(Resource, Debug, Clone, Copy, Reflect)]
 #[reflect(Resource)]
 pub struct PlayerSatchel {
-    pub item: Option<ItemId>,
+    pub slots: [Option<ItemId>; SATCHEL_MAX_SLOTS as usize],
+}
+
+impl Default for PlayerSatchel {
+    fn default() -> Self {
+        Self {
+            slots: [None; SATCHEL_MAX_SLOTS as usize],
+        }
+    }
+}
+
+impl PlayerSatchel {
+    pub fn occupied_count(&self) -> u8 {
+        self.slots.iter().filter(|s| s.is_some()).count() as u8
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.occupied_count() == 0
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.occupied_count() >= SATCHEL_MAX_SLOTS
+    }
+
+    pub fn first_item(&self) -> Option<ItemId> {
+        self.slots.iter().flatten().copied().next()
+    }
 }
 
 #[derive(Resource, Debug, Default, Reflect)]
@@ -85,20 +172,43 @@ pub struct ActiveInteractionTarget {
     pub interactable: Option<Entity>,
 }
 
+/// State for [`Menu::CareItemPicker`].
+#[derive(Resource, Debug, Default, Clone, Reflect)]
+#[reflect(Resource)]
+pub struct CareMenuState {
+    pub menu_id: Option<CareMenuId>,
+    pub options: Vec<ItemId>,
+    pub cursor: usize,
+}
+
 /// Emitted when the player successfully feeds an animal at a dish.
-/// Item consumption, stat changes, and UI feedback are handled by observers.
 #[derive(Event, Debug, Clone, Copy, Reflect)]
 #[reflect(Event)]
 pub struct AnimalFedEvent {
     pub animal_id: AnimalId,
     pub required_item: ItemId,
-    pub stat: AnimalStat,
-    pub delta: u32,
+    pub delta: FeedStat,
     pub dish_position: TilePosition,
 }
 
-fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
-    matches!(screen.get(), Screen::Gameplay | Screen::InRoom(_))
+/// Emitted when the player successfully enriches an animal.
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
+pub struct AnimalEnrichedEvent {
+    pub animal_id: AnimalId,
+    pub required_item: Option<ItemId>,
+    pub delta: EnrichStat,
+    pub station_position: TilePosition,
+}
+
+/// Emitted when the player successfully cleans an animal's enclosure.
+#[derive(Event, Debug, Clone, Copy, Reflect)]
+#[reflect(Event)]
+pub struct AnimalCleanedEvent {
+    pub animal_id: AnimalId,
+    pub required_item: Option<ItemId>,
+    pub delta: CleanStat,
+    pub station_position: TilePosition,
 }
 
 fn update_interaction_target(
@@ -117,63 +227,32 @@ fn update_interaction_target(
         .map(|(entity, _)| entity);
 }
 
-fn handle_drop_input(
-    input: Res<ButtonInput<KeyCode>>,
-    mut satchel: ResMut<PlayerSatchel>,
-    mut commands: Commands,
-) {
-    if input.just_pressed(KeyCode::KeyK) {
-        perform_drop(&mut satchel, &mut commands);
-    }
-}
-
 pub fn perform_drop(satchel: &mut PlayerSatchel, commands: &mut Commands) {
-    let Some(item) = satchel.item else {
-        return;
-    };
-
-    if let Err(message) = try_drop_item(satchel) {
-        commands.insert_resource(LastPickupMessage {
-            text: Some(message.to_string()),
-            timer: Timer::from_seconds(2.5, TimerMode::Once),
-        });
-        return;
+    match try_drop_item(satchel) {
+        Ok(item) => {
+            set_pickup_message(commands, format!("Dropped {}", item_display_name(item)));
+        }
+        Err(_) => {
+            // Empty satchel: no-op (matches GameCommand::DropItem docs).
+        }
     }
-
-    commands.insert_resource(LastPickupMessage {
-        text: Some(format!("Dropped {}", item_display_name(item))),
-        timer: Timer::from_seconds(2.5, TimerMode::Once),
-    });
 }
 
 pub fn perform_drop_in_world(world: &mut World) {
     let drop_result = {
         let mut satchel = world.resource_mut::<PlayerSatchel>();
-        let Some(item) = satchel.item else {
-            return;
-        };
-        if let Err(message) = try_drop_item(&mut satchel) {
-            Err(message.to_string())
-        } else {
-            Ok(item)
-        }
+        try_drop_item(&mut satchel)
     };
 
+    let Ok(item) = drop_result else {
+        // Empty satchel: no-op (matches GameCommand::DropItem docs).
+        return;
+    };
     let mut commands = world.commands();
-    match drop_result {
-        Ok(item) => {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(format!("Dropped {}", item_display_name(item))),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-        }
-        Err(message) => {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(message),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-        }
-    }
+    set_pickup_message(
+        &mut commands,
+        format!("Dropped {}", item_display_name(item)),
+    );
 }
 
 fn decay_pickup_message(time: Res<Time>, mut message: ResMut<LastPickupMessage>) {
@@ -186,165 +265,118 @@ fn decay_pickup_message(time: Res<Time>, mut message: ResMut<LastPickupMessage>)
     }
 }
 
-fn handle_interaction_input(
-    input: Res<ButtonInput<KeyCode>>,
-    active: Res<ActiveInteractionTarget>,
-    tile_query: Query<&TilePosition>,
-    give_query: Query<&GiveItem>,
-    feed_query: Query<&FeedAnimal>,
-    poop_query: Query<&PoopPile>,
-    dump_query: Query<&PoopDump>,
-    mut satchel: ResMut<PlayerSatchel>,
-    mut wheelbarrow: ResMut<PoopWheelbarrow>,
-    mut commands: Commands,
-) {
-    if input.just_pressed(KeyCode::Space) {
-        perform_interact(
-            &active,
-            &tile_query,
-            &give_query,
-            &feed_query,
-            &poop_query,
-            &dump_query,
-            &mut satchel,
-            &mut wheelbarrow,
-            &mut commands,
-        );
-    }
-}
-
-pub fn perform_interact(
-    active: &ActiveInteractionTarget,
-    tile_query: &Query<&TilePosition>,
-    give_query: &Query<&GiveItem>,
-    feed_query: &Query<&FeedAnimal>,
-    poop_query: &Query<&PoopPile>,
-    dump_query: &Query<&PoopDump>,
-    satchel: &mut PlayerSatchel,
-    wheelbarrow: &mut PoopWheelbarrow,
-    commands: &mut Commands,
-) {
-    let Some(entity) = active.interactable else {
-        return;
-    };
-
-    if let Ok(give) = give_query.get(entity) {
-        if let Err(message) = try_give_item(satchel, give.item_id) {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-        } else {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(format!("Picked up {}", item_display_name(give.item_id))),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-        }
-        return;
-    }
-
-    if let Ok(feed) = feed_query.get(entity) {
-        if let Err(message) = validate_feed_animal(satchel, feed.required_item) {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-
-        let Ok(tile_pos) = tile_query.get(entity) else {
-            return;
-        };
-
-        commands.trigger(AnimalFedEvent {
-            animal_id: feed.animal_id,
-            required_item: feed.required_item,
-            stat: feed.stat,
-            delta: feed.delta,
-            dish_position: *tile_pos,
-        });
-        return;
-    }
-
-    if let Ok(poop) = poop_query.get(entity) {
-        if let Err(message) = try_pickup_poop(wheelbarrow, poop.enclosure_id) {
-            commands.insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-
-        let Ok(tile_pos) = tile_query.get(entity) else {
-            let _ = wheelbarrow.poops.pop();
-            return;
-        };
-
-        commands.trigger(PoopPickedUpEvent {
-            entity,
-            enclosure_id: poop.enclosure_id,
-            tile: *tile_pos,
-        });
-        return;
-    }
-
-    if let Ok(_dump) = dump_query.get(entity) {
-        match try_dump_poop(wheelbarrow) {
-            Ok(poops) => {
-                commands.trigger(PoopDumpedEvent { poops });
-            }
-            Err(message) => {
-                commands.insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            }
-        }
+fn tick_care_hud_pulse(time: Res<Time>, mut pulse: ResMut<CareHudPulse>) {
+    if pulse.timer.duration().as_secs_f32() > 0.0 {
+        pulse.timer.tick(time.delta());
     }
 }
 
 pub fn perform_interact_in_world(world: &mut World) {
+    if *world.resource::<State<Menu>>().get() == Menu::CareItemPicker {
+        confirm_care_menu_in_world(world);
+        return;
+    }
+
     let entity = match world.resource::<ActiveInteractionTarget>().interactable {
         Some(entity) => entity,
         None => return,
     };
 
     if let Some(give) = world.get::<GiveItem>(entity).cloned() {
-        let pickup_message = {
+        let result = {
             let mut satchel = world.resource_mut::<PlayerSatchel>();
-            match try_give_item(&mut satchel, give.item_id) {
-                Ok(()) => format!("Picked up {}", item_display_name(give.item_id)),
-                Err(message) => message.to_string(),
-            }
+            try_give_item(&mut satchel, give.item_id)
         };
-        world.commands().insert_resource(LastPickupMessage {
-            text: Some(pickup_message),
-            timer: Timer::from_seconds(2.5, TimerMode::Once),
-        });
+        match result {
+            Ok(()) => {
+                world.trigger(CareFeedbackEvent {
+                    message: format!("Picked up {}", item_display_name(give.item_id)),
+                });
+            }
+            Err(message) => {
+                world.commands().insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+            }
+        }
         return;
     }
 
     if let Some(feed) = world.get::<FeedAnimal>(entity).cloned() {
         let satchel = world.resource::<PlayerSatchel>();
-        if let Err(message) = validate_feed_animal(satchel, feed.required_item) {
+        if let Err(message) = validate_has_item(satchel, feed.required_item) {
             world.commands().insert_resource(LastPickupMessage {
                 text: Some(message.to_string()),
                 timer: Timer::from_seconds(2.5, TimerMode::Once),
             });
             return;
         }
-
         let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
             return;
         };
-
         world.trigger(AnimalFedEvent {
             animal_id: feed.animal_id,
             required_item: feed.required_item,
-            stat: feed.stat,
             delta: feed.delta,
             dish_position: tile_pos,
         });
+        return;
+    }
+
+    if let Some(enrich) = world.get::<EnrichAnimal>(entity).cloned() {
+        if let Some(required) = enrich.required_item {
+            let satchel = world.resource::<PlayerSatchel>();
+            if let Err(message) = validate_has_item(satchel, required) {
+                world.commands().insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+                return;
+            }
+        }
+        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
+            return;
+        };
+        world.trigger(AnimalEnrichedEvent {
+            animal_id: enrich.animal_id,
+            required_item: enrich.required_item,
+            delta: enrich.delta,
+            station_position: tile_pos,
+        });
+        return;
+    }
+
+    if let Some(clean) = world.get::<CleanAnimal>(entity).cloned() {
+        if let Some(required) = clean.required_item {
+            let satchel = world.resource::<PlayerSatchel>();
+            if let Err(message) = validate_has_item(satchel, required) {
+                world.commands().insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+                return;
+            }
+        }
+        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
+            return;
+        };
+        world.trigger(AnimalCleanedEvent {
+            animal_id: clean.animal_id,
+            required_item: clean.required_item,
+            delta: clean.delta,
+            station_position: tile_pos,
+        });
+        return;
+    }
+
+    if let Some(chore) = world.get::<MiniChore>(entity).cloned() {
+        handle_mini_chore_in_world(world, &chore);
+        return;
+    }
+
+    if let Some(open) = world.get::<OpenMenu>(entity).cloned() {
+        open_care_menu_in_world(world, open.menu_id);
         return;
     }
 
@@ -360,13 +392,11 @@ pub fn perform_interact_in_world(world: &mut World) {
             });
             return;
         }
-
         let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
             let mut wheelbarrow = world.resource_mut::<PoopWheelbarrow>();
             let _ = wheelbarrow.poops.pop();
             return;
         };
-
         world.trigger(PoopPickedUpEvent {
             entity,
             enclosure_id: poop.enclosure_id,
@@ -394,31 +424,237 @@ pub fn perform_interact_in_world(world: &mut World) {
     }
 }
 
+fn handle_mini_chore_in_world(world: &mut World, chore: &MiniChore) {
+    if let Some(required) = chore.required_item {
+        let satchel = world.resource::<PlayerSatchel>();
+        if let Err(message) = validate_has_item(satchel, required) {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+    }
+
+    let mut satchel = world.resource_mut::<PlayerSatchel>();
+    if let Some(required_item) = chore.required_item {
+        if let Err(message) = try_take_item(&mut satchel, required_item) {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+        if let Some(output) = chore
+            .output_item
+            .or_else(|| prep_recipe_for(chore.chore_id, required_item).map(|r| r.output))
+        {
+            if let Err(message) = try_give_item(&mut satchel, output) {
+                let _ = try_give_item(&mut satchel, required_item);
+                world.commands().insert_resource(LastPickupMessage {
+                    text: Some(message.to_string()),
+                    timer: Timer::from_seconds(2.5, TimerMode::Once),
+                });
+                return;
+            }
+            let msg = format!("Prepared {}", item_display_name(output));
+            world.trigger(CareFeedbackEvent { message: msg });
+            return;
+        }
+    } else if let Some(output) = chore.output_item {
+        if let Err(message) = try_give_item(&mut satchel, output) {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            return;
+        }
+        world.trigger(CareFeedbackEvent {
+            message: format!("Got {}", item_display_name(output)),
+        });
+        return;
+    }
+
+    world.trigger(CareFeedbackEvent {
+        message: format!("Finished {}", chore.prompt),
+    });
+}
+
+pub fn open_care_menu(
+    menu_id: CareMenuId,
+    care_menu: &mut CareMenuState,
+    next_menu: &mut NextState<Menu>,
+) {
+    care_menu.menu_id = Some(menu_id);
+    care_menu.options = care_menu_options(menu_id).to_vec();
+    care_menu.cursor = 0;
+    next_menu.set(Menu::CareItemPicker);
+}
+
+fn open_care_menu_in_world(world: &mut World, menu_id: CareMenuId) {
+    {
+        let mut care_menu = world.resource_mut::<CareMenuState>();
+        care_menu.menu_id = Some(menu_id);
+        care_menu.options = care_menu_options(menu_id).to_vec();
+        care_menu.cursor = 0;
+    }
+    world
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+}
+
+pub fn care_menu_move_cursor(care_menu: &mut CareMenuState, delta: i32) {
+    if care_menu.options.is_empty() {
+        return;
+    }
+    let len = care_menu.options.len() as i32;
+    let next = (care_menu.cursor as i32 + delta).rem_euclid(len) as usize;
+    care_menu.cursor = next;
+}
+
+pub fn confirm_care_menu(
+    care_menu: &mut CareMenuState,
+    satchel: &mut PlayerSatchel,
+    next_menu: &mut NextState<Menu>,
+    commands: &mut Commands,
+) {
+    let Some(item) = care_menu.options.get(care_menu.cursor).copied() else {
+        cancel_care_menu(care_menu, next_menu);
+        return;
+    };
+    match try_give_item(satchel, item) {
+        Ok(()) => {
+            emit_care_feedback(commands, format!("Took {}", item_display_name(item)));
+        }
+        Err(message) => {
+            set_pickup_message(commands, message.to_string());
+        }
+    }
+    *care_menu = CareMenuState::default();
+    next_menu.set(Menu::None);
+}
+
+pub fn confirm_care_menu_in_world(world: &mut World) {
+    let item = {
+        let care_menu = world.resource::<CareMenuState>();
+        care_menu.options.get(care_menu.cursor).copied()
+    };
+    let Some(item) = item else {
+        cancel_care_menu_in_world(world);
+        return;
+    };
+    let result = {
+        let mut satchel = world.resource_mut::<PlayerSatchel>();
+        try_give_item(&mut satchel, item)
+    };
+    match result {
+        Ok(()) => {
+            world.trigger(CareFeedbackEvent {
+                message: format!("Took {}", item_display_name(item)),
+            });
+        }
+        Err(message) => {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+        }
+    }
+    *world.resource_mut::<CareMenuState>() = CareMenuState::default();
+    world.resource_mut::<NextState<Menu>>().set(Menu::None);
+}
+
+pub fn cancel_care_menu(care_menu: &mut CareMenuState, next_menu: &mut NextState<Menu>) {
+    *care_menu = CareMenuState::default();
+    next_menu.set(Menu::None);
+}
+
+pub fn cancel_care_menu_in_world(world: &mut World) {
+    *world.resource_mut::<CareMenuState>() = CareMenuState::default();
+    world.resource_mut::<NextState<Menu>>().set(Menu::None);
+}
+
 fn apply_animal_fed(
     trigger: On<AnimalFedEvent>,
     mut satchel: ResMut<PlayerSatchel>,
+    mut pulse: ResMut<CareHudPulse>,
     mut commands: Commands,
 ) {
     let event = trigger.event();
-    if let Err(message) = try_feed_animal(&mut satchel, event.required_item) {
-        commands.insert_resource(LastPickupMessage {
-            text: Some(message.to_string()),
-            timer: Timer::from_seconds(2.5, TimerMode::Once),
-        });
+    if let Err(message) = try_take_item(&mut satchel, event.required_item) {
+        set_pickup_message(&mut commands, message.to_string());
         return;
     }
 
     commands.trigger(ImproveStatEvent {
         target: StatTarget::Animal {
             id: event.animal_id,
-            stat: event.stat,
+            stat: AnimalStat::Hunger,
         },
-        amount: event.delta,
+        amount: event.delta.into(),
     });
-    commands.insert_resource(LastPickupMessage {
-        text: Some(format!("Fed {}", animal_display_name(event.animal_id))),
-        timer: Timer::from_seconds(2.5, TimerMode::Once),
+    // Outcome toast via CareFeedbackEvent; satchel card stays inventory-only.
+    emit_care_feedback(
+        &mut commands,
+        care_outcome_message(event.animal_id, AnimalStat::Hunger),
+    );
+    pulse.trigger();
+}
+
+fn apply_animal_enriched(
+    trigger: On<AnimalEnrichedEvent>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut pulse: ResMut<CareHudPulse>,
+    mut commands: Commands,
+) {
+    let event = trigger.event();
+    if let Some(required) = event.required_item
+        && let Err(message) = try_take_item(&mut satchel, required)
+    {
+        set_pickup_message(&mut commands, message.to_string());
+        return;
+    }
+
+    commands.trigger(ImproveStatEvent {
+        target: StatTarget::Animal {
+            id: event.animal_id,
+            stat: AnimalStat::Happiness,
+        },
+        amount: event.delta.into(),
     });
+    emit_care_feedback(
+        &mut commands,
+        care_outcome_message(event.animal_id, AnimalStat::Happiness),
+    );
+    pulse.trigger();
+}
+
+fn apply_animal_cleaned(
+    trigger: On<AnimalCleanedEvent>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut pulse: ResMut<CareHudPulse>,
+    mut commands: Commands,
+) {
+    let event = trigger.event();
+    if let Some(required) = event.required_item
+        && let Err(message) = try_take_item(&mut satchel, required)
+    {
+        set_pickup_message(&mut commands, message.to_string());
+        return;
+    }
+
+    commands.trigger(ImproveStatEvent {
+        target: StatTarget::Animal {
+            id: event.animal_id,
+            stat: AnimalStat::Cleanliness,
+        },
+        amount: event.delta.into(),
+    });
+    emit_care_feedback(
+        &mut commands,
+        care_outcome_message(event.animal_id, AnimalStat::Cleanliness),
+    );
+    pulse.trigger();
 }
 
 fn animal_display_name(animal_id: AnimalId) -> &'static str {
@@ -431,35 +667,127 @@ fn animal_display_name(animal_id: AnimalId) -> &'static str {
     }
 }
 
-pub fn try_drop_item(satchel: &mut PlayerSatchel) -> Result<ItemId, &'static str> {
-    satchel.item.take().ok_or("Satchel is already empty")
+/// Player-facing care outcome copy keyed by the restored [`AnimalStat`].
+pub fn care_outcome_message(animal_id: AnimalId, stat: AnimalStat) -> String {
+    let name = animal_display_name(animal_id);
+    match stat {
+        AnimalStat::Cleanliness => format!("Cleaned {name}"),
+        AnimalStat::Happiness => format!("Enriched {name}"),
+        AnimalStat::Hunger => format!("Fed {name}"),
+    }
 }
 
+fn set_pickup_message(commands: &mut Commands, text: String) {
+    commands.insert_resource(LastPickupMessage {
+        text: Some(text),
+        timer: Timer::from_seconds(2.5, TimerMode::Once),
+    });
+}
+
+fn emit_care_feedback(commands: &mut Commands, message: String) {
+    commands.trigger(CareFeedbackEvent { message });
+}
+
+// --- Pure satchel helpers (unit-tested) ---
+
+/// Drop the first occupied slot. Returns the dropped item.
+pub fn try_drop_item(satchel: &mut PlayerSatchel) -> Result<ItemId, &'static str> {
+    for slot in &mut satchel.slots {
+        if let Some(item) = slot.take() {
+            return Ok(item);
+        }
+    }
+    Err("Satchel is already empty")
+}
+
+/// Place `item_id` in the first empty slot.
 pub fn try_give_item(satchel: &mut PlayerSatchel, item_id: ItemId) -> Result<(), &'static str> {
-    let occupied = u8::from(satchel.item.is_some());
-    if occupied >= SATCHEL_MAX_SLOTS {
+    if satchel.is_full() {
         return Err("Satchel is full");
     }
-    satchel.item = Some(item_id);
-    Ok(())
+    for slot in &mut satchel.slots {
+        if slot.is_none() {
+            *slot = Some(item_id);
+            return Ok(());
+        }
+    }
+    Err("Satchel is full")
 }
 
+pub fn satchel_contains(satchel: &PlayerSatchel, item_id: ItemId) -> bool {
+    satchel.slots.contains(&Some(item_id))
+}
+
+/// Remove the first slot matching `item_id`.
+pub fn try_take_item(satchel: &mut PlayerSatchel, item_id: ItemId) -> Result<(), &'static str> {
+    for slot in &mut satchel.slots {
+        if *slot == Some(item_id) {
+            *slot = None;
+            return Ok(());
+        }
+    }
+    if satchel.is_empty() {
+        Err("You are not carrying any food")
+    } else {
+        Err("Wrong item for this feeding dish")
+    }
+}
+
+pub fn validate_has_item(
+    satchel: &PlayerSatchel,
+    required_item: ItemId,
+) -> Result<(), &'static str> {
+    if satchel_contains(satchel, required_item) {
+        Ok(())
+    } else if satchel.is_empty() {
+        Err("You are not carrying any food")
+    } else {
+        Err("Wrong item for this feeding dish")
+    }
+}
+
+/// Back-compat alias used by older tests / call sites.
 pub fn validate_feed_animal(
     satchel: &PlayerSatchel,
     required_item: ItemId,
 ) -> Result<(), &'static str> {
-    match satchel.item {
-        Some(item) if item == required_item => Ok(()),
-        Some(_) => Err("Wrong item for this feeding dish"),
-        None => Err("You are not carrying any food"),
-    }
+    validate_has_item(satchel, required_item)
 }
 
 pub fn try_feed_animal(
     satchel: &mut PlayerSatchel,
     required_item: ItemId,
 ) -> Result<(), &'static str> {
-    validate_feed_animal(satchel, required_item)?;
-    satchel.item = None;
-    Ok(())
+    try_take_item(satchel, required_item)
+}
+
+pub fn try_enrich_animal(
+    satchel: &mut PlayerSatchel,
+    required_item: Option<ItemId>,
+) -> Result<(), &'static str> {
+    match required_item {
+        Some(item) => try_take_item(satchel, item),
+        None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod care_outcome_tests {
+    use super::*;
+
+    #[test]
+    fn care_outcome_message_matches_stat() {
+        assert_eq!(
+            care_outcome_message(AnimalId::PushPop, AnimalStat::Hunger),
+            "Fed Push Pop"
+        );
+        assert_eq!(
+            care_outcome_message(AnimalId::Polly, AnimalStat::Cleanliness),
+            "Cleaned Polly"
+        );
+        assert_eq!(
+            care_outcome_message(AnimalId::PushPop, AnimalStat::Happiness),
+            "Enriched Push Pop"
+        );
+    }
 }

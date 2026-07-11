@@ -6,11 +6,17 @@ use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
 use alveus_app::{InRoom, Menu, Pause, Screen};
-use alveus_components::{BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition};
-use alveus_interaction::{perform_drop_in_world, perform_interact_in_world};
+use alveus_components::{
+    BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition,
+};
+use alveus_interaction::{
+    CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
+    perform_drop_in_world, perform_interact_in_world,
+};
 use alveus_menus::PlayClickEvent;
 use alveus_screens::gameplay::spawn_pause_overlay;
 use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
+use alveus_types::Stat;
 use alveus_world::room::{PlayerSpawnPoint, try_enter_room};
 
 use crate::camera::HeadlessRenderTarget;
@@ -48,11 +54,15 @@ pub enum GameCommand {
     /// Clear the player's movement intent (stop walking).
     MoveStop,
     /// Interact with whatever is currently in front of / under the player
-    /// (`Space` in-game): pick up a `GiveItem`, feed an animal via `FeedAnimal`,
-    /// pick up a `PoopPile` into the wheelbarrow, empty the wheelbarrow at the
-    /// overview `PoopDump` compost bin (enclosure-agnostic), etc. No-op if there is no active interaction target.
+    /// (`Space` in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
+    /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
+    /// menu (`OpenMenu`), pick up a `PoopPile`, or empty the wheelbarrow at
+    /// `PoopDump`. While [`Menu::CareItemPicker`] is open, confirms the
+    /// highlighted item instead. No-op if there is no active interaction target
+    /// (and no care menu).
     Interact,
-    /// Drop the currently held satchel item (`K` in-game). No-op if empty.
+    /// Drop the first occupied satchel slot (`K` in-game). No-op if empty.
+    /// Allowed on overview and inside rooms.
     DropItem,
     /// Enter the building whose entrance the player is standing on (`Enter`
     /// in-game). Only valid while in [`Screen::Gameplay`] and while the player
@@ -69,7 +79,7 @@ pub enum GameCommand {
     /// Transitions Title -> Gameplay.
     Play,
     /// Go back one level in the current menu (`Esc` in menus): Settings/Credits
-    /// -> previous menu, Pause -> resume.
+    /// -> previous menu, Pause -> resume, CareItemPicker -> close picker.
     Back,
     /// Skip the splash screen (`Esc` during splash). Transitions to Title.
     SkipSplash,
@@ -78,6 +88,8 @@ pub enum GameCommand {
     /// Open the Credits menu.
     OpenCredits,
     /// Close the active menu and continue playing (resume from pause).
+    /// While [`Menu::CareItemPicker`] is open, confirms the highlighted item
+    /// (same as Interact in that menu).
     Continue,
     /// Abandon the current session and return to the Title screen.
     QuitToTitle,
@@ -87,11 +99,15 @@ pub enum GameCommand {
     // control. They are NOT things an ordinary player does during normal play;
     // prefer the player verbs above when reproducing real play sessions.
     /// Debug: increase a specific animal/enclosure stat (mirrors debug keys).
-    /// Triggers an [`ImproveStatEvent`].
-    ImproveStat { target: StatTarget, amount: u32 },
+    /// Triggers an [`ImproveStatEvent`]. `amount` is a direction-agnostic
+    /// [`Stat`] quantity on the shared scale; on the BRP wire it serializes as a
+    /// bare `u32` (not a `{ "0": … }` map).
+    ImproveStat { target: StatTarget, amount: Stat },
     /// Debug: decrease a specific animal/enclosure stat (mirrors debug keys).
-    /// Triggers a [`WorsenStatEvent`].
-    WorsenStat { target: StatTarget, amount: u32 },
+    /// Triggers a [`WorsenStatEvent`]. `amount` is a direction-agnostic
+    /// [`Stat`] quantity on the shared scale; on the BRP wire it serializes as a
+    /// bare `u32` (not a `{ "0": … }` map).
+    WorsenStat { target: StatTarget, amount: Stat },
     /// Debug: fast-forward simulated decay by `hours` (mirrors the `=`/`L`
     /// fast-forward path).
     AdvanceTime { hours: f32 },
@@ -143,6 +159,9 @@ pub struct CommandPlugin;
 
 impl Plugin for CommandPlugin {
     fn build(&self, app: &mut App) {
+        if !app.world().contains_resource::<State<Menu>>() {
+            app.init_state::<Menu>();
+        }
         app.init_resource::<StepRequest>()
             .init_resource::<PendingGameCommands>()
             .add_observer(enqueue_game_command)
@@ -175,9 +194,31 @@ fn apply_pending_game_commands(world: &mut World) {
     let _ = world.try_run_schedule(StateTransition);
 }
 
+fn care_menu_open(world: &World) -> bool {
+    world
+        .get_resource::<State<Menu>>()
+        .is_some_and(|menu| *menu.get() == Menu::CareItemPicker)
+}
+
 fn apply_game_command(world: &mut World, command: GameCommand) {
     match command {
         GameCommand::Move(intent) => {
+            if care_menu_open(world) {
+                let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
+                if let Ok(mut movement) = query.single_mut(world) {
+                    movement.intent = None;
+                }
+                let delta = match intent {
+                    MovementIntent::Up => -1,
+                    MovementIntent::Down => 1,
+                    MovementIntent::Left | MovementIntent::Right => 0,
+                };
+                if delta != 0 {
+                    let mut care_menu = world.resource_mut::<CareMenuState>();
+                    care_menu_move_cursor(&mut care_menu, delta);
+                }
+                return;
+            }
             let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
             if let Ok(mut movement) = query.single_mut(world) {
                 movement.intent = Some(intent);
@@ -263,6 +304,10 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
         GameCommand::Back => {
             let screen = *world.resource::<State<Screen>>().get();
             let menu = *world.resource::<State<Menu>>().get();
+            if menu == Menu::CareItemPicker {
+                cancel_care_menu_in_world(world);
+                return;
+            }
             let mut next_menu = world.resource_mut::<NextState<Menu>>();
             go_back_menu(&screen, &menu, &mut next_menu);
         }
@@ -276,6 +321,10 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             world.resource_mut::<NextState<Menu>>().set(Menu::Credits);
         }
         GameCommand::Continue => {
+            if care_menu_open(world) {
+                confirm_care_menu_in_world(world);
+                return;
+            }
             world.resource_mut::<NextState<Menu>>().set(Menu::None);
         }
         GameCommand::QuitToTitle => {
@@ -336,7 +385,7 @@ fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {
             });
         }
         Menu::Credits => next_menu.set(Menu::Main),
-        Menu::Pause => next_menu.set(Menu::None),
+        Menu::Pause | Menu::CareItemPicker => next_menu.set(Menu::None),
         Menu::Main | Menu::None => {}
     }
 }

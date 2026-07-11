@@ -136,10 +136,45 @@ impl PoopWheelbarrow {
     }
 }
 
-/// Transient feedback message surfaced in the HUD after pickups/drops.
-#[derive(Resource, Debug, Default, Reflect)]
+/// Transient inventory / error / progress copy (pickups, drops, satchel full,
+/// missing item, mini-chore tap progress). Care outcomes use [`CareFeedbackEvent`].
+#[derive(Resource, Debug, Default, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct LastPickupMessage {
     pub text: Option<String>,
     pub timer: Timer,
+}
+
+/// Short care-action feedback toast (feed, enrich, clean, chore, menu take, pickup).
+/// Observed by the toast system. Does not drive the satchel HUD pulse.
+#[derive(Event, Debug, Clone, Reflect)]
+#[reflect(Event)]
+pub struct CareFeedbackEvent {
+    pub message: String,
+}
+
+/// Brief satchel HUD highlight after a care action restores an animal stat
+/// (feed / enrich / clean). Inventory and chore toasts do not trigger this.
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
+pub struct CareHudPulse {
+    pub timer: Timer,
+}
+
+impl Default for CareHudPulse {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.0, TimerMode::Once),
+        }
+    }
+}
+
+impl CareHudPulse {
+    pub fn trigger(&mut self) {
+        self.timer = Timer::from_seconds(0.4, TimerMode::Once);
+    }
+
+    pub fn is_active(&self) -> bool {
+        !self.timer.is_finished() && self.timer.duration().as_secs_f32() > 0.0
+    }
 }

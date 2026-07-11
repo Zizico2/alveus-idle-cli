@@ -1,7 +1,7 @@
 #![cfg(feature = "headless")]
 
-use alveus_headless::register_headless_types;
 use alveus_app::Screen;
+use alveus_headless::register_headless_types;
 use alveus_stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::remote::{BrpMessage, BrpSender};

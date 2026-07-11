@@ -1,7 +1,7 @@
 use alveus_app::{InRoom, Screen};
 use alveus_collision::{
-    CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, collision_key_for_animal,
-    is_walkable, walkable_neighbors,
+    CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem,
+    collision_key_for_animal, is_walkable, walkable_neighbors,
 };
 use alveus_components::{
     CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure, TILE_SIZE, TilePosition,

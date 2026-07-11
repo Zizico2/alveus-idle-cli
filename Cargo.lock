@@ -250,6 +250,7 @@ dependencies = [
  "alveus-menus",
  "alveus-screens",
  "alveus-stats",
+ "alveus-types",
  "alveus-world",
  "async-channel",
  "bevy",
@@ -373,6 +374,7 @@ dependencies = [
  "bevy_reflect",
  "moonshine-save",
  "phf_shared",
+ "serde",
 ]
 
 [[package]]

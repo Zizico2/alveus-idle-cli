@@ -8,17 +8,20 @@
 //! Identifier enums live in [`alveus_types`]. Historical prose lives in `design/`
 //! (markdown only) and [`ROADMAP.md`](../../ROADMAP.md).
 
-use alveus_types::{AnimalId, EnclosureId, ItemId, TileBounds, TilePosition};
+use alveus_types::{
+    AnimalId, CareMenuId, ChoreId, CleanStat, EnclosureId, EnrichStat, FeedStat, ItemId, Stat,
+    TileBounds, TilePosition,
+};
 
 // ---------------------------------------------------------
 // Scale & timing
 // ---------------------------------------------------------
 
 /// Internal stat scale: design fractions `0.0–1.0` map to `0..=STAT_SCALE`.
-pub const STAT_SCALE: u32 = 1000;
+pub const STAT_SCALE: Stat = Stat(1000);
 
 /// Full / initial value for hunger, happiness, and enclosure cleanliness.
-pub const STAT_FULL: u32 = STAT_SCALE;
+pub const STAT_FULL: Stat = STAT_SCALE;
 
 /// World tile size in pixels.
 pub const TILE_SIZE: u32 = 32;
@@ -32,8 +35,17 @@ pub const AUTOSAVE_INTERVAL_SECS: f32 = 5.0;
 /// Upkeep score at or below this shows the neglect banner (and related Epic 5 effects).
 pub const NEGLECT_UPKEEP_THRESHOLD: f32 = 0.30;
 
-/// Current satchel capacity (one carried item). Planned target is 2 — see README.
-pub const SATCHEL_MAX_SLOTS: u8 = 1;
+/// Caretaker satchel capacity (two carried items).
+pub const SATCHEL_MAX_SLOTS: u8 = 2;
+
+/// Typical feed restore amount ([`STAT_FULL`] = full bar).
+pub const CARE_FEED_RESTORE: FeedStat = FeedStat(STAT_FULL);
+
+/// Typical enrichment (happiness) restore amount.
+pub const CARE_ENRICH_RESTORE: EnrichStat = EnrichStat(STAT_FULL);
+
+/// Typical clean / nesting restore amount (enclosure cleanliness).
+pub const CARE_CLEAN_RESTORE: CleanStat = CleanStat(STAT_FULL);
 
 /// Default overview spawn when entering gameplay (runtime; not design-map coords).
 pub const OVERVIEW_PLAYER_SPAWN: TilePosition = TilePosition { x: 0, y: 0 };
@@ -61,11 +73,47 @@ pub const fn item_data(item_id: ItemId) -> ItemStaticData {
         ItemId::ChickenGrains => ItemStaticData {
             display_name: "Chicken Grains",
         },
+        ItemId::RawVeggieTub => ItemStaticData {
+            display_name: "Lettuce & Veggie Tub",
+        },
+        ItemId::PreparedVeggieDiet => ItemStaticData {
+            display_name: "Prepared Veggie Diet",
+        },
+        ItemId::MiniMirror => ItemStaticData {
+            display_name: "Mini Mirror",
+        },
     }
 }
 
 pub const fn item_display_name(item_id: ItemId) -> &'static str {
     item_data(item_id).display_name
+}
+
+/// Prep recipe: input item + chore → output item.
+#[derive(Debug, Clone, Copy)]
+pub struct PrepRecipe {
+    pub chore_id: ChoreId,
+    pub input: ItemId,
+    pub output: ItemId,
+}
+
+pub const PREP_RECIPES: &[PrepRecipe] = &[PrepRecipe {
+    chore_id: ChoreId::ChopVeggies,
+    input: ItemId::RawVeggieTub,
+    output: ItemId::PreparedVeggieDiet,
+}];
+
+pub fn prep_recipe_for(chore_id: ChoreId, input: ItemId) -> Option<&'static PrepRecipe> {
+    PREP_RECIPES
+        .iter()
+        .find(|recipe| recipe.chore_id == chore_id && recipe.input == input)
+}
+
+/// Items offered by a care item-picker menu.
+pub const fn care_menu_options(menu_id: CareMenuId) -> &'static [ItemId] {
+    match menu_id {
+        CareMenuId::Fridge => &[ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
+    }
 }
 
 // ---------------------------------------------------------
@@ -165,22 +213,22 @@ pub const ENCLOSURES_DATA: &[EnclosureStaticData] = &[
     EnclosureStaticData {
         enclosure_id: EnclosureId::NutritionHousePlaypen,
         display_name: "Nutrition House Playpen",
-        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE.get() as f32,
     },
     EnclosureStaticData {
         enclosure_id: EnclosureId::PushPopEnclosure,
         display_name: "Push Pop Enclosure",
-        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE.get() as f32,
     },
     EnclosureStaticData {
         enclosure_id: EnclosureId::Pasture,
         display_name: "Pasture Grassland",
-        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE.get() as f32,
     },
     EnclosureStaticData {
         enclosure_id: EnclosureId::ReptileEnclosure,
         display_name: "Reptile Enclosure",
-        cleanliness_decay_per_hour: 0.03 * STAT_SCALE as f32,
+        cleanliness_decay_per_hour: 0.03 * STAT_SCALE.get() as f32,
     },
 ];
 
@@ -262,18 +310,18 @@ pub const PUSH_POP_ENCLOSURE_ROOM: RoomTileConfig = RoomTileConfig {
 #[derive(Debug, Clone, Copy)]
 pub struct PoopConfig {
     /// Cleanliness at or below each threshold ([`STAT_SCALE`] units) adds one poop.
-    pub spawn_thresholds: &'static [u32],
+    pub spawn_thresholds: &'static [Stat],
     /// Extra cleanliness units lost per hour per poop on the floor.
     pub poop_decay_rate: f32,
     /// Cleanliness restored when a poop is picked up (not when the wheelbarrow is emptied).
-    pub cleanliness_restore_per_poop: u32,
+    pub cleanliness_restore_per_poop: CleanStat,
     pub spawn_bounds: TileBounds,
 }
 
 const PUSH_POP_POOP_CONFIG: PoopConfig = PoopConfig {
-    spawn_thresholds: &[800, 500, 200],
+    spawn_thresholds: &[Stat(800), Stat(500), Stat(200)],
     poop_decay_rate: 20.0,
-    cleanliness_restore_per_poop: 350,
+    cleanliness_restore_per_poop: CleanStat(Stat(350)),
     spawn_bounds: PUSH_POP_PLACEMENT.wander_bounds,
 };
 
@@ -292,7 +340,7 @@ pub const fn poop_config_for(id: EnclosureId) -> &'static PoopConfig {
 // ---------------------------------------------------------
 
 /// How many poops should be on the floor given current enclosure cleanliness.
-pub fn target_poop_count(cleanliness: u32, thresholds: &[u32]) -> u32 {
+pub fn target_poop_count(cleanliness: Stat, thresholds: &[Stat]) -> u32 {
     thresholds
         .iter()
         .filter(|&&threshold| cleanliness <= threshold)
@@ -311,11 +359,11 @@ pub fn cleanliness_decay_with_poops(
 
 /// Simulate threshold-crossing poop acceleration over a block of hours (offline / time-skip).
 pub fn cleanliness_after_threshold_decay(
-    start: u32,
+    start: Stat,
     hours: f32,
     base_rate: f32,
     config: &PoopConfig,
-) -> u32 {
+) -> Stat {
     if hours <= 0.0 {
         return start;
     }
@@ -323,7 +371,7 @@ pub fn cleanliness_after_threshold_decay(
     let mut current = start;
     let mut remaining = hours;
 
-    let mut thresholds: Vec<u32> = config.spawn_thresholds.to_vec();
+    let mut thresholds: Vec<Stat> = config.spawn_thresholds.to_vec();
     thresholds.sort_by(|a, b| b.cmp(a));
 
     for &threshold in &thresholds {
@@ -335,7 +383,7 @@ pub fn cleanliness_after_threshold_decay(
         if rate <= 0.0 {
             break;
         }
-        let drain_to_threshold = current - threshold;
+        let drain_to_threshold = current.get() - threshold.get();
         let time_needed = drain_to_threshold as f32 / rate;
 
         if time_needed <= remaining {
@@ -343,15 +391,15 @@ pub fn cleanliness_after_threshold_decay(
             current = threshold;
         } else {
             let decay = (rate * remaining).round() as u32;
-            return current.saturating_sub(decay);
+            return current.saturating_sub(Stat(decay));
         }
     }
 
-    if remaining > 0.0 && current > 0 {
+    if remaining > 0.0 && !current.is_zero() {
         let poop_count = target_poop_count(current, config.spawn_thresholds);
         let rate = base_rate + config.poop_decay_rate * poop_count as f32;
         let decay = (rate * remaining).round() as u32;
-        current = current.saturating_sub(decay);
+        current = current.saturating_sub(Stat(decay));
     }
 
     current
@@ -359,14 +407,14 @@ pub fn cleanliness_after_threshold_decay(
 
 /// Total cleanliness units lost over `hours`, accounting for threshold poop acceleration.
 pub fn enclosure_cleanliness_decay_amount(
-    start: u32,
+    start: Stat,
     hours: f32,
     base_rate: f32,
     enclosure_id: EnclosureId,
     _starting_poop_count: usize,
-) -> u32 {
+) -> Stat {
     if hours <= 0.0 {
-        return 0;
+        return Stat::ZERO;
     }
     let config = poop_config_for(enclosure_id);
     start.saturating_sub(cleanliness_after_threshold_decay(

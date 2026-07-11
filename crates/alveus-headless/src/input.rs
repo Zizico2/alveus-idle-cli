@@ -54,17 +54,63 @@ impl Plugin for InputPlugin {
                     .and_then(input_just_pressed(KeyCode::KeyP)),
             ),
         );
+
+        app.add_systems(
+            Update,
+            (
+                interact_from_keyboard
+                    .run_if(allows_tile_interaction.and_then(input_just_pressed(KeyCode::Space))),
+                drop_item_from_keyboard
+                    .run_if(allows_tile_interaction.and_then(input_just_pressed(KeyCode::KeyK))),
+                confirm_care_menu_from_keyboard.run_if(
+                    in_state(Menu::CareItemPicker).and_then(input_just_pressed(KeyCode::Enter)),
+                ),
+                cancel_care_menu_from_keyboard.run_if(
+                    in_state(Menu::CareItemPicker).and_then(input_just_pressed(KeyCode::Escape)),
+                ),
+            ),
+        );
     }
 }
 
-fn record_player_directional_input(input: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
-    let intent = if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
+fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
+    matches!(*screen.get(), Screen::Gameplay | Screen::InRoom(_))
+}
+
+fn record_player_directional_input(
+    input: Res<ButtonInput<KeyCode>>,
+    menu: Res<State<Menu>>,
+    mut commands: Commands,
+) {
+    let picker_open = *menu.get() == Menu::CareItemPicker;
+    let is_up = if picker_open {
+        input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::ArrowUp)
+    } else {
+        input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp)
+    };
+    let is_down = if picker_open {
+        input.just_pressed(KeyCode::KeyS) || input.just_pressed(KeyCode::ArrowDown)
+    } else {
+        input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown)
+    };
+    let is_left = if picker_open {
+        input.just_pressed(KeyCode::KeyA) || input.just_pressed(KeyCode::ArrowLeft)
+    } else {
+        input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft)
+    };
+    let is_right = if picker_open {
+        input.just_pressed(KeyCode::KeyD) || input.just_pressed(KeyCode::ArrowRight)
+    } else {
+        input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight)
+    };
+
+    let intent = if is_up {
         Some(MovementIntent::Up)
-    } else if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {
+    } else if is_down {
         Some(MovementIntent::Down)
-    } else if input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft) {
+    } else if is_left {
         Some(MovementIntent::Left)
-    } else if input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight) {
+    } else if is_right {
         Some(MovementIntent::Right)
     } else {
         None
@@ -87,4 +133,20 @@ fn pause_from_keyboard(mut commands: Commands) {
 
 fn close_menu_from_keyboard(mut commands: Commands) {
     commands.trigger(GameCommand::PauseToggle);
+}
+
+fn interact_from_keyboard(mut commands: Commands) {
+    commands.trigger(GameCommand::Interact);
+}
+
+fn confirm_care_menu_from_keyboard(mut commands: Commands) {
+    commands.trigger(GameCommand::Continue);
+}
+
+fn cancel_care_menu_from_keyboard(mut commands: Commands) {
+    commands.trigger(GameCommand::Back);
+}
+
+fn drop_item_from_keyboard(mut commands: Commands) {
+    commands.trigger(GameCommand::DropItem);
 }

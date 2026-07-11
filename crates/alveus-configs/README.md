@@ -19,12 +19,15 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 
 | Domain | Symbols |
 |--------|---------|
-| Stat scale | `STAT_SCALE`, `STAT_FULL` |
+| Stat scale | `Stat`, `STAT_SCALE`, `STAT_FULL` |
 | Timing / feel | `TILE_SIZE`, `PLAYER_MOVE_DURATION_SECS`, `AUTOSAVE_INTERVAL_SECS` |
 | Neglect | `NEGLECT_UPKEEP_THRESHOLD` |
-| Satchel (current) | `SATCHEL_MAX_SLOTS` (= 1) |
+| Satchel | `SATCHEL_MAX_SLOTS` (= 2) |
+| Care restores | `FeedStat` / `EnrichStat` / `CleanStat`; `CARE_FEED_RESTORE`, `CARE_ENRICH_RESTORE`, `CARE_CLEAN_RESTORE` |
+| Prep chore | `PREP_RECIPES`, `prep_recipe_for` |
+| Care menus | `care_menu_options` (`CareMenuId::Fridge`) |
 | Overview spawn | `OVERVIEW_PLAYER_SPAWN` |
-| Items (2) | `item_data` / `item_display_name` |
+| Items (5) | `item_data` / `item_display_name` |
 | Animals | `ANIMALS_DATA`, `animal_data`, `enclosure_for_animal` |
 | Enclosures | `ENCLOSURES_DATA`, `enclosure_data` |
 | Placements | `POLLY_PLACEMENT`, `PUSH_POP_PLACEMENT`, `animal_default_placement` |
@@ -34,7 +37,13 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 
 **Promotion rule:** When an epic implements a Planned row, move it into Rust, wire call sites, remove it from Planned. Do not leave a second authoritative copy in `design/`.
 
-**Dual source (temporary):** Care restore deltas for feed/give are still authored on Tiled interior objects (`FeedAnimal.delta`, etc.). Epic 1 should centralize restores here; until then treat Planned care restores as the intended SoT for new work.
+**Stat scale:** `Stat` is the shared discrete unit for hunger, happiness, and enclosure cleanliness. `STAT_SCALE: Stat = Stat(1000)` defines a full bar, and `STAT_FULL` aliases that typed value for defaults.
+
+**Action wrappers:** Feed, enrichment, and cleaning authored deltas use `FeedStat`, `EnrichStat`, and `CleanStat` so call sites preserve the action domain while still converting to the shared `Stat` unit at mutation time. The `CARE_*_RESTORE` names are retained, but their values are typed action wrappers around `STAT_FULL`.
+
+**Rates:** Decay rates remain `f32` because they accumulate fractional stat units over time. Convert with `Stat::get()` only at rate, percentage, logging, or serialization boundaries.
+
+**Tiled override:** Per-object `FeedAnimal.delta` / `EnrichAnimal.delta` / `CleanAnimal.delta` on tiles use the matching stat newtype class shape (e.g. `alveus_types::FeedStat` with member `0`) and may override the typical care restore constants.
 
 ---
 
@@ -42,27 +51,26 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 
 Non-binding starting points for playtest tuning. Values below were mined from the old design JSON (now deleted). Prefer **parrot** framing for Siren; shed rows are under **future snakes**.
 
-### Satchel & economy
+### Economy
 
 | Knob | Ballpark | Notes |
 |------|----------|-------|
-| Satchel max slots | **2** | Shipped is `1`; raise in Epic 1 |
 | Coin tier Excellent | ≥ 0.80 upkeep → **20**/hour | |
 | Coin tier Fair | ≥ 0.30 upkeep → **10**/hour | |
 | Coin tier Neglected | &lt; 0.30 → **0**/hour | Aligns with `NEGLECT_UPKEEP_THRESHOLD` |
 | Daily HQ bonus | **50** coins | All stats at 100% when checking clipboard |
 | Upkeep formula | `(avg_hunger + avg_cleanliness + avg_happiness) / 3` | Already used in stats |
 
-### Care restores
+### Care restores (remaining)
 
-Normalized `1.0` → `STAT_SCALE` units when implemented.
+Normalized `1.0` → `STAT_SCALE` (`Stat(1000)`) units when implemented.
 
 | Action | Ballpark restore | Notes |
 |--------|------------------|-------|
-| Feed / clean (typical) | **1.0** (= full bar) | |
 | Stompy clean (partial) | **0.34** | Old design; re-tune in Pasture epic |
 | Georgie enrich (soundboard share) | **0.5** | Shared happiness bump |
-| Prep chop chore | **5** taps | Prep table mini-chore |
+
+Shipped: feed/enrich typical = `STAT_FULL`; prep is a single Interact (`PREP_RECIPES`).
 
 ### Unimplemented items
 
@@ -70,16 +78,13 @@ Full descriptions: [`design/copy-notes.md`](../../design/copy-notes.md).
 
 | Id | Display name | Category | Notes |
 |----|--------------|----------|-------|
-| `raw_veggie_tub` | Lettuce & Veggie Tub | raw_diet | Prep → `prepared_veggie_diet` |
-| `prepared_veggie_diet` | Prepared Veggie Diet | prepared_diet | Stompy |
 | `cricket_box` | Cricket Box | prepared_diet | Georgie |
 | `carnivore_raw_prep` | *(rework)* | raw_diet | Was snake prey — redesign for **parrot** Siren diet |
 | `prepared_carnivore_diet` | *(rework)* | prepared_diet | Same — parrot-appropriate |
-| `mini_mirror` | Mini Mirror | enrichment_toy | Polly |
 | `shiny_object` | Shiny Object | enrichment_toy | Stompy |
 | `shed_snake_skin` | Shed Snake Skin | collectible | **Future snakes**, not Siren |
 
-Shipped today: `TortoiseLeafyGreens`, `ChickenGrains`.
+Shipped: `TortoiseLeafyGreens`, `ChickenGrains`, `RawVeggieTub`, `PreparedVeggieDiet`, `MiniMirror`.
 
 ### Daily events (weights)
 

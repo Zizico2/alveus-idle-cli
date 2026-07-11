@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use alveus_components::BuildingEntrance;
+use alveus_components::{BuildingEntrance, CareFeedbackEvent};
 use bevy::prelude::*;
 use bevy_tweening::{lens::UiPositionLens, *};
 
@@ -30,8 +30,14 @@ impl Plugin for ToastPlugin {
             .add_observer(toast_dismiss_observer)
             .add_observer(player_entered_building_observer)
             .add_observer(player_exited_building_observer)
-            .add_observer(on_anim_completed);
+            .add_observer(on_anim_completed)
+            .add_observer(care_feedback_toast_observer);
     }
+}
+
+fn care_feedback_toast_observer(trigger: On<CareFeedbackEvent>, mut commands: Commands) {
+    let message = trigger.event().message.clone();
+    commands.trigger(TriggerToastEvent::new(message));
 }
 
 #[derive(Event, Debug, Clone, Reflect)]

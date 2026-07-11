@@ -37,10 +37,21 @@ def give_item_prop(item_id: str, prompt: str) -> str:
     </property>"""
 
 
+def care_stat_prop(name: str, type_path: str, value: int) -> str:
+    return f"""      <property name="{name}" type="class" propertytype="{type_path}">
+       <properties>
+        <property name="0" type="class" propertytype="alveus_types::Stat">
+         <properties>
+          <property name="0" type="int" value="{value}"/>
+         </properties>
+        </property>
+       </properties>
+      </property>"""
+
+
 def feed_animal_prop(
     animal_id: str,
     required_item: str,
-    stat: str,
     delta: int,
     prompt: str,
 ) -> str:
@@ -48,8 +59,57 @@ def feed_animal_prop(
      <properties>
 {enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
 {enum_variant_prop("required_item", "alveus_types::ItemId", required_item)}
-{enum_variant_prop("stat", "alveus_stats::AnimalStat", stat)}
-      <property name="delta" type="int" value="{delta}"/>
+{care_stat_prop("delta", "alveus_types::FeedStat", delta)}
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def enrich_animal_prop(
+    animal_id: str,
+    required_item: str | None,
+    delta: int,
+    prompt: str,
+) -> str:
+    required = (
+        enum_variant_prop("required_item", "alveus_types::ItemId", required_item)
+        if required_item is not None
+        else '      <property name="required_item" type="class" propertytype="core::option::Option<alveus_types::ItemId">\n'
+        '       <properties>\n'
+        '        <property name=":variant" propertytype="core::option::Option<alveus_types::ItemId>:::Variant" value="None"/>\n'
+        "       </properties>\n"
+        "      </property>"
+    )
+    return f"""    <property name="enrich_animal" type="class" propertytype="alveus_interaction::EnrichAnimal">
+     <properties>
+{enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
+{required}
+{care_stat_prop("delta", "alveus_types::EnrichStat", delta)}
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def clean_animal_prop(
+    animal_id: str,
+    required_item: str | None,
+    delta: int,
+    prompt: str,
+) -> str:
+    required = (
+        enum_variant_prop("required_item", "alveus_types::ItemId", required_item)
+        if required_item is not None
+        else '      <property name="required_item" type="class" propertytype="core::option::Option<alveus_types::ItemId">\n'
+        '       <properties>\n'
+        '        <property name=":variant" propertytype="core::option::Option<alveus_types::ItemId>:::Variant" value="None"/>\n'
+        "       </properties>\n"
+        "      </property>"
+    )
+    return f"""    <property name="clean_animal" type="class" propertytype="alveus_interaction::CleanAnimal">
+     <properties>
+{enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
+{required}
+{care_stat_prop("delta", "alveus_types::CleanStat", delta)}
       <property name="prompt" type="string" value="{prompt}"/>
      </properties>
     </property>"""
@@ -59,15 +119,15 @@ def interactable_tile_props(
     room_object: str,
     *,
     give_item: tuple[str, str] | None = None,
-    feed_animal: tuple[str, str, str, int, str] | None = None,
+    feed_animal: tuple[str, str, int, str] | None = None,
 ) -> str:
     interaction = ""
     if give_item is not None:
         item_id, prompt = give_item
         interaction = give_item_prop(item_id, prompt)
     elif feed_animal is not None:
-        animal_id, required_item, stat, delta, prompt = feed_animal
-        interaction = feed_animal_prop(animal_id, required_item, stat, delta, prompt)
+        animal_id, required_item, delta, prompt = feed_animal
+        interaction = feed_animal_prop(animal_id, required_item, delta, prompt)
 
     return f"""   <properties>
     <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
@@ -87,7 +147,7 @@ class TileDef(NamedTuple):
     obstacle: bool
     room_object: str | None = None
     give_item: tuple[str, str] | None = None
-    feed_animal: tuple[str, str, str, int, str] | None = None
+    feed_animal: tuple[str, str, int, str] | None = None
 
 # Palette derived from room.rs Color::srgb values and nutrition_house.png cottage style.
 PALETTE = {
@@ -297,7 +357,6 @@ TILE_DEFS: list[TileDef] = [
         feed_animal=(
             "PushPop",
             "TortoiseLeafyGreens",
-            "Hunger",
             1000,
             "Place leafy greens for Push Pop",
         ),
