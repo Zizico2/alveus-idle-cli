@@ -587,6 +587,10 @@ fn clean_animal_restores_cleanliness_only() {
         .expect("care feedback");
     assert!(text.contains("Cleaned"), "{text}");
     assert!(!text.contains("Enriched"), "{text}");
+    assert_eq!(
+        care_outcome_message(AnimalId::PushPop, AnimalStat::Cleanliness),
+        text
+    );
     assert!(app.world().resource::<LastPickupMessage>().text.is_none());
 
     let enc_stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
@@ -646,6 +650,16 @@ fn interact_clean_via_game_command() {
         CARE_CLEAN_RESTORE.0
     );
 
+    let text = app
+        .world()
+        .resource::<CapturedCareFeedback>()
+        .0
+        .as_deref()
+        .expect("care feedback");
+    assert!(text.contains("Cleaned"), "{text}");
+    assert!(!text.contains("Enriched"), "{text}");
+    assert!(app.world().resource::<LastPickupMessage>().text.is_none());
+
     let _ = std::fs::remove_file(save_path);
 }
 
@@ -698,7 +712,12 @@ fn feed_feedback_says_fed() {
         .as_deref()
         .expect("care feedback");
     assert!(text.contains("Fed"), "{text}");
+    assert!(!text.contains("Cleaned"), "{text}");
     assert!(!text.contains("Enriched"), "{text}");
+    assert_eq!(
+        care_outcome_message(AnimalId::PushPop, AnimalStat::Hunger),
+        text
+    );
     assert!(app.world().resource::<LastPickupMessage>().text.is_none());
 
     let stats = app.world().get::<AnimalStats>(push_pop).unwrap();

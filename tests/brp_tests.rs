@@ -1,18 +1,33 @@
 #![cfg(feature = "headless")]
 
 use alveus_app::{Menu, Screen};
-use alveus_components::{CurrentTilePosition, Interactable, Player, TilePosition};
+use alveus_components::{
+    CareFeedbackEvent, CurrentTilePosition, Interactable, LastPickupMessage, Player, TilePosition,
+};
+use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE};
 use alveus_content::ItemId;
 use alveus_headless::{GameCommand, register_headless_types};
 use alveus_interaction::{
-    CareMenuState, EnrichAnimal, InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel,
-    satchel_contains, try_give_item,
+    CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, InteractionPlugin, MiniChore, OpenMenu,
+    PlayerSatchel, care_outcome_message, satchel_contains, try_give_item,
 };
-use alveus_stats::{AnimalId, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin};
+use alveus_stats::{
+    AnimalId, AnimalStat, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin,
+};
 use alveus_types::{CareMenuId, ChoreId, Stat};
 use bevy::prelude::*;
 use bevy::remote::{BrpMessage, BrpResult, BrpSender};
 use bevy::state::app::StatesPlugin;
+
+#[derive(Resource, Default)]
+struct CapturedCareFeedback(Option<String>);
+
+fn capture_care_feedback(
+    trigger: On<CareFeedbackEvent>,
+    mut captured: ResMut<CapturedCareFeedback>,
+) {
+    captured.0 = Some(trigger.event().message.clone());
+}
 
 fn brp_request(app: &mut App, method: &str, params: Option<serde_json::Value>) -> BrpResult {
     let (result_sender, result_receiver) = async_channel::bounded(1);
@@ -57,6 +72,7 @@ fn care_brp_app(save_path: &str) -> App {
     app.add_plugins(alveus_app::plugin);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
+    app.init_resource::<CapturedCareFeedback>();
     app.add_plugins((
         StatsPlugin,
         alveus_cleaning::CleaningPlugin,
@@ -65,6 +81,7 @@ fn care_brp_app(save_path: &str) -> App {
     ));
     app.add_plugins(bevy::remote::RemotePlugin::default());
     register_headless_types(&mut app);
+    app.add_observer(capture_care_feedback);
     app.world_mut()
         .spawn((Player, CurrentTilePosition(TilePosition { x: 0, y: 0 })));
     app.world_mut()
@@ -195,7 +212,7 @@ fn brp_enrich_interaction_restores_happiness() {
         EnrichAnimal {
             animal_id: AnimalId::PushPop,
             required_item: None,
-            delta: alveus_configs::CARE_ENRICH_RESTORE,
+            delta: CARE_ENRICH_RESTORE,
             prompt: "Scatter hay".to_string(),
         },
         TilePosition { x: 0, y: 0 },
@@ -207,8 +224,142 @@ fn brp_enrich_interaction_restores_happiness() {
 
     assert_eq!(
         app.world().get::<AnimalStats>(push_pop).unwrap().happiness,
-        alveus_configs::CARE_ENRICH_RESTORE.0
+        CARE_ENRICH_RESTORE.0
     );
+
+    let text = app
+        .world()
+        .resource::<CapturedCareFeedback>()
+        .0
+        .as_deref()
+        .expect("care feedback");
+    assert_eq!(
+        text,
+        care_outcome_message(AnimalId::PushPop, AnimalStat::Happiness)
+    );
+    assert!(text.contains("Enriched"), "{text}");
+    assert!(!text.contains("Cleaned"), "{text}");
+    assert!(app.world().resource::<LastPickupMessage>().text.is_none());
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn brp_clean_interaction_says_cleaned_not_enriched() {
+    let save_path = "brp_test_clean_feedback.ron";
+    let mut app = care_brp_app(save_path);
+
+    let enc_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EnclosureId>>()
+        .iter(app.world())
+        .find(|&entity| {
+            app.world().get::<EnclosureId>(entity) == Some(&EnclosureId::PushPopEnclosure)
+        })
+        .expect("Push Pop enclosure");
+    app.world_mut()
+        .get_mut::<EnclosureStats>(enc_entity)
+        .unwrap()
+        .cleanliness = Stat(50);
+
+    app.world_mut().spawn((
+        CleanAnimal {
+            animal_id: AnimalId::PushPop,
+            required_item: None,
+            delta: CARE_CLEAN_RESTORE,
+            prompt: "Sweep nesting".to_string(),
+        },
+        TilePosition { x: 0, y: 0 },
+        Interactable,
+    ));
+    app.update();
+
+    trigger_game_command(&mut app, serde_json::json!("Interact"));
+
+    assert_eq!(
+        app.world()
+            .get::<EnclosureStats>(enc_entity)
+            .unwrap()
+            .cleanliness,
+        CARE_CLEAN_RESTORE.0
+    );
+
+    let text = app
+        .world()
+        .resource::<CapturedCareFeedback>()
+        .0
+        .as_deref()
+        .expect("care feedback");
+    assert_eq!(
+        text,
+        care_outcome_message(AnimalId::PushPop, AnimalStat::Cleanliness)
+    );
+    assert!(text.contains("Cleaned"), "{text}");
+    assert!(!text.contains("Enriched"), "{text}");
+    assert!(app.world().resource::<LastPickupMessage>().text.is_none());
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn brp_feed_interaction_says_fed_and_consumes_item() {
+    let save_path = "brp_test_feed_feedback.ron";
+    let mut app = care_brp_app(save_path);
+
+    try_give_item(
+        &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+        ItemId::TortoiseLeafyGreens,
+    )
+    .unwrap();
+
+    let push_pop = app
+        .world_mut()
+        .query_filtered::<Entity, With<AnimalId>>()
+        .iter(app.world())
+        .find(|&entity| app.world().get::<AnimalId>(entity) == Some(&AnimalId::PushPop))
+        .expect("Push Pop stats entity");
+    app.world_mut()
+        .get_mut::<AnimalStats>(push_pop)
+        .unwrap()
+        .hunger = Stat(100);
+
+    app.world_mut().spawn((
+        FeedAnimal {
+            animal_id: AnimalId::PushPop,
+            required_item: ItemId::TortoiseLeafyGreens,
+            delta: CARE_FEED_RESTORE,
+            prompt: "Fill dish".to_string(),
+        },
+        TilePosition { x: 0, y: 0 },
+        Interactable,
+    ));
+    app.update();
+
+    trigger_game_command(&mut app, serde_json::json!("Interact"));
+
+    assert_eq!(
+        app.world().get::<AnimalStats>(push_pop).unwrap().hunger,
+        CARE_FEED_RESTORE.0
+    );
+    assert!(!satchel_contains(
+        app.world().resource::<PlayerSatchel>(),
+        ItemId::TortoiseLeafyGreens
+    ));
+
+    let text = app
+        .world()
+        .resource::<CapturedCareFeedback>()
+        .0
+        .as_deref()
+        .expect("care feedback");
+    assert_eq!(
+        text,
+        care_outcome_message(AnimalId::PushPop, AnimalStat::Hunger)
+    );
+    assert!(text.contains("Fed"), "{text}");
+    assert!(!text.contains("Cleaned"), "{text}");
+    assert!(!text.contains("Enriched"), "{text}");
+    assert!(app.world().resource::<LastPickupMessage>().text.is_none());
 
     let _ = std::fs::remove_file(save_path);
 }
