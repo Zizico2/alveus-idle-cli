@@ -113,9 +113,12 @@ pub enum GameCommand {
     AdvanceTime { hours: f32 },
     /// Debug: nudge the global audio volume by `delta` (clamped to [0.0, 3.0]).
     AdjustVolume { delta: f32 },
-    /// Harness: capture a PNG of the offscreen render target to `path`. With no
-    /// headless render target it falls back to the primary window. The write is
-    /// asynchronous — wait a couple of frames before reading the file.
+    /// Harness: capture a PNG of the composed offscreen frame (world + UI) to
+    /// `path`. The headless camera is the default UI camera, so HUD, menus, and
+    /// toasts are included. With no headless render target it falls back to the
+    /// primary window. The write is asynchronous — wait a couple of frames
+    /// before reading the file. Visual PNG checks need a wgpu adapter; use ECS
+    /// queries as the source of truth for game logic.
     Screenshot { path: String },
     /// Harness: in `--step` mode, request that the headless loop simulate `n`
     /// additional frames. Ignored in `--realtime` mode (frames advance on a

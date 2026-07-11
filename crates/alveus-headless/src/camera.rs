@@ -78,5 +78,80 @@ fn spawn_headless_camera(
         Camera2d,
         Camera::default(),
         RenderTarget::Image(handle.into()),
+        // Windowless mode has no primary window, so UI roots without
+        // `UiTargetCamera` only reach this offscreen target when it is marked
+        // as the default UI camera (world + HUD/menus/toasts in screenshots).
+        IsDefaultUiCamera,
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::camera::RenderTarget;
+
+    fn headless_camera_app(resolution: (u32, u32)) -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .add_plugins(HeadlessCameraPlugin { resolution });
+        app.update();
+        app
+    }
+
+    #[test]
+    fn headless_camera_is_default_ui_camera_with_image_target() {
+        let mut app = headless_camera_app((320, 180));
+
+        let mut query = app
+            .world_mut()
+            .query::<(&Camera, Option<&IsDefaultUiCamera>)>();
+        let cameras: Vec<_> = query.iter(app.world()).collect();
+        assert_eq!(cameras.len(), 1, "expected exactly one camera");
+        assert!(
+            cameras[0].1.is_some(),
+            "headless Camera2d must carry IsDefaultUiCamera"
+        );
+
+        let expected = app.world().resource::<HeadlessRenderTarget>().image.clone();
+        let target = app
+            .world_mut()
+            .query_filtered::<&RenderTarget, With<Camera>>()
+            .single(app.world())
+            .expect("camera RenderTarget");
+        match target {
+            RenderTarget::Image(image_target) => {
+                assert_eq!(image_target.handle, expected);
+            }
+            other => panic!("expected RenderTarget::Image, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn exactly_one_default_ui_camera() {
+        let mut app = headless_camera_app(DEFAULT_HEADLESS_RESOLUTION);
+        let count = app
+            .world_mut()
+            .query_filtered::<Entity, (With<Camera>, With<IsDefaultUiCamera>)>()
+            .iter(app.world())
+            .count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn render_target_matches_configured_resolution() {
+        let resolution = (640, 360);
+        let app = headless_camera_app(resolution);
+        let target = app.world().resource::<HeadlessRenderTarget>();
+        assert_eq!((target.width, target.height), resolution);
+
+        let handle = target.image.clone();
+        let image = app
+            .world()
+            .resource::<Assets<Image>>()
+            .get(&handle)
+            .expect("render target image");
+        assert_eq!(image.width(), resolution.0);
+        assert_eq!(image.height(), resolution.1);
+    }
 }

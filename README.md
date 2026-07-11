@@ -171,17 +171,25 @@ Derived facts (adjacency, cleanliness joins, etc.) are computed **client-side** 
 
 ### Screenshots
 
-Offscreen mode renders to an `Image` render target (no display server, no Xvfb). Capture via:
+Offscreen mode renders to an `Image` render target (no display server, no Xvfb).
+The headless camera is the default UI camera, so captures are the **composed
+frame** (world geometry plus HUD, menus, and toasts) at the configured
+`--resolution`. Capture via:
 
 ```json
 {
   "method": "world.trigger_event",
   "params": {
     "event": "alveus_headless::command::GameCommand",
-    "value": { "Screenshot": { "path": "/tmp/frame.png" } }
+    "value": { "Screenshot": { "path": "/abs/path/to/repo/screenshots/frame.png" } }
   }
 }
 ```
+
+Prefer writing under `screenshots/` (see `scripts/headless_ui_screenshot_smoke.py`,
+which asserts UI overlay pixels and fails on world-only captures). Use ECS
+queries for logic assertions; treat PNGs as presentation checks. Visual pixel
+tests need a **wgpu device** (GPU or lavapipe) and stay outside plain CI.
 
 ### Tests
 

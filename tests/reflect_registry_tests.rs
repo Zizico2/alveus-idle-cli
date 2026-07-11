@@ -1,3 +1,4 @@
+use alveus_app::{Menu, Pause, Screen};
 use alveus_headless::{GameCommand, register_headless_types};
 use alveus_interaction::{CleanAnimal, PlayerSatchel};
 use alveus_stats::SanctuaryUpkeep;
@@ -22,6 +23,9 @@ fn reflect_registry_exposes_headless_control_types() {
         std::any::TypeId::of::<EnrichStat>(),
         std::any::TypeId::of::<CleanStat>(),
         std::any::TypeId::of::<CleanAnimal>(),
+        std::any::TypeId::of::<State<Screen>>(),
+        std::any::TypeId::of::<State<Menu>>(),
+        std::any::TypeId::of::<State<Pause>>(),
     ] {
         assert!(
             registry.get(type_id).is_some(),
