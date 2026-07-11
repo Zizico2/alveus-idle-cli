@@ -30,7 +30,10 @@ use alveus_types::{AnimalId, EnclosureId};
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct LevelAssets {
-    #[dependency]
+    // Intentionally not `#[dependency]`: wrapping the map handle as a dependency of
+    // this asset can stall a failed Tiled load in `Loading` forever, which hides
+    // failures from [`record_failed_collision_map_loads`]. Readiness is gated by
+    // [`collision_ready`] / Loading instead.
     pub map: Handle<TiledMapAsset>,
 }
 
@@ -46,9 +49,8 @@ impl FromWorld for LevelAssets {
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct InteriorAssets {
-    #[dependency]
+    // See [`LevelAssets`] — no `#[dependency]` so Failed map loads stay observable.
     pub nutrition_house: Handle<TiledMapAsset>,
-    #[dependency]
     pub push_pop_enclosure: Handle<TiledMapAsset>,
 }
 
@@ -81,7 +83,8 @@ impl InteriorAssets {
 // Collision keys & masks
 // ---------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+#[reflect(Debug, PartialEq, Hash)]
 pub enum CollisionMapKey {
     Overview,
     Enclosure(EnclosureId),
@@ -101,6 +104,108 @@ impl CollisionMapKey {
             Self::Enclosure(id) => Some(id),
         }
     }
+
+    /// Asset path used when requesting this map for collision masks.
+    pub fn asset_path(self) -> &'static str {
+        match self {
+            Self::Overview => "maps/overview/map.tmx",
+            Self::Enclosure(EnclosureId::NutritionHousePlaypen) => {
+                "maps/interiors/nutrition_house_interior.tmx"
+            }
+            Self::Enclosure(EnclosureId::PushPopEnclosure) => {
+                "maps/interiors/push_pop_enclosure_interior.tmx"
+            }
+            // Not yet shipped as collision-required interiors.
+            Self::Enclosure(EnclosureId::Pasture) => "maps/interiors/pasture_interior.tmx",
+            Self::Enclosure(EnclosureId::ReptileEnclosure) => {
+                "maps/interiors/reptile_enclosure_interior.tmx"
+            }
+        }
+    }
+}
+
+/// Stable reason category when a required collision map fails to load.
+/// Full Bevy load-state debug details stay in logs (not reflected).
+pub const COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED: &str =
+    "recursive_dependency_failed";
+
+/// One failed required collision map, observable via BRP `world.get_resources`.
+#[derive(Reflect, Debug, Clone, PartialEq, Eq)]
+pub struct CollisionLoadFailure {
+    pub key: CollisionMapKey,
+    pub asset_path: String,
+    pub reason: String,
+}
+
+/// Deduplicated required-map load failures for the current Loading attempt.
+#[derive(Resource, Reflect, Debug, Clone, Default)]
+#[reflect(Resource)]
+pub struct CollisionLoadFailures {
+    pub entries: Vec<CollisionLoadFailure>,
+}
+
+impl CollisionLoadFailures {
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn contains_key(&self, key: CollisionMapKey) -> bool {
+        self.entries.iter().any(|entry| entry.key == key)
+    }
+
+    /// Record a failure if this key is new. Returns `true` when inserted.
+    pub fn record(&mut self, failure: CollisionLoadFailure) -> bool {
+        if self.contains_key(failure.key) {
+            return false;
+        }
+        self.entries.push(failure);
+        true
+    }
+
+    /// Concise player-facing summary; details are bounded for UI.
+    pub fn player_message(&self) -> String {
+        if self.entries.is_empty() {
+            return String::new();
+        }
+
+        let mut msg =
+            String::from("Could not load a required map. Returning to title…");
+
+        #[cfg(debug_assertions)]
+        {
+            msg.push('\n');
+            for entry in self.entries.iter().take(MAX_FAILURE_DETAILS_IN_UI) {
+                msg.push_str(&format!(
+                    "\n- {:?}: {} ({})",
+                    entry.key, entry.asset_path, entry.reason
+                ));
+            }
+            if self.entries.len() > MAX_FAILURE_DETAILS_IN_UI {
+                msg.push_str(&format!(
+                    "\n…and {} more",
+                    self.entries.len() - MAX_FAILURE_DETAILS_IN_UI
+                ));
+            }
+            msg.push_str("\nCheck the asset and log for details.");
+        }
+
+        truncate_ui_message(msg)
+    }
+}
+
+const MAX_FAILURE_DETAILS_IN_UI: usize = 3;
+const MAX_UI_MESSAGE_CHARS: usize = 400;
+
+fn truncate_ui_message(mut msg: String) -> String {
+    if msg.chars().count() > MAX_UI_MESSAGE_CHARS {
+        msg = msg.chars().take(MAX_UI_MESSAGE_CHARS.saturating_sub(1)).collect();
+        msg.push('…');
+    }
+    msg
 }
 
 pub fn enclosure_for_room(room: InRoom) -> EnclosureId {
@@ -298,7 +403,20 @@ pub struct CollisionPlugin;
 
 impl Plugin for CollisionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CollisionMasks>()
+        // Request required maps once up front and retain the handles. Do not call
+        // `AssetServer::load` on these paths every frame — that can stall Failed
+        // loads in `Loading` indefinitely.
+        let required_handles = {
+            let server = app.world().resource::<AssetServer>();
+            RequiredCollisionMapHandles::from_asset_server(server)
+        };
+
+        app.insert_resource(required_handles)
+            .init_resource::<CollisionMasks>()
+            .init_resource::<CollisionLoadFailures>()
+            .register_type::<CollisionMapKey>()
+            .register_type::<CollisionLoadFailure>()
+            .register_type::<CollisionLoadFailures>()
             .register_type::<DynamicObstacleTiles>()
             .register_type::<PersistedDynamicObstacle>()
             .add_systems(
@@ -401,36 +519,79 @@ pub fn build_all_collision_masks(
     }
 }
 
-/// Log once per key when a required Tiled map failed to load (Loading hang diagnostic).
-pub fn warn_failed_collision_map_loads(
-    map_assets: &Assets<TiledMapAsset>,
-    level_assets: &LevelAssets,
-    interior_assets: &InteriorAssets,
-    asset_server: &AssetServer,
-    already_warned: &mut HashSet<CollisionMapKey>,
-) {
-    let handles = std::iter::once((CollisionMapKey::Overview, level_assets.map.clone())).chain(
-        interior_assets
-            .collision_entries()
-            .into_iter()
-            .map(|(id, handle)| (CollisionMapKey::Enclosure(id), handle)),
-    );
+/// Handles for required collision maps, requested once at plugin build.
+///
+/// [`AssetServer::load`] must not be called every frame on a failing path — that
+/// can stall the asset in `Loading` forever. Inspect these handles instead.
+#[derive(Resource, Debug, Clone)]
+pub struct RequiredCollisionMapHandles {
+    pub entries: Vec<(CollisionMapKey, Handle<TiledMapAsset>)>,
+}
 
-    for (key, handle) in handles {
-        if map_assets.get(&handle).is_some() || already_warned.contains(&key) {
+impl RequiredCollisionMapHandles {
+    pub fn from_asset_server(asset_server: &AssetServer) -> Self {
+        Self {
+            entries: REQUIRED_COLLISION_KEYS
+                .iter()
+                .map(|&key| (key, asset_server.load(key.asset_path())))
+                .collect(),
+        }
+    }
+}
+
+/// Detect required Tiled maps that failed to load and record them once per key.
+///
+/// Inspects pre-requested handles from [`RequiredCollisionMapHandles`] (or the
+/// live [`LevelAssets`] / [`InteriorAssets`] handles). Does **not** call
+/// [`AssetServer::load`] — repeated loads of a failing path can stall in `Loading`.
+///
+/// Logging is a side effect of recording a *new* failure. Deduplicates by
+/// [`CollisionMapKey`]. Full Bevy load-state details go to the log; the resource
+/// stores a stable reason category for BRP/UI.
+pub fn record_failed_collision_map_loads(
+    asset_server: &AssetServer,
+    handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
+    failures: &mut CollisionLoadFailures,
+) {
+    for &(key, ref handle) in handles {
+        if failures.contains_key(key) {
             continue;
         }
-        let Some(state) = asset_server.get_recursive_dependency_load_state(&handle) else {
+        let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
             continue;
         };
         if matches!(state, bevy::asset::RecursiveDependencyLoadState::Failed(_)) {
-            warn!(
-                "Collision mask for {:?} cannot be built: TiledMapAsset {:?} failed to load ({state:?})",
-                key, handle
-            );
-            already_warned.insert(key);
+            let failure = CollisionLoadFailure {
+                key,
+                asset_path: key.asset_path().to_string(),
+                reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
+            };
+            if failures.record(failure) {
+                error!(
+                    "Collision mask for {:?} cannot be built: TiledMapAsset {:?} failed to load ({state:?})",
+                    key, handle
+                );
+            }
         }
     }
+}
+
+/// Collect required map handles from live assets when present, else from the
+/// one-shot [`RequiredCollisionMapHandles`] resource.
+pub fn required_collision_handles<'a>(
+    required: &'a RequiredCollisionMapHandles,
+    level_assets: Option<&'a LevelAssets>,
+    interior_assets: Option<&'a InteriorAssets>,
+) -> Vec<(CollisionMapKey, Handle<TiledMapAsset>)> {
+    if let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets) {
+        let mut out = Vec::with_capacity(REQUIRED_COLLISION_KEYS.len());
+        out.push((CollisionMapKey::Overview, level_assets.map.clone()));
+        for (id, handle) in interior_assets.collision_entries() {
+            out.push((CollisionMapKey::Enclosure(id), handle));
+        }
+        return out;
+    }
+    required.entries.clone()
 }
 
 fn build_collision_masks_on_gameplay_enter(
@@ -769,9 +930,58 @@ mod tests {
         assert!(!is_walkable_with_dynamic(
             &masks,
             &[] as &[TilePosition],
-            &[blocked],
+            [blocked],
             key,
             blocked,
         ));
+    }
+
+    fn sample_failure(key: CollisionMapKey) -> CollisionLoadFailure {
+        CollisionLoadFailure {
+            key,
+            asset_path: key.asset_path().to_string(),
+            reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
+        }
+    }
+
+    #[test]
+    fn collision_load_failures_dedupe_by_key() {
+        let mut failures = CollisionLoadFailures::default();
+        let key = CollisionMapKey::Overview;
+
+        assert!(failures.record(sample_failure(key)));
+        assert!(!failures.record(sample_failure(key)));
+        assert_eq!(failures.entries.len(), 1);
+        assert!(failures.contains_key(key));
+    }
+
+    #[test]
+    fn collision_load_failures_clear_removes_stale_entries() {
+        let mut failures = CollisionLoadFailures::default();
+        assert!(failures.record(sample_failure(CollisionMapKey::Overview)));
+        assert!(!failures.is_empty());
+
+        failures.clear();
+        assert!(failures.is_empty());
+        assert!(failures.record(sample_failure(CollisionMapKey::Overview)));
+        assert_eq!(failures.entries.len(), 1);
+    }
+
+    #[test]
+    fn collision_load_failures_player_message_is_bounded() {
+        let mut failures = CollisionLoadFailures::default();
+        for key in [
+            CollisionMapKey::Overview,
+            CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
+            CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+            CollisionMapKey::Enclosure(EnclosureId::Pasture),
+            CollisionMapKey::Enclosure(EnclosureId::ReptileEnclosure),
+        ] {
+            assert!(failures.record(sample_failure(key)));
+        }
+
+        let msg = failures.player_message();
+        assert!(msg.contains("Could not load a required map"));
+        assert!(msg.chars().count() <= MAX_UI_MESSAGE_CHARS);
     }
 }

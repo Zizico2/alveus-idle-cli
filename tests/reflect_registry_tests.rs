@@ -1,6 +1,8 @@
 use alveus_app::{Menu, Pause, Screen};
+use alveus_collision::{CollisionLoadFailure, CollisionLoadFailures, CollisionMapKey};
 use alveus_headless::{GameCommand, register_headless_types};
 use alveus_interaction::{CleanAnimal, PlayerSatchel};
+use alveus_screens::LoadingTimeoutDiagnostic;
 use alveus_stats::SanctuaryUpkeep;
 use alveus_types::{CleanStat, EnrichStat, FeedStat, Stat};
 use bevy::prelude::*;
@@ -26,6 +28,10 @@ fn reflect_registry_exposes_headless_control_types() {
         std::any::TypeId::of::<State<Screen>>(),
         std::any::TypeId::of::<State<Menu>>(),
         std::any::TypeId::of::<State<Pause>>(),
+        std::any::TypeId::of::<CollisionMapKey>(),
+        std::any::TypeId::of::<CollisionLoadFailure>(),
+        std::any::TypeId::of::<CollisionLoadFailures>(),
+        std::any::TypeId::of::<LoadingTimeoutDiagnostic>(),
     ] {
         assert!(
             registry.get(type_id).is_some(),

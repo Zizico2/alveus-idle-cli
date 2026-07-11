@@ -7,6 +7,7 @@ use bevy::prelude::*;
 
 use alveus_app::{InRoom, Menu, Pause, Screen};
 use alveus_cleaning::{PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile};
+use alveus_collision::{CollisionLoadFailure, CollisionLoadFailures, CollisionMapKey};
 use alveus_components::{
     BuildingEntrance, CareFeedbackEvent, CareHudPulse, CurrentTilePosition, DesiredTilePosition,
     DynamicObstacle, InEnclosure, Interactable, LastPickupMessage, Obstacle,
@@ -20,6 +21,7 @@ use alveus_interaction::{
     PlayerSatchel,
 };
 use alveus_menus::PlayClickEvent;
+use alveus_screens::LoadingTimeoutDiagnostic;
 use alveus_stats::{
     AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition,
     EnclosureId, EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath,
@@ -103,5 +105,9 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<PlayerEnteredBuildingEvent>()
         .register_type::<PlayerExitedBuildingEvent>()
         .register_type::<TriggerToastEvent>()
-        .register_type::<DismissToastEvent>();
+        .register_type::<DismissToastEvent>()
+        .register_type::<CollisionMapKey>()
+        .register_type::<CollisionLoadFailure>()
+        .register_type::<CollisionLoadFailures>()
+        .register_type::<LoadingTimeoutDiagnostic>();
 }

@@ -161,12 +161,14 @@ pub fn build_app(mode: RunMode) -> App {
         alveus_app::plugin,
         alveus_asset_tracking::plugin,
         alveus_audio::plugin,
+        // Collision before world so required map handles are requested before
+        // `load_resource::<LevelAssets/InteriorAssets>` wraps them as dependencies.
+        alveus_collision::CollisionPlugin,
         alveus_world::plugin,
         alveus_menus::plugin,
         alveus_screens::plugin,
         alveus_theme::plugin,
         alveus_stats::StatsPlugin,
-        alveus_collision::CollisionPlugin,
         alveus_interaction::InteractionPlugin,
         alveus_cleaning::CleaningPlugin,
         alveus_animals::AnimalsPlugin,

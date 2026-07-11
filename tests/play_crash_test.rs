@@ -10,10 +10,10 @@ use moonshine_save::save::TriggerSave;
 fn is_valid_save_format(content: &str) -> bool {
     if let Ok(ron::Value::Map(map)) = ron::from_str::<ron::Value>(content) {
         for key in map.keys() {
-            if let ron::Value::String(s) = key {
-                if s == "resources" || s == "entities" {
-                    return true;
-                }
+            if let ron::Value::String(s) = key
+                && (s == "resources" || s == "entities")
+            {
+                return true;
             }
         }
     }

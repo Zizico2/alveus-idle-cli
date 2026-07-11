@@ -637,3 +637,44 @@ fn brp_registry_schema_exposes_stat_types_not_restore_types() {
 
     let _ = std::fs::remove_file(save_path);
 }
+
+#[test]
+fn brp_collision_load_failures_resource_is_queryable() {
+    use alveus_collision::{
+        COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED, CollisionLoadFailure,
+        CollisionLoadFailures, CollisionMapKey,
+    };
+
+    let save_path = "brp_collision_load_failures.ron";
+    let mut app = care_brp_app(save_path);
+
+    app.world_mut()
+        .insert_resource(CollisionLoadFailures {
+            entries: vec![CollisionLoadFailure {
+                key: CollisionMapKey::Overview,
+                asset_path: CollisionMapKey::Overview.asset_path().to_string(),
+                reason: COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED.to_string(),
+            }],
+        });
+
+    let result = brp_request(
+        &mut app,
+        "world.get_resources",
+        Some(serde_json::json!({
+            "resource": "alveus_collision::CollisionLoadFailures"
+        })),
+    )
+    .expect("get_resources succeeds");
+
+    let text = result.to_string();
+    assert!(
+        text.contains("maps/overview/map.tmx"),
+        "expected asset_path in BRP payload: {text}"
+    );
+    assert!(
+        text.contains(COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED),
+        "expected stable reason in BRP payload: {text}"
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}

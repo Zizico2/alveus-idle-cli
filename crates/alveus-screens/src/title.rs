@@ -4,8 +4,13 @@ use bevy::prelude::*;
 
 use alveus_app::{Menu, Screen};
 
+use crate::loading::surface_loading_diagnostic_on_title;
+
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::Title), open_main_menu);
+    app.add_systems(
+        OnEnter(Screen::Title),
+        (open_main_menu, surface_loading_diagnostic_on_title),
+    );
     app.add_systems(OnExit(Screen::Title), close_menu);
 }
 

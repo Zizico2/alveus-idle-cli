@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 
 use alveus_app::Screen;
@@ -28,20 +30,27 @@ pub fn minimal_stats_app(save_path: &str) -> App {
 }
 
 fn seed_maps_assets(dir: &Dir) {
-    let assets_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    copy_dir_into_memory(dir, &assets_root, Path::new(""));
+    seed_maps_assets_excluding(dir, &[]);
 }
 
-fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path) {
+fn seed_maps_assets_excluding(dir: &Dir, exclude: &[&str]) {
+    let assets_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+    copy_dir_into_memory(dir, &assets_root, Path::new(""), exclude);
+}
+
+fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path, exclude: &[&str]) {
     for entry in std::fs::read_dir(disk_root.join(rel))
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", disk_root.join(rel).display()))
     {
         let entry = entry.expect("valid directory entry");
         let file_name = entry.file_name();
-        let child_rel = rel.join(file_name);
+        let child_rel = rel.join(&file_name);
         let path = entry.path();
+        if exclude.iter().any(|e| child_rel == Path::new(e)) {
+            continue;
+        }
         if path.is_dir() {
-            copy_dir_into_memory(dir, disk_root, &child_rel);
+            copy_dir_into_memory(dir, disk_root, &child_rel, exclude);
         } else {
             let bytes = std::fs::read(&path).expect("map asset bytes");
             dir.insert_asset(&child_rel, bytes);
@@ -49,10 +58,26 @@ fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path) {
     }
 }
 
-/// Headless app with Tiled asset loading (memory-backed assets, no GPU render stack).
-pub fn headless_tiled_test_app() -> App {
+/// Like [`headless_tiled_test_app`], but replace the given asset-relative paths with
+/// `replacement` bytes after seeding (e.g. corrupt a `.tmx` so the loader fails).
+pub fn headless_tiled_test_app_with_replacements(replacements: &[(&str, &[u8])]) -> App {
     let dir = Dir::default();
-    seed_maps_assets(&dir);
+    seed_maps_assets_excluding(&dir, &[]);
+    for (path, bytes) in replacements {
+        dir.insert_asset(Path::new(path), bytes.to_vec());
+    }
+    finish_headless_tiled_app(dir)
+}
+
+/// Like [`headless_tiled_test_app`], but omit the given asset-relative paths from the
+/// memory store (e.g. `"maps/overview/map.tmx"`) so loads fail with NotFound.
+pub fn headless_tiled_test_app_excluding(exclude: &[&str]) -> App {
+    let dir = Dir::default();
+    seed_maps_assets_excluding(&dir, exclude);
+    finish_headless_tiled_app(dir)
+}
+
+fn finish_headless_tiled_app(dir: Dir) -> App {
     let dir_for_reader = dir.clone();
 
     let mut app = App::new();
@@ -114,6 +139,11 @@ pub fn headless_tiled_test_app() -> App {
     app
 }
 
+/// Headless app with Tiled asset loading (memory-backed assets, no GPU render stack).
+pub fn headless_tiled_test_app() -> App {
+    headless_tiled_test_app_excluding(&[])
+}
+
 pub fn load_tiled_map(app: &mut App, path: &'static str) -> Handle<TiledMapAsset> {
     let handle = {
         let assets = app.world().resource::<AssetServer>();
@@ -154,57 +184,189 @@ pub fn cleanup_save(save_path: &str) {
     let _ = std::fs::remove_file(save_path);
 }
 
+fn test_all_required_maps_terminal(
+    asset_server: Res<AssetServer>,
+    required: Res<alveus_collision::RequiredCollisionMapHandles>,
+    level_assets: Option<Res<alveus_collision::LevelAssets>>,
+    interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+) -> bool {
+    use bevy::asset::RecursiveDependencyLoadState;
+
+    let handles = alveus_collision::required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    handles.iter().all(|(_, handle)| {
+        matches!(
+            asset_server.get_recursive_dependency_load_state(handle),
+            Some(RecursiveDependencyLoadState::Loaded | RecursiveDependencyLoadState::Failed(_))
+        )
+    })
+}
+
+fn test_build_masks_during_loading(
+    mut masks: ResMut<alveus_collision::CollisionMasks>,
+    map_assets: Res<Assets<bevy_ecs_tiled::prelude::TiledMapAsset>>,
+    level_assets: Option<Res<alveus_collision::LevelAssets>>,
+    interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+) {
+    use alveus_collision::{build_all_collision_masks, collision_ready};
+
+    if let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets)
+        && !collision_ready(&masks)
+    {
+        build_all_collision_masks(&mut masks, &map_assets, &level_assets, &interior_assets);
+    }
+}
+
+fn test_detect_collision_failures(
+    asset_server: Res<AssetServer>,
+    required: Res<alveus_collision::RequiredCollisionMapHandles>,
+    level_assets: Option<Res<alveus_collision::LevelAssets>>,
+    interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+    mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
+) {
+    let handles = alveus_collision::required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    alveus_collision::record_failed_collision_map_loads(&asset_server, &handles, &mut failures);
+}
+
 /// Headless app that exercises Title → Loading → Gameplay with real map assets.
 ///
 /// Loads `LevelAssets` + `InteriorAssets` through [`ResourceHandles`] (same path as
 /// the game) and builds collision masks while in Loading.
 pub fn loading_transition_app() -> App {
+    loading_diagnostic_app(&[])
+}
+
+/// Loading harness with optional replaced map bytes and production-like failure /
+/// timeout diagnostics (no UI spawn).
+pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
+    use std::time::Instant;
+
     use alveus_asset_tracking::LoadResource;
     use alveus_collision::{
-        CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks, collision_ready,
+        CollisionLoadFailures, CollisionMasks, InteriorAssets, LevelAssets, REQUIRED_COLLISION_KEYS,
+        collision_ready,
     };
     use alveus_menus::PlayClickEvent;
-    use bevy_ecs_tiled::prelude::TiledMapAsset;
+    use alveus_screens::{LoadingTimeoutDiagnostic, LoadingTiming};
 
-    let mut app = headless_tiled_test_app();
+    #[derive(Resource, Debug)]
+    struct TestLoadingWatchdog {
+        started: Instant,
+    }
+
+    let mut app = headless_tiled_test_app_with_replacements(map_replacements);
     app.add_plugins(StatesPlugin);
     app.init_state::<Screen>();
     app.add_plugins(alveus_asset_tracking::plugin);
     app.init_resource::<CollisionMasks>();
+    app.init_resource::<CollisionLoadFailures>();
+    app.init_resource::<LoadingTimeoutDiagnostic>();
+    app.init_resource::<LoadingTiming>();
+    {
+        let handles = alveus_collision::RequiredCollisionMapHandles::from_asset_server(
+            app.world().resource::<AssetServer>(),
+        );
+        app.insert_resource(handles);
+    }
     app.load_resource::<LevelAssets>()
         .load_resource::<InteriorAssets>();
     app.add_observer(alveus_menus::main_menu::handle_play_click);
 
     app.add_systems(
+        OnEnter(Screen::Loading),
+        (
+            |mut failures: ResMut<CollisionLoadFailures>,
+             mut timeout: ResMut<LoadingTimeoutDiagnostic>| {
+                failures.clear();
+                timeout.clear();
+            },
+            |mut commands: Commands| {
+                commands.insert_resource(TestLoadingWatchdog {
+                    started: Instant::now(),
+                });
+            },
+        ),
+    );
+
+    app.add_systems(
         Update,
         (
-            move |mut masks: ResMut<CollisionMasks>,
-                  map_assets: Res<Assets<TiledMapAsset>>,
-                  level_assets: Option<Res<LevelAssets>>,
-                  interior_assets: Option<Res<InteriorAssets>>,
-                  screen: Res<State<Screen>>| {
-                if *screen.get() != Screen::Loading {
-                    return;
-                }
-                let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets)
-                else {
-                    return;
-                };
-                if collision_ready(&masks) {
-                    return;
-                }
-                build_all_collision_masks(&mut masks, &map_assets, &level_assets, &interior_assets);
-            },
+            test_build_masks_during_loading
+                .run_if(in_state(Screen::Loading).and_then(test_all_required_maps_terminal)),
+            test_detect_collision_failures.run_if(in_state(Screen::Loading)),
             move |resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
                   masks: Res<CollisionMasks>,
+                  failures: Res<CollisionLoadFailures>,
                   screen: Res<State<Screen>>,
                   mut next_screen: ResMut<NextState<Screen>>| {
                 if *screen.get() != Screen::Loading {
                     return;
                 }
-                if resource_handles.is_all_done() && collision_ready(&masks) {
+                if failures.is_empty()
+                    && resource_handles.is_all_done()
+                    && collision_ready(&masks)
+                {
                     next_screen.set(Screen::Gameplay);
                 }
+            },
+            move |watchdog: Option<Res<TestLoadingWatchdog>>,
+                  timing: Res<LoadingTiming>,
+                  failures: Res<CollisionLoadFailures>,
+                  screen: Res<State<Screen>>,
+                  mut next_screen: ResMut<NextState<Screen>>| {
+                if *screen.get() != Screen::Loading || failures.is_empty() {
+                    return;
+                }
+                let Some(watchdog) = watchdog else {
+                    return;
+                };
+                if watchdog.started.elapsed().as_secs_f32() < timing.failure_return_secs {
+                    return;
+                }
+                next_screen.set(Screen::Title);
+            },
+            move |watchdog: Option<Res<TestLoadingWatchdog>>,
+                  timing: Res<LoadingTiming>,
+                  resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
+                  masks: Res<CollisionMasks>,
+                  failures: Res<CollisionLoadFailures>,
+                  level_assets: Option<Res<LevelAssets>>,
+                  interior_assets: Option<Res<InteriorAssets>>,
+                  mut timeout: ResMut<LoadingTimeoutDiagnostic>,
+                  screen: Res<State<Screen>>,
+                  mut next_screen: ResMut<NextState<Screen>>| {
+                if *screen.get() != Screen::Loading || !failures.is_empty() {
+                    return;
+                }
+                let Some(watchdog) = watchdog else {
+                    return;
+                };
+                if watchdog.started.elapsed().as_secs_f32() < timing.timeout_secs {
+                    return;
+                }
+                if resource_handles.is_all_done() && collision_ready(&masks) {
+                    return;
+                }
+                let missing: Vec<_> = REQUIRED_COLLISION_KEYS
+                    .iter()
+                    .filter(|key| !masks.contains(**key))
+                    .map(|key| format!("{key:?}"))
+                    .collect();
+                *timeout = LoadingTimeoutDiagnostic {
+                    timed_out: true,
+                    missing_keys: missing,
+                    is_all_done: resource_handles.is_all_done(),
+                    has_level_assets: level_assets.is_some(),
+                    has_interior_assets: interior_assets.is_some(),
+                };
+                next_screen.set(Screen::Title);
             },
         ),
     );
