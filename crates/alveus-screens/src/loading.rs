@@ -135,9 +135,17 @@ fn enter_fatal_error_on_collision_failure(
 fn enter_gameplay_screen(
     resource_handles: Res<ResourceHandles>,
     masks: Res<CollisionMasks>,
+    asset_server: Res<AssetServer>,
+    level_assets: Res<LevelAssets>,
+    interior_assets: Res<InteriorAssets>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    if resource_handles.is_all_done() && collision_ready(&masks) {
+    let handles = required_collision_handles(&level_assets, &interior_assets);
+    let all_collision_maps_loaded = handles.iter().all(|(_, handle)| {
+        required_collision_map_state(&asset_server, handle) == RequiredCollisionMapState::Loaded
+    });
+
+    if resource_handles.is_all_done() && collision_ready(&masks) && all_collision_maps_loaded {
         next_screen.set(Screen::Gameplay);
     }
 }
