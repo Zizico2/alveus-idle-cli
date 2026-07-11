@@ -151,6 +151,10 @@ def navigate_to(target: tuple[int, int], max_steps: int = 40) -> tuple[int, int]
             return current
         tx, ty = target
         cx, cy = current
+        # Overview y=0 is blocked past x=2; climb before continuing east/west.
+        if cy == 0 and cx != tx and cx >= 2:
+            current = step("Up")
+            continue
         if cx < tx:
             current = step("Right")
         elif cx > tx:

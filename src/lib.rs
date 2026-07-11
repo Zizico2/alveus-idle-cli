@@ -138,14 +138,20 @@ pub fn build_app(mode: RunMode) -> App {
         },
     };
 
-    app.add_plugins(
-        DefaultPlugins
-            .set(AssetPlugin {
-                meta_check: AssetMetaCheck::Never,
-                ..default()
-            })
-            .set(window_plugin),
-    );
+    let default_plugins = DefaultPlugins
+        .set(AssetPlugin {
+            meta_check: AssetMetaCheck::Never,
+            ..default()
+        })
+        .set(window_plugin);
+    if headless {
+        // Headless mode has no primary window and must not create a Winit event
+        // loop, which requires a desktop compositor even when no window exists.
+        app.add_plugins(default_plugins.disable::<bevy::winit::WinitPlugin>());
+        app.add_plugins(bevy::app::ScheduleRunnerPlugin::default());
+    } else {
+        app.add_plugins(default_plugins);
+    }
 
     // Single canonical Reflect registration (shared with the headless server and
     // the `gen_tiled_types` exporter).

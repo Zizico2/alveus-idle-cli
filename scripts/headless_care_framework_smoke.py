@@ -6,8 +6,8 @@ Menu / mini-chore / enrich paths are covered by Rust tests
 This script only documents the BRP satchel shape after Epic 1
 (two `slots` instead of a single `item`).
 
-Live fridge→feed still works via `scripts/headless_feed_push_pop_demo.py`
-against a realtime headless server; fridge remains instant GiveItem until Epic 2.
+Live fridge menu → Push Pop feed: `scripts/headless_feed_push_pop_demo.py`.
+Polly prep → feed → enrich: `scripts/headless_polly_care_demo.py`.
 """
 
 from __future__ import annotations

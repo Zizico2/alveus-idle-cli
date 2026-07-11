@@ -7,6 +7,9 @@ the resulting toast and ECS state. Clean/enrich copy that has no Epic 1 map
 station is covered by Rust unit and in-process BRP tests instead of bypassing
 the player interaction path with internal events.
 
+Navigation uses explicit tile-count routes with a CurrentTilePosition read after
+every Move (AGENTS.md §4). No pathfinding helpers.
+
 Run against a fresh realtime headless server, then stop that server afterward:
 
   cargo run --features headless -- --headless --realtime --port 15702 --no-stdio
@@ -29,8 +32,13 @@ REQUIRE_SERVER = os.environ.get("REQUIRE_SERVER", "0") == "1"
 
 OVERVIEW_SPAWN = (0, 0)
 NUTRITION_ENTRANCE = (33, 12)
-NUTRITION_FRIDGE = (2, 8)
 PUSH_POP_ENTRANCE = (39, 12)
+NAV_UP = 12
+NAV_RIGHT_NUTRITION = 33
+NAV_RIGHT_TO_PUSH_POP = 6
+
+FRIDGE_APPROACH = (2, 7)
+DISH_APPROACH = (8, 5)
 PUSH_POP_DISH = (8, 6)
 
 TEXT_CANDIDATES = (
@@ -117,71 +125,37 @@ def step(direction: str, hold_s: float = 0.35) -> tuple[int, int] | None:
     return after
 
 
-def walk_to(target: tuple[int, int], max_steps: int = 120) -> tuple[int, int] | None:
-    tx, ty = target
-    for _ in range(max_steps):
-        pos = player_tile()
-        if pos is None:
-            time.sleep(0.1)
-            continue
-        x, y = pos
-        if pos == target:
-            return pos
-        primary = None
-        secondary = None
-        if x < tx:
-            primary = "Right"
-        elif x > tx:
-            primary = "Left"
-        if y < ty:
-            secondary = "Up"
-        elif y > ty:
-            secondary = "Down"
-
-        # Follow the planned axis first, then react to a blocked tile using the
-        # other target-facing direction. Position is queried inside every step.
-        after = step(primary or secondary)
-        if after == pos and primary is not None and secondary is not None:
-            step(secondary)
-    return player_tile()
+def follow(directions: list[str], expect: tuple[int, int]) -> tuple[int, int] | None:
+    print(f"  follow {directions} → expect {expect} from {player_tile()}", flush=True)
+    pos = player_tile()
+    for direction in directions:
+        before = pos
+        pos = step(direction)
+        if pos == before:
+            time.sleep(0.4)
+            pos = step(direction)
+            if pos == before:
+                print(f"  FAIL: blocked on {direction}, still at {pos}", flush=True)
+                return pos
+    if pos != expect:
+        print(f"  FAIL: expected {expect}, at {pos}", flush=True)
+    return pos
 
 
-def walk_adjacent_to(
-    object_tile: tuple[int, int], preferred_side: str, max_steps: int = 100
-) -> tuple[int, int] | None:
-    ox, oy = object_tile
-    side_tiles = {
-        "below": (ox, oy - 1),
-        "left": (ox - 1, oy),
-        "right": (ox + 1, oy),
-        "above": (ox, oy + 1),
-    }
-    target = side_tiles[preferred_side]
-    candidates = list(side_tiles.values())
-    candidates = [(x, y) for x, y in candidates if x >= 0 and y >= 0]
-    for _ in range(max_steps):
-        pos = player_tile()
-        if pos is None:
-            time.sleep(0.1)
-            continue
-        if pos in candidates:
-            return pos
-        px, py = pos
-        tx, ty = target
-        primary = None
-        secondary = None
-        if px < tx:
-            primary = "Right"
-        elif px > tx:
-            primary = "Left"
-        if py < ty:
-            secondary = "Up"
-        elif py > ty:
-            secondary = "Down"
-        after = step(primary or secondary)
-        if after == pos and primary is not None and secondary is not None:
-            step(secondary)
-    return player_tile()
+def is_adjacent(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1]) == 1
+
+
+def walk_overview_counts(up: int, right: int, expect: tuple[int, int]) -> tuple[int, int] | None:
+    print(f"  overview: Up×{up} then Right×{right} → {expect}", flush=True)
+    pos = player_tile()
+    for _ in range(up):
+        pos = step("Up")
+    for _ in range(right):
+        pos = step("Right")
+    if pos != expect:
+        print(f"  FAIL: expected {expect}, at {pos}", flush=True)
+    return pos
 
 
 def player_entrance() -> str:
@@ -289,31 +263,47 @@ def run_player_feed_flow() -> dict:
     time.sleep(0.2)
     hunger_before = animal_hunger()
 
-    if walk_to(NUTRITION_ENTRANCE) != NUTRITION_ENTRANCE:
+    if walk_overview_counts(NAV_UP, NAV_RIGHT_NUTRITION, NUTRITION_ENTRANCE) != NUTRITION_ENTRANCE:
         raise RuntimeError("could not reach Nutrition House entrance")
     if "NutritionHouse" not in player_entrance():
         raise RuntimeError(f"wrong entrance: {player_entrance()}")
     trigger_game("EnterBuilding")
     time.sleep(2.0)
 
-    if walk_adjacent_to(NUTRITION_FRIDGE, "right") is None:
-        raise RuntimeError("could not reach diet fridge")
+    if follow(
+        ["Left", "Left", "Up", "Up", "Up", "Up", "Up", "Left"],
+        FRIDGE_APPROACH,
+    ) != FRIDGE_APPROACH:
+        raise RuntimeError(f"could not reach diet fridge, at {player_tile()}")
+    # Fridge is CareItemPicker: first option RawVeggieTub, second TortoiseLeafyGreens.
     trigger_game("Interact")
     time.sleep(0.3)
+    trigger_game({"Move": "Down"})
+    time.sleep(0.15)
+    trigger_game("MoveStop")
+    time.sleep(0.1)
+    trigger_game("Continue")
+    time.sleep(0.4)
     if "TortoiseLeafyGreens" not in str(satchel_slots()):
         raise RuntimeError(f"greens not acquired: {satchel_slots()!r}")
 
     trigger_game("ExitRoom")
     time.sleep(2.0)
-    if walk_to(PUSH_POP_ENTRANCE) != PUSH_POP_ENTRANCE:
+    if walk_overview_counts(0, NAV_RIGHT_TO_PUSH_POP, PUSH_POP_ENTRANCE) != PUSH_POP_ENTRANCE:
         raise RuntimeError("could not reach Push Pop entrance")
     if "PushPop" not in player_entrance():
         raise RuntimeError(f"wrong entrance: {player_entrance()}")
     trigger_game("EnterBuilding")
     time.sleep(2.0)
 
-    if walk_adjacent_to(PUSH_POP_DISH, "below") is None:
-        raise RuntimeError("could not reach Push Pop feeding dish")
+    if follow(["Up", "Up", "Up", "Right", "Right"], DISH_APPROACH) != DISH_APPROACH:
+        pos = player_tile()
+        if pos is None or not is_adjacent(pos, PUSH_POP_DISH):
+            # Local alternate if Push Pop blocks (8,5).
+            follow(["Left", "Up"], (7, 6))
+            pos = player_tile()
+            if pos is None or not is_adjacent(pos, PUSH_POP_DISH):
+                raise RuntimeError(f"could not reach Push Pop feeding dish, at {pos}")
     trigger_game("Interact")
     time.sleep(0.35)
 

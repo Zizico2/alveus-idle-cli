@@ -283,7 +283,9 @@ fn sync_threshold_poop_spawn_system(
     let mut rng = rand::rng();
 
     for (enclosure_id, stats, mut tiles) in enclosure_query.iter_mut() {
-        let config = poop_config_for(*enclosure_id);
+        let Some(config) = poop_config_for(*enclosure_id) else {
+            continue;
+        };
 
         let in_room = matches!(
             screen.get(),
@@ -354,14 +356,15 @@ pub fn apply_poop_pickup(
 
     commands.entity(event.entity).despawn();
 
-    let config = poop_config_for(event.enclosure_id);
-    commands.trigger(ImproveStatEvent {
-        target: StatTarget::Enclosure {
-            id: event.enclosure_id,
-            stat: EnclosureStat::Cleanliness,
-        },
-        amount: config.cleanliness_restore_per_poop.into(),
-    });
+    if let Some(config) = poop_config_for(event.enclosure_id) {
+        commands.trigger(ImproveStatEvent {
+            target: StatTarget::Enclosure {
+                id: event.enclosure_id,
+                stat: EnclosureStat::Cleanliness,
+            },
+            amount: config.cleanliness_restore_per_poop.into(),
+        });
+    }
 
     commands.insert_resource(LastPickupMessage {
         text: Some(format!(
