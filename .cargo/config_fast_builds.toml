@@ -9,7 +9,7 @@
 #
 # LLD is a linker from the LLVM project that supports Linux, Windows, macOS, and Wasm. It has the greatest
 # platform support and the easiest installation process. It is enabled by default in this file for Windows.
-# LLD is the default linker in Rust itself for Linux, so no configuration is needed.
+# On Linux, use Clang as the linker driver and explicitly select LLD.
 # On macOS, the default linker yields higher performance than LLD and is used instead.
 #
 # To install, please scroll to the corresponding table for your target (eg. `[target.x86_64-pc-windows-msvc]`
@@ -74,6 +74,19 @@
 # bottom of this file.
 #
 # For more information, see the blog post at <https://kobzol.github.io/rust/rustc/2025/06/02/reduce-cargo-target-dir-size-with-z-no-embed-metadata.html>.
+#
+# ## Cranelift
+#
+# Cranelift is an experimental nightly-only code-generation backend. It compiles the application crate faster
+# than LLVM, while dependencies continue to use LLVM so Bevy remains optimized. Install it with:
+#
+# ```
+# rustup component add rustc-codegen-cranelift-preview --toolchain nightly
+# ```
+#
+# Cranelift currently works best on Linux. It does not support Wasm, can crash for Bevy applications on macOS,
+# and produces less-optimized binaries, so use LLVM for release builds. Uncomment the `codegen-backend` entries
+# at the bottom of this file to enable it for dev builds.
 
 [target.x86_64-unknown-linux-gnu]
 rustflags = [
@@ -156,3 +169,12 @@ rustflags = [
 # Nightly
 # [unstable]
 # no-embed-metadata = true
+# codegen-backend = true
+
+# Cranelift compiles the local application quickly while retaining LLVM for Bevy and other dependencies.
+# These settings are nightly-only and are intended for dev builds, not release or Wasm builds.
+# [profile.dev]
+# codegen-backend = "cranelift"
+
+# [profile.dev.package."*"]
+# codegen-backend = "llvm"
