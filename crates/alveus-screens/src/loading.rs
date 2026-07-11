@@ -125,6 +125,7 @@ fn clear_loading_diagnostics(
     mut timeout: ResMut<LoadingTimeoutDiagnostic>,
     mut gate: ResMut<CollisionReloadGate>,
     mut failed_messages: ResMut<Messages<bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>>,
+    mut map_messages: ResMut<Messages<AssetEvent<TiledMapAsset>>>,
     asset_server: Res<AssetServer>,
     required: Res<RequiredCollisionMapHandles>,
     level_assets: Option<Res<LevelAssets>>,
@@ -134,6 +135,7 @@ fn clear_loading_diagnostics(
     // Drop failure events from earlier attempts so they cannot immediately
     // complete the gate for this Loading visit's reload.
     failed_messages.clear();
+    map_messages.clear();
 
     let handles = required_collision_handles(
         &required,
@@ -219,19 +221,24 @@ fn build_collision_masks_during_loading(
 }
 
 fn advance_collision_reload_gate_during_loading(
-    asset_server: Res<AssetServer>,
     required: Res<RequiredCollisionMapHandles>,
     level_assets: Option<Res<LevelAssets>>,
     interior_assets: Option<Res<InteriorAssets>>,
     mut gate: ResMut<CollisionReloadGate>,
     mut failed_events: MessageReader<bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>,
+    mut map_events: MessageReader<AssetEvent<TiledMapAsset>>,
 ) {
     let handles = required_collision_handles(
         &required,
         level_assets.as_deref(),
         interior_assets.as_deref(),
     );
-    advance_collision_reload_gate(&asset_server, &handles, &mut gate, failed_events.read());
+    advance_collision_reload_gate(
+        &handles,
+        &mut gate,
+        failed_events.read(),
+        map_events.read(),
+    );
 }
 
 fn detect_collision_load_failures_during_loading(

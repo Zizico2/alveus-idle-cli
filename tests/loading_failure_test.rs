@@ -15,6 +15,8 @@ mod common;
 
 /// Deliberately invalid Tiled XML so the map loader reports Failed.
 const CORRUPT_TMX: &[u8] = b"not a valid tiled map";
+/// Deliberately invalid PNG so the map loads but a recursive image dependency fails.
+const CORRUPT_PNG: &[u8] = b"not a valid png";
 
 #[test]
 fn missing_overview_map_records_failure_and_returns_to_title() {
@@ -143,7 +145,16 @@ fn loading_retry_recovers_after_asset_is_repaired() {
 
 #[test]
 fn loading_retry_while_still_broken_records_failure_again() {
-    let mut app = common::loading_diagnostic_app(&[("maps/overview/map.tmx", CORRUPT_TMX)]);
+    assert_loading_retry_while_still_broken(&[("maps/overview/map.tmx", CORRUPT_TMX)]);
+}
+
+#[test]
+fn loading_retry_with_broken_recursive_dependency_records_failure_again() {
+    assert_loading_retry_while_still_broken(&[("maps/overview/sand_tile.png", CORRUPT_PNG)]);
+}
+
+fn assert_loading_retry_while_still_broken(replacements: &[(&str, &[u8])]) {
+    let mut app = common::loading_diagnostic_app(replacements);
     // Long timeout: a permanently gated Failed must not be misreported as timeout.
     app.insert_resource(LoadingTiming {
         timeout_secs: 30.0,

@@ -544,10 +544,13 @@ pub struct RequiredCollisionMapHandles {
 /// Tracks in-flight [`AssetServer::reload`] attempts for failed collision maps.
 ///
 /// Bevy often keeps `RecursiveDependencyLoadState::Failed` through a failed
-/// reload (no intermediate non-Failed state). Gating on "state left Failed"
-/// would suppress the diagnostic forever and fall through to the Loading
-/// timeout. Completion is therefore driven by reload-attempt signals:
-/// [`AssetLoadFailedEvent`] or reaching `Loaded`.
+/// reload (no intermediate non-Failed state). Gating on "recursive state left
+/// Failed" would suppress the diagnostic forever and fall through to the
+/// Loading timeout. Completion is therefore driven by root-map reload signals:
+/// [`AssetLoadFailedEvent`] or a new root-map [`AssetEvent::Added`] /
+/// [`AssetEvent::Modified`]. Those events deliberately ignore recursive
+/// dependencies so their fresh failure can be recorded by
+/// [`record_failed_collision_map_loads`].
 #[derive(Resource, Debug, Default, Clone)]
 pub struct CollisionReloadGate {
     pub awaiting_retry: HashSet<CollisionMapKey>,
@@ -615,17 +618,23 @@ pub fn reload_failed_collision_maps(
     }
 }
 
-/// Mark reload attempts complete when Bevy reports a new failure or a Loaded map.
+/// Mark reload attempts complete when Bevy reports a new root-map failure or a
+/// new root-map value.
+///
+/// A successfully reloaded TMX may still have a failed image or other recursive
+/// dependency. Its `Added` / `Modified` event opens the gate once the root load
+/// completes, allowing [`record_failed_collision_map_loads`] to report the new
+/// recursive result. Using the current direct load state would be incorrect: it
+/// may still be `Loaded` from the previous failed-dependency attempt before the
+/// asynchronous reload starts.
 ///
 /// Must run before [`record_failed_collision_map_loads`] each frame while Loading.
-pub fn advance_collision_reload_gate<'a>(
-    asset_server: &AssetServer,
+pub fn advance_collision_reload_gate<'a, 'b>(
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
     gate: &mut CollisionReloadGate,
     failed_events: impl IntoIterator<Item = &'a bevy::asset::AssetLoadFailedEvent<TiledMapAsset>>,
+    map_events: impl IntoIterator<Item = &'b AssetEvent<TiledMapAsset>>,
 ) {
-    use bevy::asset::RecursiveDependencyLoadState;
-
     // Always walk the events so the caller's MessageReader advances, even when
     // nothing is gated.
     for event in failed_events {
@@ -639,15 +648,18 @@ pub fn advance_collision_reload_gate<'a>(
         }
     }
 
-    for &(key, ref handle) in handles {
-        if !gate.awaiting_retry.contains(&key) {
-            continue;
-        }
-        if matches!(
-            asset_server.get_recursive_dependency_load_state(handle),
-            Some(RecursiveDependencyLoadState::Loaded)
-        ) {
-            gate.awaiting_retry.remove(&key);
+    // Added/Modified means the root TMX loader completed this attempt. Recursive
+    // dependencies may still be Loading or Failed, which the regular detector
+    // handles after this gate opens.
+    for event in map_events {
+        let id = match event {
+            AssetEvent::Added { id } | AssetEvent::Modified { id } => *id,
+            _ => continue,
+        };
+        for &(key, ref handle) in handles {
+            if handle.id() == id {
+                gate.awaiting_retry.remove(&key);
+            }
         }
     }
 }

@@ -201,12 +201,14 @@ fn test_clear_loading_diagnostics(
     mut failed_messages: ResMut<
         Messages<bevy::asset::AssetLoadFailedEvent<bevy_ecs_tiled::prelude::TiledMapAsset>>,
     >,
+    mut map_messages: ResMut<Messages<AssetEvent<bevy_ecs_tiled::prelude::TiledMapAsset>>>,
     asset_server: Res<AssetServer>,
     required: Res<alveus_collision::RequiredCollisionMapHandles>,
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
 ) {
     failed_messages.clear();
+    map_messages.clear();
     let handles = alveus_collision::required_collision_handles(
         &required,
         level_assets.as_deref(),
@@ -259,7 +261,6 @@ fn test_build_masks_during_loading(
 }
 
 fn test_advance_collision_reload_gate(
-    asset_server: Res<AssetServer>,
     required: Res<alveus_collision::RequiredCollisionMapHandles>,
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
@@ -267,6 +268,7 @@ fn test_advance_collision_reload_gate(
     mut failed_events: MessageReader<
         bevy::asset::AssetLoadFailedEvent<bevy_ecs_tiled::prelude::TiledMapAsset>,
     >,
+    mut map_events: MessageReader<AssetEvent<bevy_ecs_tiled::prelude::TiledMapAsset>>,
 ) {
     let handles = alveus_collision::required_collision_handles(
         &required,
@@ -274,10 +276,10 @@ fn test_advance_collision_reload_gate(
         interior_assets.as_deref(),
     );
     alveus_collision::advance_collision_reload_gate(
-        &asset_server,
         &handles,
         &mut gate,
         failed_events.read(),
+        map_events.read(),
     );
 }
 
