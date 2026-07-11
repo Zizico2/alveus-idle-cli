@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use alveus_app::{Menu, Screen};
 use alveus_asset_tracking::ResourceHandles;
+use alveus_collision::{CollisionMasks, collision_ready};
 use alveus_theme::widget;
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
@@ -42,9 +43,14 @@ fn enter_loading_or_gameplay_screen(_: On<Pointer<Click>>, mut commands: Command
 pub fn handle_play_click(
     _: On<PlayClickEvent>,
     resource_handles: Res<ResourceHandles>,
+    masks: Option<Res<CollisionMasks>>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    if resource_handles.is_all_done() {
+    // Level/Interior map handles are no longer Asset dependencies, so
+    // ResourceHandles can finish before collision masks exist. Require masks
+    // before skipping Loading.
+    let collision_ok = masks.as_deref().is_none_or(collision_ready);
+    if resource_handles.is_all_done() && collision_ok {
         next_screen.set(Screen::Gameplay);
     } else {
         next_screen.set(Screen::Loading);

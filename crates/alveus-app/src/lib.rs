@@ -41,6 +41,9 @@ pub enum Screen {
     Splash,
     Title,
     Loading,
+    /// A required startup asset failed or Loading timed out. The current process
+    /// cannot safely enter gameplay; the player must restart the game.
+    FatalError,
     Gameplay,
     InRoom(InRoom),
 }

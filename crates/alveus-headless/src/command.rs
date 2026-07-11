@@ -204,6 +204,15 @@ fn care_menu_open(world: &World) -> bool {
 }
 
 fn apply_game_command(world: &mut World, command: GameCommand) {
+    // FatalError is terminal for this process: ignore gameplay / navigation verbs.
+    // Passive harness verbs (screenshots, frame advance) still apply.
+    if *world.resource::<State<Screen>>().get() == Screen::FatalError {
+        match &command {
+            GameCommand::Screenshot { .. } | GameCommand::AdvanceFrames(_) => {}
+            _ => return,
+        }
+    }
+
     match command {
         GameCommand::Move(intent) => {
             if care_menu_open(world) {

@@ -6,7 +6,6 @@ use bevy::prelude::*;
 use bevy_ecs_tiled::prelude::{regex::RegexSet, *};
 use bevy_ecs_tiled::tiled::properties::export_types;
 
-use alveus_asset_tracking::LoadResource;
 use alveus_collision::{InteriorAssets, LevelAssets};
 use alveus_components::{CurrentTilePosition, DesiredTilePosition, TILE_SIZE};
 
@@ -53,8 +52,8 @@ pub fn export_tiled_types(app: &App, path: impl AsRef<Path>) {
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(tiled_plugin(None))
-        .load_resource::<LevelAssets>()
-        .load_resource::<InteriorAssets>();
+        .init_resource::<LevelAssets>()
+        .init_resource::<InteriorAssets>();
 }
 
 /// A system that spawns the main level.
