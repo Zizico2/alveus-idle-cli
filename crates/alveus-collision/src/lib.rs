@@ -401,6 +401,38 @@ pub fn build_all_collision_masks(
     }
 }
 
+/// Log once per key when a required Tiled map failed to load (Loading hang diagnostic).
+pub fn warn_failed_collision_map_loads(
+    map_assets: &Assets<TiledMapAsset>,
+    level_assets: &LevelAssets,
+    interior_assets: &InteriorAssets,
+    asset_server: &AssetServer,
+    already_warned: &mut HashSet<CollisionMapKey>,
+) {
+    let handles = std::iter::once((CollisionMapKey::Overview, level_assets.map.clone())).chain(
+        interior_assets
+            .collision_entries()
+            .into_iter()
+            .map(|(id, handle)| (CollisionMapKey::Enclosure(id), handle)),
+    );
+
+    for (key, handle) in handles {
+        if map_assets.get(&handle).is_some() || already_warned.contains(&key) {
+            continue;
+        }
+        let Some(state) = asset_server.get_recursive_dependency_load_state(&handle) else {
+            continue;
+        };
+        if matches!(state, bevy::asset::RecursiveDependencyLoadState::Failed(_)) {
+            warn!(
+                "Collision mask for {:?} cannot be built: TiledMapAsset {:?} failed to load ({state:?})",
+                key, handle
+            );
+            already_warned.insert(key);
+        }
+    }
+}
+
 fn build_collision_masks_on_gameplay_enter(
     mut masks: ResMut<CollisionMasks>,
     map_assets: Res<Assets<TiledMapAsset>>,
@@ -588,7 +620,7 @@ fn cleanup_dynamic_obstacle_tiles(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alveus_content::PUSH_POP_PLACEMENT;
+    use alveus_content::{POLLY_PLACEMENT, PUSH_POP_PLACEMENT};
 
     #[test]
     fn push_pop_wander_never_includes_feeding_dish() {
@@ -623,6 +655,100 @@ mod tests {
         assert!(
             !neighbors.contains(&dish),
             "wander candidates from (8,5) must not include the dish at (8,6)"
+        );
+    }
+
+    /// Static obstacles for Polly's Nutrition House stations as laid out in
+    /// `tools/gen_interiors.py` (open floor; no playpen fence).
+    fn nutrition_playpen_static_blocked() -> HashSet<TilePosition> {
+        HashSet::from([
+            // Nesting station
+            TilePosition { x: 9, y: 2 },
+            // Enrichment post
+            TilePosition { x: 7, y: 5 },
+            // Feed bowl
+            TilePosition { x: 8, y: 3 },
+        ])
+    }
+
+    fn walkable_adjacent(
+        masks: &CollisionMasks,
+        key: CollisionMapKey,
+        from: TilePosition,
+        bounds: TileBounds,
+    ) -> Vec<TilePosition> {
+        adjacent_tiles(from)
+            .into_iter()
+            .filter(|tile| {
+                tile_in_bounds(*tile, bounds)
+                    && is_walkable_with_dynamic(
+                        masks,
+                        &[] as &[TilePosition],
+                        &[] as &[TilePosition],
+                        key,
+                        *tile,
+                    )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn polly_playpen_stations_reachable_and_home_has_wander_neighbors() {
+        let key = CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen);
+        let mut masks = CollisionMasks::default();
+        masks
+            .static_blocked
+            .insert(key, nutrition_playpen_static_blocked());
+
+        let bounds = POLLY_PLACEMENT.wander_bounds;
+        let home = POLLY_PLACEMENT.home_position;
+        let nesting = TilePosition { x: 9, y: 2 };
+        let enrichment = TilePosition { x: 7, y: 5 };
+        let bowl = TilePosition { x: 8, y: 3 };
+
+        assert!(
+            !masks.is_statically_walkable(key, nesting),
+            "nesting box must be blocked"
+        );
+        assert!(
+            !masks.is_statically_walkable(key, enrichment),
+            "enrichment post must be blocked"
+        );
+        assert!(
+            !masks.is_statically_walkable(key, bowl),
+            "feed bowl must be blocked"
+        );
+        assert!(
+            masks.is_statically_walkable(key, TilePosition { x: 6, y: 3 }),
+            "former gate tile must be open floor"
+        );
+        assert!(
+            masks.is_statically_walkable(key, home),
+            "Polly home must be walkable"
+        );
+
+        let home_neighbors = walkable_adjacent(&masks, key, home, bounds);
+        assert!(
+            home_neighbors.len() >= 2,
+            "Polly home needs ≥2 wander neighbors, got {home_neighbors:?}"
+        );
+
+        let nesting_adj = walkable_adjacent(&masks, key, nesting, bounds);
+        assert!(
+            !nesting_adj.is_empty(),
+            "nesting box needs a walkable adjacent tile, got none"
+        );
+
+        let enrich_adj = walkable_adjacent(&masks, key, enrichment, bounds);
+        assert!(
+            !enrich_adj.is_empty(),
+            "enrichment post needs a walkable adjacent tile, got none"
+        );
+
+        let bowl_adj = walkable_adjacent(&masks, key, bowl, bounds);
+        assert!(
+            !bowl_adj.is_empty(),
+            "feed bowl needs a walkable adjacent tile, got none"
         );
     }
 

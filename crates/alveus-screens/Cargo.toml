@@ -10,6 +10,7 @@ bevy = { workspace = true }
 bevy_ecs_tiled.workspace = true
 alveus-app.workspace = true
 alveus-asset-tracking.workspace = true
+alveus-configs.workspace = true
 alveus-theme.workspace = true
 alveus-collision.workspace = true
 alveus-world.workspace = true

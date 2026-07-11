@@ -20,7 +20,7 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 | Domain | Symbols |
 |--------|---------|
 | Stat scale | `Stat`, `STAT_SCALE`, `STAT_FULL` |
-| Timing / feel | `TILE_SIZE`, `PLAYER_MOVE_DURATION_SECS`, `AUTOSAVE_INTERVAL_SECS` |
+| Timing / feel | `TILE_SIZE`, `PLAYER_MOVE_DURATION_SECS`, `AUTOSAVE_INTERVAL_SECS`, `LOADING_TIMEOUT_SECS` |
 | Neglect | `NEGLECT_UPKEEP_THRESHOLD` |
 | Satchel | `SATCHEL_MAX_SLOTS` (= 2) |
 | Care restores | `FeedStat` / `EnrichStat` / `CleanStat`; `CARE_FEED_RESTORE`, `CARE_ENRICH_RESTORE`, `CARE_CLEAN_RESTORE` |
@@ -32,7 +32,7 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 | Enclosures | `ENCLOSURES_DATA`, `enclosure_data` |
 | Placements | `POLLY_PLACEMENT`, `PUSH_POP_PLACEMENT`, `animal_default_placement` |
 | Rooms | `NUTRITION_HOUSE_ROOM`, `PUSH_POP_ENCLOSURE_ROOM` |
-| Cleaning | `WHEELBARROW_CAPACITY`, `poop_config_for`, cleaning math fns |
+| Cleaning | `WHEELBARROW_CAPACITY`, sparse `POOP_CONFIGS` / `poop_config_for` → `Option`, cleaning math fns |
 | Offline wander | `OFFLINE_WANDER_STEPS_PER_HOUR` |
 
 **Promotion rule:** When an epic implements a Planned row, move it into Rust, wire call sites, remove it from Planned. Do not leave a second authoritative copy in `design/`.
@@ -44,6 +44,8 @@ Historical prose (care loops, fact cards, room objects, shop copy): [`design/`](
 **Rates:** Decay rates remain `f32` because they accumulate fractional stat units over time. Convert with `Stat::get()` only at rate, percentage, logging, or serialization boundaries.
 
 **Tiled override:** Per-object `FeedAnimal.delta` / `EnrichAnimal.delta` / `CleanAnimal.delta` on tiles use the matching stat newtype class shape (e.g. `alveus_types::FeedStat` with member `0`) and may override the typical care restore constants.
+
+**Poop configs** are sparse / opt-in (`POOP_CONFIGS` via `phf_codegen`): only enclosures that use pile-based cleaning appear in the map. `poop_config_for` returns `None` for nest-sweep rooms (Nutrition House / Polly). Add a map entry when Pasture manure (etc.) ships.
 
 ---
 

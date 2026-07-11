@@ -157,15 +157,16 @@ def main() -> int:
     animals = animal_stats()
     results.append(f"Animals loaded: {len(animals)} ({', '.join(a[0] for a in animals)})")
 
-    print(f"Walking right × {NAV_RIGHT}, up × {NAV_UP}…", flush=True)
-    for i in range(NAV_RIGHT):
-        move_dir("Right")
-        if (i + 1) % 11 == 0:
-            print(f"  right …{i + 1}/{NAV_RIGHT}", flush=True)
+    # Overview y=0 is blocked past x=2; climb first, then walk east.
+    print(f"Walking up × {NAV_UP}, right × {NAV_RIGHT}…", flush=True)
     for i in range(NAV_UP):
         move_dir("Up")
         if (i + 1) % 6 == 0:
             print(f"  up …{i + 1}/{NAV_UP}", flush=True)
+    for i in range(NAV_RIGHT):
+        move_dir("Right")
+        if (i + 1) % 11 == 0:
+            print(f"  right …{i + 1}/{NAV_RIGHT}", flush=True)
 
     entrance = player_has_entrance()
     report("at entrance area")

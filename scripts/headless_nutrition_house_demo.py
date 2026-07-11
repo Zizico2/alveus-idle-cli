@@ -73,17 +73,17 @@ def main() -> int:
     trigger("Play")
     time.sleep(3.0)
 
+    print(f"Walking up × {NAV_UP} (clear y=0 blockage)…", flush=True)
+    for i in range(NAV_UP):
+        move_dir("Up")
+        if (i + 1) % 10 == 0:
+            print(f"  …{i + 1}/{NAV_UP}", flush=True)
+
     print(f"Walking right × {NAV_RIGHT}…", flush=True)
     for i in range(NAV_RIGHT):
         move_dir("Right")
         if (i + 1) % 10 == 0:
             print(f"  …{i + 1}/{NAV_RIGHT}", flush=True)
-
-    print(f"Walking up × {NAV_UP}…", flush=True)
-    for i in range(NAV_UP):
-        move_dir("Up")
-        if (i + 1) % 10 == 0:
-            print(f"  …{i + 1}/{NAV_UP}", flush=True)
 
     print("Entering Nutrition House…", flush=True)
     trigger("EnterBuilding")

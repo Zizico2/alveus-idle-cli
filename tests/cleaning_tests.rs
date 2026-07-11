@@ -236,7 +236,7 @@ fn test_poop_pickup_removes_tile() {
 
 #[test]
 fn test_cleanliness_after_threshold_decay_24h_from_full() {
-    let config = poop_config_for(EnclosureId::PushPopEnclosure);
+    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop has poop config");
     assert_eq!(
         cleanliness_after_threshold_decay(Stat(1000), 24.0, 30.0, config),
         Stat(0),
@@ -284,9 +284,17 @@ fn test_wheelbarrow_persists_in_save() {
 
 #[test]
 fn push_pop_poop_config_matches_configs() {
-    let config = poop_config_for(EnclosureId::PushPopEnclosure);
+    let config = poop_config_for(EnclosureId::PushPopEnclosure).expect("Push Pop has poop config");
     assert_eq!(config.spawn_thresholds, &[Stat(800), Stat(500), Stat(200)]);
     assert_eq!(config.cleanliness_restore_per_poop, CleanStat(Stat(350)));
+}
+
+#[test]
+fn nutrition_house_has_no_poop_config() {
+    assert!(
+        poop_config_for(EnclosureId::NutritionHousePlaypen).is_none(),
+        "Polly clean is nest-sweep only; no pile-based poop config"
+    );
 }
 #[test]
 fn test_poop_count_accelerates_offline_decay() {

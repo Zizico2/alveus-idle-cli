@@ -254,6 +254,11 @@
     "values": [
       "DietFridge",
       "SeedChest",
+      "PrepTable",
+      "ToyBin",
+      "PollyFeedBowl",
+      "PollyNestingBox",
+      "PollyEnrichmentPost",
       "PushPopFeedingDish",
       "CompostBin"
     ],

@@ -28,6 +28,32 @@ def enum_variant_prop(name: str, type_path: str, variant: str) -> str:
     </property>"""
 
 
+# XML attribute values must escape `<`/`>` (TMX parsers reject raw angle brackets).
+OPTION_ITEM_ID = "core::option::Option&lt;alveus_types::ItemId&gt;"
+OPTION_ITEM_ID_VARIANT = f"{OPTION_ITEM_ID}:::Variant"
+OPTION_ITEM_ID_SOME = f"{OPTION_ITEM_ID}::Some"
+
+
+def option_item_prop(name: str, item_id: str | None) -> str:
+    """Serialize Option<ItemId> for Tiled custom properties."""
+    if item_id is None:
+        return f"""    <property name="{name}" type="class" propertytype="{OPTION_ITEM_ID}">
+     <properties>
+      <property name=":variant" propertytype="{OPTION_ITEM_ID_VARIANT}" value="None"/>
+     </properties>
+    </property>"""
+    return f"""    <property name="{name}" type="class" propertytype="{OPTION_ITEM_ID}">
+     <properties>
+      <property name=":variant" propertytype="{OPTION_ITEM_ID_VARIANT}" value="Some"/>
+      <property name="Some" type="class" propertytype="{OPTION_ITEM_ID_SOME}">
+       <properties>
+{enum_variant_prop("0", "alveus_types::ItemId", item_id)}
+       </properties>
+      </property>
+     </properties>
+    </property>"""
+
+
 def give_item_prop(item_id: str, prompt: str) -> str:
     return f"""    <property name="give_item" type="class" propertytype="alveus_interaction::GiveItem">
      <properties>
@@ -71,19 +97,10 @@ def enrich_animal_prop(
     delta: int,
     prompt: str,
 ) -> str:
-    required = (
-        enum_variant_prop("required_item", "alveus_types::ItemId", required_item)
-        if required_item is not None
-        else '      <property name="required_item" type="class" propertytype="core::option::Option<alveus_types::ItemId">\n'
-        '       <properties>\n'
-        '        <property name=":variant" propertytype="core::option::Option<alveus_types::ItemId>:::Variant" value="None"/>\n'
-        "       </properties>\n"
-        "      </property>"
-    )
     return f"""    <property name="enrich_animal" type="class" propertytype="alveus_interaction::EnrichAnimal">
      <properties>
 {enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
-{required}
+{option_item_prop("required_item", required_item)}
 {care_stat_prop("delta", "alveus_types::EnrichStat", delta)}
       <property name="prompt" type="string" value="{prompt}"/>
      </properties>
@@ -96,20 +113,36 @@ def clean_animal_prop(
     delta: int,
     prompt: str,
 ) -> str:
-    required = (
-        enum_variant_prop("required_item", "alveus_types::ItemId", required_item)
-        if required_item is not None
-        else '      <property name="required_item" type="class" propertytype="core::option::Option<alveus_types::ItemId">\n'
-        '       <properties>\n'
-        '        <property name=":variant" propertytype="core::option::Option<alveus_types::ItemId>:::Variant" value="None"/>\n'
-        "       </properties>\n"
-        "      </property>"
-    )
     return f"""    <property name="clean_animal" type="class" propertytype="alveus_interaction::CleanAnimal">
      <properties>
 {enum_variant_prop("animal_id", "alveus_types::AnimalId", animal_id)}
-{required}
+{option_item_prop("required_item", required_item)}
 {care_stat_prop("delta", "alveus_types::CleanStat", delta)}
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def open_menu_prop(menu_id: str, prompt: str) -> str:
+    return f"""    <property name="open_menu" type="class" propertytype="alveus_interaction::OpenMenu">
+     <properties>
+{enum_variant_prop("menu_id", "alveus_types::CareMenuId", menu_id)}
+      <property name="prompt" type="string" value="{prompt}"/>
+     </properties>
+    </property>"""
+
+
+def mini_chore_prop(
+    chore_id: str,
+    required_item: str | None,
+    output_item: str | None,
+    prompt: str,
+) -> str:
+    return f"""    <property name="mini_chore" type="class" propertytype="alveus_interaction::MiniChore">
+     <properties>
+{enum_variant_prop("chore_id", "alveus_types::ChoreId", chore_id)}
+{option_item_prop("required_item", required_item)}
+{option_item_prop("output_item", output_item)}
       <property name="prompt" type="string" value="{prompt}"/>
      </properties>
     </property>"""
@@ -120,6 +153,10 @@ def interactable_tile_props(
     *,
     give_item: tuple[str, str] | None = None,
     feed_animal: tuple[str, str, int, str] | None = None,
+    open_menu: tuple[str, str] | None = None,
+    mini_chore: tuple[str, str | None, str | None, str] | None = None,
+    enrich_animal: tuple[str, str | None, int, str] | None = None,
+    clean_animal: tuple[str, str | None, int, str] | None = None,
 ) -> str:
     interaction = ""
     if give_item is not None:
@@ -128,6 +165,18 @@ def interactable_tile_props(
     elif feed_animal is not None:
         animal_id, required_item, delta, prompt = feed_animal
         interaction = feed_animal_prop(animal_id, required_item, delta, prompt)
+    elif open_menu is not None:
+        menu_id, prompt = open_menu
+        interaction = open_menu_prop(menu_id, prompt)
+    elif mini_chore is not None:
+        chore_id, required_item, output_item, prompt = mini_chore
+        interaction = mini_chore_prop(chore_id, required_item, output_item, prompt)
+    elif enrich_animal is not None:
+        animal_id, required_item, delta, prompt = enrich_animal
+        interaction = enrich_animal_prop(animal_id, required_item, delta, prompt)
+    elif clean_animal is not None:
+        animal_id, required_item, delta, prompt = clean_animal
+        interaction = clean_animal_prop(animal_id, required_item, delta, prompt)
 
     return f"""   <properties>
     <property name="obstacle" type="class" propertytype="alveus_components::Obstacle">
@@ -148,6 +197,10 @@ class TileDef(NamedTuple):
     room_object: str | None = None
     give_item: tuple[str, str] | None = None
     feed_animal: tuple[str, str, int, str] | None = None
+    open_menu: tuple[str, str] | None = None
+    mini_chore: tuple[str, str | None, str | None, str] | None = None
+    enrich_animal: tuple[str, str | None, int, str] | None = None
+    clean_animal: tuple[str, str | None, int, str] | None = None
 
 # Palette derived from room.rs Color::srgb values and nutrition_house.png cottage style.
 PALETTE = {
@@ -178,6 +231,13 @@ PALETTE = {
     "dish": (140, 115, 77),
     "dish_inner": (90, 75, 55),
     "food_green": (80, 140, 60),
+    "toy_bin": (70, 110, 150),
+    "toy_bin_dark": (45, 80, 115),
+    "mirror": (200, 220, 230),
+    "nest": (160, 130, 90),
+    "nest_dark": (120, 95, 65),
+    "post": (90, 70, 50),
+    "grains": (200, 170, 80),
 }
 
 
@@ -265,6 +325,50 @@ def draw_seed_chest() -> Image.Image:
     return img
 
 
+def draw_toy_bin() -> Image.Image:
+    img = new_tile()
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), fill=PALETTE["wood_dark"])
+    draw.rectangle((5, 10, TILE - 6, TILE - 4), fill=PALETTE["toy_bin"])
+    draw.rectangle((5, 10, TILE - 6, 14), fill=PALETTE["toy_bin_dark"])
+    draw.ellipse((10, 16, 18, 24), fill=PALETTE["mirror"])
+    draw.ellipse((12, 18, 16, 22), fill=PALETTE["toy_bin_dark"])
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), outline=PALETTE["outline"], width=1)
+    return img
+
+
+def draw_polly_feed_bowl() -> Image.Image:
+    img = new_tile()
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), fill=PALETTE["wood_dark"])
+    draw.ellipse((7, 12, TILE - 8, TILE - 6), fill=PALETTE["dish"])
+    draw.ellipse((10, 15, TILE - 11, TILE - 9), fill=PALETTE["dish_inner"])
+    draw.ellipse((12, 17, 18, 21), fill=PALETTE["grains"])
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), outline=PALETTE["outline"], width=1)
+    return img
+
+
+def draw_polly_nesting() -> Image.Image:
+    img = new_tile()
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), fill=PALETTE["wood_dark"])
+    draw.ellipse((6, 10, TILE - 7, TILE - 5), fill=PALETTE["nest"])
+    draw.ellipse((10, 14, TILE - 11, TILE - 9), fill=PALETTE["nest_dark"])
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), outline=PALETTE["outline"], width=1)
+    return img
+
+
+def draw_polly_enrichment() -> Image.Image:
+    img = new_tile()
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), fill=PALETTE["wood_dark"])
+    draw.rectangle((14, 6, 18, TILE - 5), fill=PALETTE["post"])
+    draw.ellipse((8, 4, 24, 18), fill=PALETTE["mirror"])
+    draw.ellipse((11, 7, 21, 15), fill=PALETTE["toy_bin_dark"])
+    draw.rectangle((0, 0, TILE - 1, TILE - 1), outline=PALETTE["outline"], width=1)
+    return img
+
+
 def draw_sand_floor(variant: int = 0) -> Image.Image:
     img = new_tile()
     draw = ImageDraw.Draw(img)
@@ -329,13 +433,14 @@ TILE_DEFS: list[TileDef] = [
     TileDef("wood_floor_alt.png", lambda: draw_wood_floor(1), False),
     TileDef("wall.png", draw_wall, True),
     TileDef("wood_door.png", draw_wood_door, False),
+    # Prep table sides: obstacle only (center tile carries MiniChore).
     TileDef("prep_table.png", draw_prep_table, True),
     TileDef(
         "fridge.png",
         draw_fridge,
         True,
         room_object="DietFridge",
-        give_item=("TortoiseLeafyGreens", "Scoop tortoise leafy greens"),
+        open_menu=("Fridge", "Open fridge"),
     ),
     TileDef(
         "seed_chest.png",
@@ -361,6 +466,61 @@ TILE_DEFS: list[TileDef] = [
             "Place leafy greens for Push Pop",
         ),
     ),
+    TileDef(
+        "prep_table_chore.png",
+        draw_prep_table,
+        True,
+        room_object="PrepTable",
+        mini_chore=(
+            "ChopVeggies",
+            "RawVeggieTub",
+            "PreparedVeggieDiet",
+            "Chop veggies",
+        ),
+    ),
+    TileDef(
+        "toy_bin.png",
+        draw_toy_bin,
+        True,
+        room_object="ToyBin",
+        give_item=("MiniMirror", "Take mini mirror"),
+    ),
+    TileDef(
+        "polly_feed_bowl.png",
+        draw_polly_feed_bowl,
+        True,
+        room_object="PollyFeedBowl",
+        feed_animal=(
+            "Polly",
+            "ChickenGrains",
+            1000,
+            "Fill Polly's bowl",
+        ),
+    ),
+    TileDef(
+        "polly_nesting.png",
+        draw_polly_nesting,
+        True,
+        room_object="PollyNestingBox",
+        clean_animal=(
+            "Polly",
+            None,
+            1000,
+            "Sweep nesting",
+        ),
+    ),
+    TileDef(
+        "polly_enrichment.png",
+        draw_polly_enrichment,
+        True,
+        room_object="PollyEnrichmentPost",
+        enrich_animal=(
+            "Polly",
+            "MiniMirror",
+            1000,
+            "Place mirror",
+        ),
+    ),
 ]
 
 # Tile indices (0-based in tileset)
@@ -377,6 +537,11 @@ FENCE = 9
 GATE = 10
 SHELTER = 11
 FEEDING_DISH = 12
+PREP_TABLE_CHORE = 13
+TOY_BIN = 14
+POLLY_FEED_BOWL = 15
+POLLY_NESTING = 16
+POLLY_ENRICHMENT = 17
 
 FIRST_GID = 1
 
@@ -401,6 +566,10 @@ def emit_tsx() -> None:
                     tile_def.room_object,
                     give_item=tile_def.give_item,
                     feed_animal=tile_def.feed_animal,
+                    open_menu=tile_def.open_menu,
+                    mini_chore=tile_def.mini_chore,
+                    enrich_animal=tile_def.enrich_animal,
+                    clean_animal=tile_def.clean_animal,
                 )
             )
         elif tile_def.obstacle:
@@ -419,6 +588,7 @@ def make_grid(width: int, height: int) -> tuple[list[list[int | None]], list[lis
 
 
 def nutrition_house_layers() -> tuple[list[list[int | None]], list[list[int | None]]]:
+    """11×11 Nutrition House with Polly stations in the east corner (no fence)."""
     w, h = 11, 11
     floor, objects = make_grid(w, h)
 
@@ -436,11 +606,19 @@ def nutrition_house_layers() -> tuple[list[list[int | None]], list[list[int | No
             else:
                 objects[y][x] = WALL
 
-    for x in range(4, 7):
-        objects[7][x] = PREP_TABLE
+    # Prep table (4–6, 7); center carries MiniChore.
+    objects[7][4] = PREP_TABLE
+    objects[7][5] = PREP_TABLE_CHORE
+    objects[7][6] = PREP_TABLE
 
     objects[8][2] = FRIDGE
     objects[5][2] = SEED_CHEST
+    objects[5][3] = TOY_BIN
+
+    # Polly care stations (open floor — no playpen fence/gate).
+    objects[5][7] = POLLY_ENRICHMENT
+    objects[2][9] = POLLY_NESTING
+    objects[3][8] = POLLY_FEED_BOWL
 
     return floor, objects
 

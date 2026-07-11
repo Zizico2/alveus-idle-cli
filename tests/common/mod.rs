@@ -153,3 +153,65 @@ fn wait_for_tiled_map(app: &mut App, handle: &Handle<TiledMapAsset>) {
 pub fn cleanup_save(save_path: &str) {
     let _ = std::fs::remove_file(save_path);
 }
+
+/// Headless app that exercises Title → Loading → Gameplay with real map assets.
+///
+/// Loads `LevelAssets` + `InteriorAssets` through [`ResourceHandles`] (same path as
+/// the game) and builds collision masks while in Loading.
+pub fn loading_transition_app() -> App {
+    use alveus_asset_tracking::LoadResource;
+    use alveus_collision::{
+        CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks, collision_ready,
+    };
+    use alveus_menus::PlayClickEvent;
+    use bevy_ecs_tiled::prelude::TiledMapAsset;
+
+    let mut app = headless_tiled_test_app();
+    app.add_plugins(StatesPlugin);
+    app.init_state::<Screen>();
+    app.add_plugins(alveus_asset_tracking::plugin);
+    app.init_resource::<CollisionMasks>();
+    app.load_resource::<LevelAssets>()
+        .load_resource::<InteriorAssets>();
+    app.add_observer(alveus_menus::main_menu::handle_play_click);
+
+    app.add_systems(
+        Update,
+        (
+            move |mut masks: ResMut<CollisionMasks>,
+                  map_assets: Res<Assets<TiledMapAsset>>,
+                  level_assets: Option<Res<LevelAssets>>,
+                  interior_assets: Option<Res<InteriorAssets>>,
+                  screen: Res<State<Screen>>| {
+                if *screen.get() != Screen::Loading {
+                    return;
+                }
+                let (Some(level_assets), Some(interior_assets)) = (level_assets, interior_assets)
+                else {
+                    return;
+                };
+                if collision_ready(&masks) {
+                    return;
+                }
+                build_all_collision_masks(&mut masks, &map_assets, &level_assets, &interior_assets);
+            },
+            move |resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
+                  masks: Res<CollisionMasks>,
+                  screen: Res<State<Screen>>,
+                  mut next_screen: ResMut<NextState<Screen>>| {
+                if *screen.get() != Screen::Loading {
+                    return;
+                }
+                if resource_handles.is_all_done() && collision_ready(&masks) {
+                    next_screen.set(Screen::Gameplay);
+                }
+            },
+        ),
+    );
+
+    // Start on Title so Play routes through Loading when assets are still pending.
+    app.insert_resource(NextState::Pending(Screen::Title));
+    app.update();
+    let _ = PlayClickEvent;
+    app
+}

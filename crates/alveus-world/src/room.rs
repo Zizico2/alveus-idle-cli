@@ -1,4 +1,4 @@
-use alveus_animals::spawn_push_pop_npc;
+use alveus_animals::{spawn_polly_npc, spawn_push_pop_npc};
 use alveus_app::{InRoom, Screen};
 use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, InteriorAssets, LiveObstacleItem,
@@ -79,6 +79,8 @@ pub struct RoomConfig<S: States + FreelyMutableState> {
     pub exit_spawn: TilePosition,
     pub exit_door: TilePosition,
     pub get_interior_map: fn(&InteriorAssets) -> Handle<TiledMapAsset>,
+    /// When set, spawn extras at a resolved tile for this resident animal.
+    pub resident_animal: Option<AnimalId>,
     pub spawn_extras_fn:
         fn(&mut ChildSpawnerCommands, &mut Assets<Mesh>, &mut Assets<ColorMaterial>, TilePosition),
     pub room_title: String,
@@ -95,6 +97,7 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
     let exit_spawn = config.exit_spawn;
     let exit_door = config.exit_door;
     let get_interior_map = config.get_interior_map;
+    let resident_animal = config.resident_animal;
     let spawn_extras_fn = config.spawn_extras_fn;
     let room_title = config.room_title;
 
@@ -120,17 +123,6 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                   animal_positions: Query<(&AnimalId, &AnimalTilePosition)>| {
                 let collision_key = CollisionMapKey::Enclosure(enclosure_id);
 
-                let push_pop_preferred = animal_positions
-                    .iter()
-                    .find(|(id, _)| **id == AnimalId::PushPop)
-                    .map(|(_, pos)| pos.0)
-                    .or_else(|| default_tile_position(AnimalId::PushPop))
-                    .expect("Push Pop must have a saved or default tile position");
-
-                let wander_bounds = animal_default_placement(AnimalId::PushPop)
-                    .expect("Push Pop must have placement config")
-                    .wander_bounds;
-
                 commands
                     .spawn((
                         Name::new(format!("{} Room", room_title_for_spawner)),
@@ -145,19 +137,35 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                             DesiredTilePosition(room_spawn),
                         ));
 
-                        let push_pop_tile = resolve_spawn_tile(
-                            push_pop_preferred,
-                            wander_bounds,
-                            collision_key,
-                            &masks,
-                            &persisted_obstacles,
-                            &live_obstacles,
-                            None,
-                        );
-
                         let map_handle = get_interior_map(&interior_assets);
                         spawn_interior_map(parent, map_handle);
-                        spawn_extras_fn(parent, &mut meshes, &mut materials, push_pop_tile);
+
+                        if let Some(animal_id) = resident_animal {
+                            let preferred = animal_positions
+                                .iter()
+                                .find(|(id, _)| **id == animal_id)
+                                .map(|(_, pos)| pos.0)
+                                .or_else(|| default_tile_position(animal_id))
+                                .unwrap_or(room_spawn);
+
+                            let wander_bounds = animal_default_placement(animal_id)
+                                .map(|p| p.wander_bounds)
+                                .unwrap_or_else(|| alveus_types::TileBounds {
+                                    bottom_left: preferred,
+                                    top_right: preferred,
+                                });
+
+                            let spawn_tile = resolve_spawn_tile(
+                                preferred,
+                                wander_bounds,
+                                collision_key,
+                                &masks,
+                                &persisted_obstacles,
+                                &live_obstacles,
+                                None,
+                            );
+                            spawn_extras_fn(parent, &mut meshes, &mut materials, spawn_tile);
+                        }
                     });
             },
             move |mut commands: Commands| {
@@ -250,12 +258,13 @@ fn push_pop_enclosure_map(assets: &InteriorAssets) -> Handle<TiledMapAsset> {
     assets.push_pop_enclosure.clone()
 }
 
-fn spawn_no_extras(
-    _parent: &mut ChildSpawnerCommands,
-    _meshes: &mut Assets<Mesh>,
-    _materials: &mut Assets<ColorMaterial>,
-    _tile: TilePosition,
+fn spawn_polly_extras(
+    parent: &mut ChildSpawnerCommands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    tile: TilePosition,
 ) {
+    spawn_polly_npc(parent, meshes, materials, tile);
 }
 
 fn spawn_push_pop_extras(
@@ -282,7 +291,8 @@ impl Plugin for NutritionHousePlugin {
                 exit_spawn: NUTRITION_HOUSE_ROOM.exit_spawn,
                 exit_door: NUTRITION_HOUSE_ROOM.exit_door,
                 get_interior_map: nutrition_house_map,
-                spawn_extras_fn: spawn_no_extras,
+                resident_animal: Some(AnimalId::Polly),
+                spawn_extras_fn: spawn_polly_extras,
                 room_title: "Nutrition House".to_string(),
             },
         );
@@ -304,6 +314,7 @@ impl Plugin for PushPopEnclosurePlugin {
                 exit_spawn: PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
                 exit_door: PUSH_POP_ENCLOSURE_ROOM.exit_door,
                 get_interior_map: push_pop_enclosure_map,
+                resident_animal: Some(AnimalId::PushPop),
                 spawn_extras_fn: spawn_push_pop_extras,
                 room_title: "Push Pop Enclosure".to_string(),
             },

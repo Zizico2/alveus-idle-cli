@@ -12,6 +12,13 @@ use alveus_types::{AnimalId, EnclosureId};
 use bevy::prelude::*;
 use rand::prelude::*;
 
+fn in_animal_room(screen: Res<State<Screen>>) -> bool {
+    matches!(
+        screen.get(),
+        Screen::InRoom(InRoom::PushPopEnclosure | InRoom::NutritionHouse)
+    )
+}
+
 pub struct AnimalsPlugin;
 
 impl Plugin for AnimalsPlugin {
@@ -24,7 +31,7 @@ impl Plugin for AnimalsPlugin {
                 apply_animal_movement,
                 sync_npc_position_to_stats,
             )
-                .run_if(in_state(Screen::InRoom(InRoom::PushPopEnclosure))),
+                .run_if(in_animal_room),
         )
         .add_systems(
             Update,
@@ -63,18 +70,55 @@ pub fn spawn_push_pop_npc(
     materials: &mut Assets<ColorMaterial>,
     tile: TilePosition,
 ) {
-    let placement =
-        animal_default_placement(AnimalId::PushPop).expect("Push Pop must have placement config");
+    spawn_animal_npc(
+        parent,
+        meshes,
+        materials,
+        tile,
+        AnimalId::PushPop,
+        EnclosureId::PushPopEnclosure,
+        "Push Pop",
+        Color::srgb(0.45, 0.55, 0.30),
+    );
+}
+
+pub fn spawn_polly_npc(
+    parent: &mut ChildSpawnerCommands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    tile: TilePosition,
+) {
+    spawn_animal_npc(
+        parent,
+        meshes,
+        materials,
+        tile,
+        AnimalId::Polly,
+        EnclosureId::NutritionHousePlaypen,
+        "Polly",
+        Color::srgb(0.92, 0.88, 0.78),
+    );
+}
+
+fn spawn_animal_npc(
+    parent: &mut ChildSpawnerCommands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    tile: TilePosition,
+    animal_id: AnimalId,
+    enclosure_id: EnclosureId,
+    name: &str,
+    color: Color,
+) {
+    let placement = animal_default_placement(animal_id).expect("animal must have placement config");
     let mesh = meshes.add(Circle::new(14.0));
-    let material = materials.add(Color::srgb(0.45, 0.55, 0.30));
+    let material = materials.add(color);
 
     parent.spawn((
-        Name::new("Push Pop"),
-        AnimalNpc {
-            animal_id: AnimalId::PushPop,
-        },
+        Name::new(name.to_string()),
+        AnimalNpc { animal_id },
         DynamicObstacle,
-        InEnclosure(EnclosureId::PushPopEnclosure),
+        InEnclosure(enclosure_id),
         WanderInZone::new(placement.wander_bounds),
         CurrentTilePosition(tile),
         DesiredTilePosition(tile),

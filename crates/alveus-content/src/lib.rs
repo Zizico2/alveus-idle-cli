@@ -27,6 +27,11 @@ pub enum RoomObjectId {
     #[default]
     DietFridge,
     SeedChest,
+    PrepTable,
+    ToyBin,
+    PollyFeedBowl,
+    PollyNestingBox,
+    PollyEnrichmentPost,
     PushPopFeedingDish,
     CompostBin,
 }
@@ -35,6 +40,11 @@ pub fn room_object_display_name(object_id: RoomObjectId) -> &'static str {
     match object_id {
         RoomObjectId::DietFridge => "Diet Fridge",
         RoomObjectId::SeedChest => "Seed Chest",
+        RoomObjectId::PrepTable => "Prep Table",
+        RoomObjectId::ToyBin => "Toy Bin",
+        RoomObjectId::PollyFeedBowl => "Polly's Feed Bowl",
+        RoomObjectId::PollyNestingBox => "Polly's Nesting Box",
+        RoomObjectId::PollyEnrichmentPost => "Polly's Enrichment Zone",
         RoomObjectId::PushPopFeedingDish => "Push Pop's Feeding Dish",
         RoomObjectId::CompostBin => "Compost Bin",
     }

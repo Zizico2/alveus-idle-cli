@@ -335,6 +335,7 @@ dependencies = [
  "alveus-app",
  "alveus-asset-tracking",
  "alveus-collision",
+ "alveus-configs",
  "alveus-theme",
  "alveus-world",
  "bevy",
