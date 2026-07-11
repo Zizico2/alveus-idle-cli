@@ -11,8 +11,8 @@ use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, is_walkable,
 };
 use alveus_components::{
-    CurrentTilePosition, DesiredTilePosition, DynamicObstacle, MovementController, MovementDuration,
-    MovementIntent, TILE_SIZE,
+    CurrentTilePosition, DesiredTilePosition, DynamicObstacle, MovementController,
+    MovementDuration, MovementIntent, TILE_SIZE,
 };
 use alveus_types::EnclosureId;
 

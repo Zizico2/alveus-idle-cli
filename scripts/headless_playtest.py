@@ -107,13 +107,21 @@ def animal_stats() -> list[tuple[str, int, int]]:
     return out
 
 
-def satchel_item() -> str | None:
+def satchel_slots() -> list:
     res = rpc("world.get_resources", {
         "resource": "alveus_interaction::PlayerSatchel",
     })
     if isinstance(res, dict):
-        item = res.get("value", {}).get("item")
-        return str(item) if item is not None else None
+        slots = res.get("value", {}).get("slots")
+        if isinstance(slots, list):
+            return slots
+    return []
+
+
+def satchel_item() -> str | None:
+    for slot in satchel_slots():
+        if slot is not None:
+            return str(slot)
     return None
 
 

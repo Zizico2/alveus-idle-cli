@@ -10,7 +10,9 @@ use alveus_app::Menu;
 use bevy::prelude::*;
 
 pub fn plugin(app: &mut App) {
-    app.init_state::<Menu>();
+    if !app.world().contains_resource::<State<Menu>>() {
+        app.init_state::<Menu>();
+    }
 
     app.add_plugins((
         credits::plugin,

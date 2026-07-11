@@ -8,19 +8,24 @@ use bevy::prelude::*;
 use alveus_app::{InRoom, Menu, Pause, Screen};
 use alveus_cleaning::{PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile};
 use alveus_components::{
-    BuildingEntrance, CurrentTilePosition, DesiredTilePosition, DynamicObstacle, InEnclosure,
-    Interactable, LastPickupMessage, Obstacle, PersistedDynamicObstacle, PoopWheelbarrow, Player,
-    TilePosition,
+    BuildingEntrance, CareFeedbackEvent, CareHudPulse, CurrentTilePosition, DesiredTilePosition,
+    DynamicObstacle, InEnclosure, Interactable, LastPickupMessage, Obstacle,
+    PersistedDynamicObstacle, Player, PoopWheelbarrow, TilePosition,
 };
-use alveus_content::{ItemId, RoomObjectId};
 use alveus_components::{MovementController, MovementIntent};
-use alveus_menus::PlayClickEvent;
-use alveus_interaction::{ActiveInteractionTarget, AnimalFedEvent, FeedAnimal, GiveItem, PlayerSatchel};
-use alveus_stats::{
-    AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition, EnclosureId,
-    EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
-    WorsenStatEvent,
+use alveus_content::{ItemId, RoomObjectId};
+use alveus_interaction::{
+    ActiveInteractionTarget, AnimalCleanedEvent, AnimalEnrichedEvent, AnimalFedEvent,
+    CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem, MiniChore, OpenMenu,
+    PlayerSatchel,
 };
+use alveus_menus::PlayClickEvent;
+use alveus_stats::{
+    AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition,
+    EnclosureId, EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath,
+    StatTarget, WorsenStatEvent,
+};
+use alveus_types::{CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat, Stat};
 use alveus_world::entrance::{PlayerEnteredBuildingEvent, PlayerExitedBuildingEvent};
 use alveus_world::room::PlayerSpawnPoint;
 use alveus_world::toast::{DismissToastEvent, TriggerToastEvent};
@@ -47,11 +52,17 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<Interactable>()
         .register_type::<GiveItem>()
         .register_type::<FeedAnimal>()
+        .register_type::<EnrichAnimal>()
+        .register_type::<CleanAnimal>()
+        .register_type::<MiniChore>()
+        .register_type::<OpenMenu>()
         .register_type::<PoopPile>()
         .register_type::<PoopDump>()
         .register_type::<PoopWheelbarrow>()
         .register_type::<RoomObjectId>()
         .register_type::<ItemId>()
+        .register_type::<ChoreId>()
+        .register_type::<CareMenuId>()
         .register_type::<AnimalId>()
         .register_type::<AnimalName>()
         .register_type::<AnimalStats>()
@@ -62,9 +73,16 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<EnclosureStats>()
         .register_type::<AnimalStat>()
         .register_type::<StatTarget>()
+        .register_type::<Stat>()
+        .register_type::<FeedStat>()
+        .register_type::<EnrichStat>()
+        .register_type::<CleanStat>()
         .register_type::<PlayerSatchel>()
         .register_type::<ActiveInteractionTarget>()
+        .register_type::<CareMenuState>()
         .register_type::<LastPickupMessage>()
+        .register_type::<CareFeedbackEvent>()
+        .register_type::<CareHudPulse>()
         .register_type::<PlayerSpawnPoint>()
         .register_type::<SanctuaryUpkeep>()
         .register_type::<SavePath>()
@@ -73,6 +91,8 @@ pub fn register_headless_types(app: &mut App) {
         .register_type::<GameCommand>()
         .register_type::<PlayClickEvent>()
         .register_type::<AnimalFedEvent>()
+        .register_type::<AnimalEnrichedEvent>()
+        .register_type::<AnimalCleanedEvent>()
         .register_type::<PoopPickedUpEvent>()
         .register_type::<PoopDumpedEvent>()
         .register_type::<ImproveStatEvent>()

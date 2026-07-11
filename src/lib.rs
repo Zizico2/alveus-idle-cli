@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-use alveus_headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, InputPlugin, StepRequest};
 #[cfg(feature = "headless")]
 use alveus_headless::HeadlessPlugin;
+use alveus_headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, InputPlugin, StepRequest};
 
 /// How the application is run.
 #[derive(Debug, Clone)]

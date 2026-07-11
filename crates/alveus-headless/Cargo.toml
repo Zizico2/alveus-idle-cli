@@ -10,6 +10,7 @@ bevy = { workspace = true }
 async-channel = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 alveus-app.workspace = true
+alveus-types.workspace = true
 alveus-components.workspace = true
 alveus-content.workspace = true
 alveus-collision.workspace = true

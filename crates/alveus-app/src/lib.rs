@@ -54,6 +54,9 @@ pub enum Menu {
     Credits,
     Settings,
     Pause,
+    /// In-world care item picker (fridge, etc.). Cursor via Move Up/Down;
+    /// confirm with Interact/Continue; cancel with Back.
+    CareItemPicker,
 }
 
 /// Configures the shared `Update` system-set ordering and the [`Pause`] state.

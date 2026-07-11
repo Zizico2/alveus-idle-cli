@@ -1,11 +1,13 @@
+use alveus_app::Screen;
 use alveus_cleaning::CleaningPlugin;
 use alveus_components::TilePosition;
+use alveus_configs::CARE_FEED_RESTORE;
 use alveus_content::ItemId;
 use alveus_interaction::{
     AnimalFedEvent, FeedAnimal, InteractionPlugin, PlayerSatchel, try_give_item,
 };
-use alveus_app::Screen;
-use alveus_stats::{AnimalId, AnimalStat, AnimalStats, SavePath, StatsPlugin};
+use alveus_stats::{AnimalId, AnimalStats, SavePath, StatsPlugin};
+use alveus_types::Stat;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 
@@ -37,7 +39,7 @@ fn test_push_pop_feed_restores_hunger() {
             .world_mut()
             .get_mut::<AnimalStats>(push_pop_entity)
             .unwrap();
-        stats.hunger = 200;
+        stats.hunger = Stat(200);
     }
 
     let mut satchel = PlayerSatchel::default();
@@ -47,15 +49,14 @@ fn test_push_pop_feed_restores_hunger() {
     app.world_mut().trigger(AnimalFedEvent {
         animal_id: AnimalId::PushPop,
         required_item: ItemId::TortoiseLeafyGreens,
-        stat: AnimalStat::Hunger,
-        delta: 1000,
+        delta: CARE_FEED_RESTORE,
         dish_position: TilePosition { x: 8, y: 6 },
     });
     app.update();
 
     let stats = app.world().get::<AnimalStats>(push_pop_entity).unwrap();
-    assert_eq!(stats.hunger, 1000);
-    assert!(app.world().resource::<PlayerSatchel>().item.is_none());
+    assert_eq!(stats.hunger, Stat(1000));
+    assert!(app.world().resource::<PlayerSatchel>().is_empty());
 
     let _ = std::fs::remove_file(save_path);
 }
@@ -65,13 +66,11 @@ fn test_push_pop_feeding_dish_feed_animal_component() {
     let feed = FeedAnimal {
         animal_id: AnimalId::PushPop,
         required_item: ItemId::TortoiseLeafyGreens,
-        stat: AnimalStat::Hunger,
-        delta: 1000,
+        delta: CARE_FEED_RESTORE,
         prompt: "Place leafy greens for Push Pop".to_string(),
     };
 
     assert_eq!(feed.animal_id, AnimalId::PushPop);
     assert_eq!(feed.required_item, ItemId::TortoiseLeafyGreens);
-    assert_eq!(feed.stat, AnimalStat::Hunger);
-    assert_eq!(feed.delta, 1000);
+    assert_eq!(feed.delta, CARE_FEED_RESTORE);
 }

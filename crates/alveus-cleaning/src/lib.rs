@@ -20,7 +20,7 @@ use alveus_stats::{
     EnclosureStat, EnclosureStats, ImproveStatEvent, StatTarget, apply_offline_decay_system,
     tick_decay_system,
 };
-use alveus_types::EnclosureId;
+use alveus_types::{EnclosureId, Stat};
 
 // Poop config + cleaning math live in `alveus-configs`; re-export so callers and
 // tests keep a single `alveus_cleaning::*` entry point.
@@ -201,7 +201,7 @@ pub fn sync_missing_poop_entities(
 pub fn sync_threshold_poops_for_config(
     enclosure_id: EnclosureId,
     config: &PoopConfig,
-    cleanliness: u32,
+    cleanliness: Stat,
     masks: &CollisionMasks,
     tiles: &mut DynamicObstacleTiles,
     live_obstacles: &Query<LiveObstacleItem<'_>>,
@@ -219,15 +219,9 @@ pub fn sync_threshold_poops_for_config(
     let live = live_obstacles_for_enclosure(enclosure_id, live_obstacles);
 
     while (tiles.0.len() as u32) < target {
-        let Some(tile) = pick_random_poop_tile_in_bounds(
-            config,
-            key,
-            masks,
-            &blocked,
-            &live,
-            exclude,
-            rng,
-        ) else {
+        let Some(tile) =
+            pick_random_poop_tile_in_bounds(config, key, masks, &blocked, &live, exclude, rng)
+        else {
             break;
         };
         tiles.insert(tile);
@@ -273,11 +267,7 @@ fn sync_threshold_poop_spawn_system(
     masks: Option<Res<CollisionMasks>>,
     player_query: Query<&CurrentTilePosition, With<Player>>,
     live_obstacles: Query<LiveObstacleItem<'_>>,
-    mut enclosure_query: Query<(
-        &EnclosureId,
-        &EnclosureStats,
-        &mut DynamicObstacleTiles,
-    )>,
+    mut enclosure_query: Query<(&EnclosureId, &EnclosureStats, &mut DynamicObstacleTiles)>,
     mut commands: Commands,
     mut meshes: Option<ResMut<Assets<Mesh>>>,
     mut materials: Option<ResMut<Assets<ColorMaterial>>>,
@@ -313,17 +303,11 @@ fn sync_threshold_poop_spawn_system(
         );
 
         if in_room
-            && let (Some(meshes), Some(materials)) = (meshes.as_deref_mut(), materials.as_deref_mut())
+            && let (Some(meshes), Some(materials)) =
+                (meshes.as_deref_mut(), materials.as_deref_mut())
         {
             for tile in spawned {
-                spawn_poop_entity(
-                    &mut commands,
-                    meshes,
-                    materials,
-                    tile,
-                    *enclosure_id,
-                    room,
-                );
+                spawn_poop_entity(&mut commands, meshes, materials, tile, *enclosure_id, room);
             }
         }
     }
@@ -376,7 +360,7 @@ pub fn apply_poop_pickup(
             id: event.enclosure_id,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: config.cleanliness_restore_per_poop,
+        amount: config.cleanliness_restore_per_poop.into(),
     });
 
     commands.insert_resource(LastPickupMessage {
@@ -411,9 +395,9 @@ mod tests {
 
     fn test_config() -> PoopConfig {
         PoopConfig {
-            spawn_thresholds: &[800],
+            spawn_thresholds: &[Stat(800)],
             poop_decay_rate: 1.0,
-            cleanliness_restore_per_poop: 1,
+            cleanliness_restore_per_poop: alveus_types::CleanStat(Stat(1)),
             spawn_bounds: TileBounds {
                 bottom_left: TilePosition { x: 0, y: 0 },
                 top_right: TilePosition { x: 2, y: 2 },
@@ -449,16 +433,10 @@ mod tests {
         let live = HashSet::new();
         let mut rng = StdRng::seed_from_u64(1);
 
-        assert!(pick_random_poop_tile_in_bounds(
-            &config,
-            key,
-            &masks,
-            &blocked,
-            &live,
-            None,
-            &mut rng,
-        )
-        .is_none());
+        assert!(
+            pick_random_poop_tile_in_bounds(&config, key, &masks, &blocked, &live, None, &mut rng,)
+                .is_none()
+        );
     }
 
     #[test]
@@ -473,13 +451,7 @@ mod tests {
 
         for _ in 0..20 {
             let tile = pick_random_poop_tile_in_bounds(
-                &config,
-                key,
-                &masks,
-                &blocked,
-                &live,
-                None,
-                &mut rng,
+                &config, key, &masks, &blocked, &live, None, &mut rng,
             )
             .expect("open tiles remain");
             assert!(!blocked.contains(&tile));
@@ -498,13 +470,7 @@ mod tests {
 
         for _ in 0..20 {
             let tile = pick_random_poop_tile_in_bounds(
-                &config,
-                key,
-                &masks,
-                &blocked,
-                &live,
-                None,
-                &mut rng,
+                &config, key, &masks, &blocked, &live, None, &mut rng,
             )
             .expect("open tiles remain");
             assert!(!live.contains(&tile));
@@ -547,16 +513,9 @@ mod tests {
         let live = HashSet::new();
         let mut rng = StdRng::seed_from_u64(5);
 
-        let tile = pick_random_poop_tile_in_bounds(
-            &config,
-            key,
-            &masks,
-            &blocked,
-            &live,
-            None,
-            &mut rng,
-        )
-        .expect("should pick from open grid");
+        let tile =
+            pick_random_poop_tile_in_bounds(&config, key, &masks, &blocked, &live, None, &mut rng)
+                .expect("should pick from open grid");
         assert!(all_test_tiles().contains(&tile));
     }
 }

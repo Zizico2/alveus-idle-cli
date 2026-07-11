@@ -4,13 +4,13 @@ use alveus_collision::{
 };
 use alveus_components::PoopWheelbarrow;
 use alveus_configs::{
-    ANIMALS_DATA, AUTOSAVE_INTERVAL_SECS, ENCLOSURES_DATA, OFFLINE_WANDER_STEPS_PER_HOUR, STAT_FULL,
-    STAT_SCALE, animal_default_placement, cleanliness_decay_with_poops,
+    ANIMALS_DATA, AUTOSAVE_INTERVAL_SECS, ENCLOSURES_DATA, OFFLINE_WANDER_STEPS_PER_HOUR,
+    STAT_FULL, STAT_SCALE, animal_default_placement, cleanliness_decay_with_poops,
     enclosure_cleanliness_decay_amount, enclosure_for_animal,
 };
 use alveus_content::default_tile_position;
 pub use alveus_types::{AnimalId, EnclosureId};
-use alveus_types::{TileBounds, TilePosition};
+use alveus_types::{Stat, TileBounds, TilePosition};
 use bevy::prelude::*;
 use moonshine_save::prelude::*;
 use rand::rng;
@@ -38,8 +38,8 @@ pub struct AnimalName(pub String);
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct AnimalStats {
-    pub hunger: u32,    // [0, STAT_SCALE]
-    pub happiness: u32, // [0, STAT_SCALE]
+    pub hunger: Stat,    // [0, STAT_SCALE]
+    pub happiness: Stat, // [0, STAT_SCALE]
 }
 
 #[derive(Component, Debug, Clone, Reflect)]
@@ -87,7 +87,7 @@ pub struct EnclosureName(pub String);
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct EnclosureStats {
-    pub cleanliness: u32, // [0, STAT_SCALE]
+    pub cleanliness: Stat, // [0, STAT_SCALE]
 }
 
 #[derive(Component, Debug, Clone, Reflect)]
@@ -134,14 +134,14 @@ pub enum StatTarget {
 #[reflect(Event)]
 pub struct ImproveStatEvent {
     pub target: StatTarget,
-    pub amount: u32,
+    pub amount: Stat,
 }
 
 #[derive(Event, Debug, Clone, Copy, Reflect)]
 #[reflect(Event)]
 pub struct WorsenStatEvent {
     pub target: StatTarget,
-    pub amount: u32,
+    pub amount: Stat,
 }
 
 // ---------------------------------------------------------
@@ -195,6 +195,7 @@ impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SavePath>()
             .register_type::<SaveTimestamp>()
+            .register_type::<Stat>()
             .register_type::<AnimalId>()
             .register_type::<AnimalStat>()
             .register_type::<AnimalName>()
@@ -259,10 +260,7 @@ impl Plugin for StatsPlugin {
 // ---------------------------------------------------------
 
 fn in_gameplay_or_room(screen_state: Res<State<Screen>>) -> bool {
-    matches!(
-        screen_state.get(),
-        Screen::Gameplay | Screen::InRoom(_)
-    )
+    matches!(screen_state.get(), Screen::Gameplay | Screen::InRoom(_))
 }
 
 // ---------------------------------------------------------
@@ -275,9 +273,11 @@ fn improve_stat_observer(
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
+    let amount = event.amount;
     info!(
         "improve_stat_observer triggered for target '{:?}', amount {}",
-        event.target, event.amount
+        event.target,
+        amount.get()
     );
 
     match event.target {
@@ -293,25 +293,26 @@ fn improve_stat_observer(
                         match stat {
                             AnimalStat::Hunger => {
                                 let prev = stats.hunger;
-                                stats.hunger = stats.hunger.saturating_add(event.amount).min(STAT_SCALE);
+                                stats.hunger =
+                                    stats.hunger.saturating_add_capped(amount, STAT_SCALE);
                                 info!(
                                     "Improved hunger for {} ({}): {} -> {}",
                                     name.0,
                                     id.as_str(),
-                                    prev,
-                                    stats.hunger
+                                    prev.get(),
+                                    stats.hunger.get()
                                 );
                             }
                             AnimalStat::Happiness => {
                                 let prev = stats.happiness;
                                 stats.happiness =
-                                    stats.happiness.saturating_add(event.amount).min(STAT_SCALE);
+                                    stats.happiness.saturating_add_capped(amount, STAT_SCALE);
                                 info!(
                                     "Improved happiness for {} ({}): {} -> {}",
                                     name.0,
                                     id.as_str(),
-                                    prev,
-                                    stats.happiness
+                                    prev.get(),
+                                    stats.happiness.get()
                                 );
                             }
                             _ => unreachable!(),
@@ -340,14 +341,15 @@ fn improve_stat_observer(
                         if *enc_id == target_enc_id {
                             found = true;
                             let prev = enc_stats.cleanliness;
-                            enc_stats.cleanliness =
-                                enc_stats.cleanliness.saturating_add(event.amount).min(STAT_SCALE);
+                            enc_stats.cleanliness = enc_stats
+                                .cleanliness
+                                .saturating_add_capped(amount, STAT_SCALE);
                             info!(
                                 "Improved cleanliness for Enclosure {} ({}): {} -> {}",
                                 enc_name.0,
                                 enc_id.as_str(),
-                                prev,
-                                enc_stats.cleanliness
+                                prev.get(),
+                                enc_stats.cleanliness.get()
                             );
                         }
                     }
@@ -374,14 +376,15 @@ fn improve_stat_observer(
                 if *enc_id == target_enc_id {
                     found = true;
                     let prev = enc_stats.cleanliness;
-                    enc_stats.cleanliness =
-                        enc_stats.cleanliness.saturating_add(event.amount).min(STAT_SCALE);
+                    enc_stats.cleanliness = enc_stats
+                        .cleanliness
+                        .saturating_add_capped(amount, STAT_SCALE);
                     info!(
                         "Improved cleanliness for Enclosure {} ({}): {} -> {}",
                         enc_name.0,
                         enc_id.as_str(),
-                        prev,
-                        enc_stats.cleanliness
+                        prev.get(),
+                        enc_stats.cleanliness.get()
                     );
                 }
             }
@@ -401,9 +404,11 @@ fn worsen_stat_observer(
     mut enclosure_query: Query<(&EnclosureId, &EnclosureName, &mut EnclosureStats)>,
 ) {
     let event = trigger.event();
+    let amount = event.amount;
     info!(
         "worsen_stat_observer triggered for target '{:?}', amount {}",
-        event.target, event.amount
+        event.target,
+        amount.get()
     );
 
     match event.target {
@@ -419,24 +424,24 @@ fn worsen_stat_observer(
                         match stat {
                             AnimalStat::Hunger => {
                                 let prev = stats.hunger;
-                                stats.hunger = stats.hunger.saturating_sub(event.amount);
+                                stats.hunger = stats.hunger.saturating_sub(amount);
                                 info!(
                                     "Worsened hunger for {} ({}): {} -> {}",
                                     name.0,
                                     id.as_str(),
-                                    prev,
-                                    stats.hunger
+                                    prev.get(),
+                                    stats.hunger.get()
                                 );
                             }
                             AnimalStat::Happiness => {
                                 let prev = stats.happiness;
-                                stats.happiness = stats.happiness.saturating_sub(event.amount);
+                                stats.happiness = stats.happiness.saturating_sub(amount);
                                 info!(
                                     "Worsened happiness for {} ({}): {} -> {}",
                                     name.0,
                                     id.as_str(),
-                                    prev,
-                                    stats.happiness
+                                    prev.get(),
+                                    stats.happiness.get()
                                 );
                             }
                             _ => unreachable!(),
@@ -465,14 +470,13 @@ fn worsen_stat_observer(
                         if *enc_id == target_enc_id {
                             found = true;
                             let prev = enc_stats.cleanliness;
-                            enc_stats.cleanliness =
-                                enc_stats.cleanliness.saturating_sub(event.amount);
+                            enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(amount);
                             info!(
                                 "Worsened cleanliness for Enclosure {} ({}): {} -> {}",
                                 enc_name.0,
                                 enc_id.as_str(),
-                                prev,
-                                enc_stats.cleanliness
+                                prev.get(),
+                                enc_stats.cleanliness.get()
                             );
                         }
                     }
@@ -499,13 +503,13 @@ fn worsen_stat_observer(
                 if *enc_id == target_enc_id {
                     found = true;
                     let prev = enc_stats.cleanliness;
-                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(event.amount);
+                    enc_stats.cleanliness = enc_stats.cleanliness.saturating_sub(amount);
                     info!(
                         "Worsened cleanliness for Enclosure {} ({}): {} -> {}",
                         enc_name.0,
                         enc_id.as_str(),
-                        prev,
-                        enc_stats.cleanliness
+                        prev.get(),
+                        enc_stats.cleanliness.get()
                     );
                 }
             }
@@ -589,8 +593,8 @@ fn spawn_default_stats(commands: &mut Commands) {
         let display_name = animal.display_name.to_string();
 
         let decay_rates = AnimalDecayRates {
-            hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
-            happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
+            hunger_rate: animal.hunger_decay_rate * STAT_SCALE.get() as f32,
+            happiness_rate: animal.happiness_decay_rate * STAT_SCALE.get() as f32,
         };
 
         let enc_id = enclosure_for_animal(animal.animal_id);
@@ -631,7 +635,10 @@ fn spawn_missing_stat_entities(
         if existing_enclosures.contains(&enc.enclosure_id) {
             continue;
         }
-        info!("Spawning missing enclosure stats entity: {}", enc.display_name);
+        info!(
+            "Spawning missing enclosure stats entity: {}",
+            enc.display_name
+        );
         commands.spawn((
             Name::new(format!("Enclosure Stats - {}", enc.display_name)),
             enc.enclosure_id,
@@ -656,8 +663,8 @@ fn spawn_missing_stat_entities(
             animal.display_name
         );
         let decay_rates = AnimalDecayRates {
-            hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
-            happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
+            hunger_rate: animal.hunger_decay_rate * STAT_SCALE.get() as f32,
+            happiness_rate: animal.happiness_decay_rate * STAT_SCALE.get() as f32,
         };
         let (tile_position, background_wander) = animal_world_components(animal.animal_id);
 
@@ -694,8 +701,8 @@ fn hydrate_loaded_stats_observer(
     for (entity, id) in &animal_query {
         if let Some(animal) = ANIMALS_DATA.iter().find(|a| a.animal_id == *id) {
             let decay_rates = AnimalDecayRates {
-                hunger_rate: animal.hunger_decay_rate * STAT_SCALE as f32,
-                happiness_rate: animal.happiness_decay_rate * STAT_SCALE as f32,
+                hunger_rate: animal.hunger_decay_rate * STAT_SCALE.get() as f32,
+                happiness_rate: animal.happiness_decay_rate * STAT_SCALE.get() as f32,
             };
 
             let enc_id = enclosure_for_animal(*id);
@@ -799,10 +806,10 @@ pub fn apply_offline_decay_system(
 
     if hours_elapsed > 0.0 {
         for (id, decay_rates) in &animal_query {
-            let hunger_decay = (decay_rates.hunger_rate * hours_elapsed).round() as u32;
-            let happiness_decay = (decay_rates.happiness_rate * hours_elapsed).round() as u32;
+            let hunger_decay = Stat((decay_rates.hunger_rate * hours_elapsed).round() as u32);
+            let happiness_decay = Stat((decay_rates.happiness_rate * hours_elapsed).round() as u32);
 
-            if hunger_decay > 0 {
+            if !hunger_decay.is_zero() {
                 commands.trigger(WorsenStatEvent {
                     target: StatTarget::Animal {
                         id: *id,
@@ -811,7 +818,7 @@ pub fn apply_offline_decay_system(
                     amount: hunger_decay,
                 });
             }
-            if happiness_decay > 0 {
+            if !happiness_decay.is_zero() {
                 commands.trigger(WorsenStatEvent {
                     target: StatTarget::Animal {
                         id: *id,
@@ -924,7 +931,7 @@ pub fn tick_decay_system(
                     id: *id,
                     stat: AnimalStat::Hunger,
                 },
-                amount: decay_amount as u32,
+                amount: Stat(decay_amount as u32),
             });
         }
         if accs.happiness >= 1.0 {
@@ -935,17 +942,14 @@ pub fn tick_decay_system(
                     id: *id,
                     stat: AnimalStat::Happiness,
                 },
-                amount: decay_amount as u32,
+                amount: Stat(decay_amount as u32),
             });
         }
     }
 
     for (id, decay_rates, tiles, mut accs) in &mut enclosure_query {
-        let effective_rate = cleanliness_decay_with_poops(
-            decay_rates.cleanliness_rate,
-            *id,
-            tiles.0.len(),
-        );
+        let effective_rate =
+            cleanliness_decay_with_poops(decay_rates.cleanliness_rate, *id, tiles.0.len());
         accs.cleanliness += effective_rate * delta_hours;
 
         if accs.cleanliness >= 1.0 {
@@ -956,7 +960,7 @@ pub fn tick_decay_system(
                     id: *id,
                     stat: EnclosureStat::Cleanliness,
                 },
-                amount: decay_amount as u32,
+                amount: Stat(decay_amount as u32),
             });
         }
     }
@@ -972,36 +976,36 @@ fn update_upkeep_system(
         return;
     }
 
-    let mut total_hunger = 0;
-    let mut total_happy = 0;
+    let mut total_hunger: u64 = 0;
+    let mut total_happy: u64 = 0;
     let animal_count = animal_query.iter().count() as f32;
 
     for stats in &animal_query {
-        total_hunger += stats.hunger;
-        total_happy += stats.happiness;
+        total_hunger += stats.hunger.get() as u64;
+        total_happy += stats.happiness.get() as u64;
     }
 
-    let mut total_clean = 0;
+    let mut total_clean: u64 = 0;
     let enclosure_count = enclosure_query.iter().count() as f32;
 
     for stats in &enclosure_query {
-        total_clean += stats.cleanliness;
+        total_clean += stats.cleanliness.get() as u64;
     }
 
     upkeep.mean_hunger = if animal_count > 0.0 {
-        (total_hunger as f32 / animal_count) / STAT_SCALE as f32
+        (total_hunger as f32 / animal_count) / STAT_SCALE.get() as f32
     } else {
         1.0
     };
 
     upkeep.mean_happiness = if animal_count > 0.0 {
-        (total_happy as f32 / animal_count) / STAT_SCALE as f32
+        (total_happy as f32 / animal_count) / STAT_SCALE.get() as f32
     } else {
         1.0
     };
 
     upkeep.mean_cleanliness = if enclosure_count > 0.0 {
-        (total_clean as f32 / enclosure_count) / STAT_SCALE as f32
+        (total_clean as f32 / enclosure_count) / STAT_SCALE.get() as f32
     } else {
         1.0
     };
@@ -1015,7 +1019,10 @@ struct AutoSaveTimer(Timer);
 
 impl Default for AutoSaveTimer {
     fn default() -> Self {
-        Self(Timer::from_seconds(AUTOSAVE_INTERVAL_SECS, TimerMode::Repeating))
+        Self(Timer::from_seconds(
+            AUTOSAVE_INTERVAL_SECS,
+            TimerMode::Repeating,
+        ))
     }
 }
 
@@ -1055,8 +1062,8 @@ fn save_stats_periodically_system(
             .allow::<DynamicObstacleTiles>()
             .allow::<EnclosureId>()
             .allow::<EnclosureStats>();
-        save.resources = bevy::world_serialization::WorldFilter::deny_all()
-            .allow::<PoopWheelbarrow>();
+        save.resources =
+            bevy::world_serialization::WorldFilter::deny_all().allow::<PoopWheelbarrow>();
         commands.trigger_save(save);
     }
 }
@@ -1082,7 +1089,7 @@ pub fn advance_simulated_hours_world(world: &mut World, hours: f32) {
         .iter(world)
         .map(|(id, rates)| (*id, rates.clone()))
         .collect();
-    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates, u32, usize)> = enclosure_query
+    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates, Stat, usize)> = enclosure_query
         .iter(world)
         .map(|(id, rates, stats)| {
             let poop_count = tiles_query
@@ -1145,8 +1152,8 @@ fn trigger_animal_decay(
     decay_rates: &AnimalDecayRates,
     hours: f32,
 ) {
-    let hunger_decay = (decay_rates.hunger_rate * hours).round() as u32;
-    let happiness_decay = (decay_rates.happiness_rate * hours).round() as u32;
+    let hunger_decay = Stat((decay_rates.hunger_rate * hours).round() as u32);
+    let happiness_decay = Stat((decay_rates.happiness_rate * hours).round() as u32);
 
     commands.trigger(WorsenStatEvent {
         target: StatTarget::Animal {
@@ -1164,8 +1171,8 @@ fn trigger_animal_decay(
     });
 }
 
-fn trigger_enclosure_decay(commands: &mut Commands, id: EnclosureId, amount: u32) {
-    if amount == 0 {
+fn trigger_enclosure_decay(commands: &mut Commands, id: EnclosureId, amount: Stat) {
+    if amount.is_zero() {
         return;
     }
     commands.trigger(WorsenStatEvent {
@@ -1192,7 +1199,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Polly,
                 stat: AnimalStat::Hunger,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit2) {
@@ -1201,7 +1208,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Polly,
                 stat: AnimalStat::Cleanliness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit3) {
@@ -1210,7 +1217,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Polly,
                 stat: AnimalStat::Happiness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
 
@@ -1221,7 +1228,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Stompy,
                 stat: AnimalStat::Hunger,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit5) {
@@ -1230,7 +1237,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Stompy,
                 stat: AnimalStat::Cleanliness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit6) {
@@ -1239,7 +1246,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Stompy,
                 stat: AnimalStat::Happiness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
 
@@ -1250,7 +1257,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Georgie,
                 stat: AnimalStat::Hunger,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit8) {
@@ -1259,7 +1266,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Georgie,
                 stat: AnimalStat::Cleanliness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::Digit9) {
@@ -1268,7 +1275,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Georgie,
                 stat: AnimalStat::Happiness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
 
@@ -1279,7 +1286,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Siren,
                 stat: AnimalStat::Hunger,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::KeyI) {
@@ -1288,7 +1295,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Siren,
                 stat: AnimalStat::Cleanliness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::KeyO) {
@@ -1297,7 +1304,7 @@ fn debug_stats_control_system(
                 id: AnimalId::Siren,
                 stat: AnimalStat::Happiness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
 
@@ -1308,7 +1315,7 @@ fn debug_stats_control_system(
                 id: AnimalId::PushPop,
                 stat: AnimalStat::Hunger,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::KeyJ) {
@@ -1317,7 +1324,7 @@ fn debug_stats_control_system(
                 id: AnimalId::PushPop,
                 stat: AnimalStat::Cleanliness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
     if input.just_pressed(KeyCode::KeyY) {
@@ -1326,7 +1333,7 @@ fn debug_stats_control_system(
                 id: AnimalId::PushPop,
                 stat: AnimalStat::Happiness,
             },
-            amount: 250,
+            amount: Stat(250),
         });
     }
 
@@ -1342,14 +1349,14 @@ fn debug_stats_control_system(
                     id: *id,
                     stat: AnimalStat::Hunger,
                 },
-                amount: 100,
+                amount: Stat(100),
             });
             commands.trigger(WorsenStatEvent {
                 target: StatTarget::Animal {
                     id: *id,
                     stat: AnimalStat::Happiness,
                 },
-                amount: 100,
+                amount: Stat(100),
             });
         }
         for (id, _, _) in &enclosure_query {
@@ -1358,7 +1365,7 @@ fn debug_stats_control_system(
                     id: *id,
                     stat: EnclosureStat::Cleanliness,
                 },
-                amount: 100,
+                amount: Stat(100),
             });
         }
     }
@@ -1405,8 +1412,8 @@ fn debug_log_stats_system(
                 "  - Animal {} ({}): hunger={}, happiness={}",
                 name.0,
                 id.as_str(),
-                stats.hunger,
-                stats.happiness
+                stats.hunger.get(),
+                stats.happiness.get()
             );
         }
         for (id, name, stats) in &enclosure_query {
@@ -1414,7 +1421,7 @@ fn debug_log_stats_system(
                 "  - Enclosure {} ({}): cleanliness={}",
                 name.0,
                 id.as_str(),
-                stats.cleanliness
+                stats.cleanliness.get()
             );
         }
     }

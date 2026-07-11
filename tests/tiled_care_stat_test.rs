@@ -1,31 +1,23 @@
+//! Assert that Push Pop's feeding dish hydrates `FeedAnimal` with a typed
+//! `FeedStat` from the migrated Tiled class property shape.
+//!
+//! Self-contained (does not `mod common`) so unused shared helpers do not
+//! produce dead-code warnings under clippy `-D warnings`.
+
 use std::path::{Path, PathBuf};
 
-use alveus_app::Screen;
-use alveus_headless::CommandPlugin;
-use alveus_stats::{SavePath, StatsPlugin};
+use alveus_configs::CARE_FEED_RESTORE;
+use alveus_content::ItemId;
+use alveus_interaction::FeedAnimal;
+use alveus_types::{AnimalId, FeedStat, Stat};
 use bevy::asset::AssetMetaCheck;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::{AssetSourceBuilder, AssetSourceId};
 use bevy::image::{CompressedImageFormats, ImageLoader};
 use bevy::prelude::*;
 use bevy::render::{ExtractSchedule, RenderApp};
-use bevy::state::app::StatesPlugin;
 use bevy::time::TimePlugin;
 use bevy_ecs_tiled::prelude::*;
-
-pub fn minimal_stats_app(save_path: &str) -> App {
-    let mut app = App::new();
-    app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
-    app.add_plugins(MinimalPlugins);
-    app.add_plugins(AssetPlugin::default());
-    app.init_resource::<ButtonInput<KeyCode>>();
-    app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((StatsPlugin, CommandPlugin));
-    app.insert_resource(NextState::Pending(Screen::Gameplay));
-    app.update();
-    app
-}
 
 fn seed_maps_assets(dir: &Dir) {
     let assets_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
@@ -49,8 +41,7 @@ fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path) {
     }
 }
 
-/// Headless app with Tiled asset loading (memory-backed assets, no GPU render stack).
-pub fn headless_tiled_test_app() -> App {
+fn tiled_spawn_app() -> App {
     let dir = Dir::default();
     seed_maps_assets(&dir);
     let dir_for_reader = dir.clone();
@@ -73,38 +64,24 @@ pub fn headless_tiled_test_app() -> App {
             use_asset_processor_override: Some(false),
             ..default()
         },
+        TransformPlugin,
     ));
     app.init_asset::<Image>();
     app.register_asset_loader(ImageLoader::new(CompressedImageFormats::empty()));
 
-    // `bevy_ecs_tilemap` with the `render` feature expects a `RenderApp` sub-app
-    // (for array-texture preload extract). Asset-only tests don't need a GPU
-    // backend — a stub sub-app with `ExtractSchedule` is enough.
+    // `bevy_ecs_tilemap` with the `render` feature expects a `RenderApp` sub-app.
     let mut render_app = SubApp::new();
     render_app.init_schedule(ExtractSchedule);
     app.insert_sub_app(RenderApp, render_app);
 
-    app.register_type::<alveus_components::BuildingEntrance>()
-        .register_type::<alveus_types::TilePosition>()
-        .register_type::<alveus_components::Obstacle>()
-        .register_type::<alveus_components::InEnclosure>()
+    app.register_type::<alveus_components::Obstacle>()
         .register_type::<alveus_content::RoomObjectId>()
         .register_type::<alveus_types::ItemId>()
         .register_type::<alveus_components::Interactable>()
-        .register_type::<alveus_interaction::GiveItem>()
-        .register_type::<alveus_interaction::FeedAnimal>()
-        .register_type::<alveus_interaction::EnrichAnimal>()
-        .register_type::<alveus_interaction::CleanAnimal>()
-        .register_type::<alveus_interaction::MiniChore>()
-        .register_type::<alveus_interaction::OpenMenu>()
-        .register_type::<alveus_types::AnimalId>()
-        .register_type::<alveus_types::ChoreId>()
-        .register_type::<alveus_types::CareMenuId>()
-        .register_type::<alveus_types::Stat>()
-        .register_type::<alveus_types::FeedStat>()
-        .register_type::<alveus_types::EnrichStat>()
-        .register_type::<alveus_types::CleanStat>()
-        .register_type::<alveus_stats::AnimalStat>();
+        .register_type::<FeedAnimal>()
+        .register_type::<AnimalId>()
+        .register_type::<Stat>()
+        .register_type::<FeedStat>();
 
     app.add_plugins(TiledPlugin(TiledPluginConfig {
         tiled_types_export_file: None,
@@ -114,16 +91,7 @@ pub fn headless_tiled_test_app() -> App {
     app
 }
 
-pub fn load_tiled_map(app: &mut App, path: &'static str) -> Handle<TiledMapAsset> {
-    let handle = {
-        let assets = app.world().resource::<AssetServer>();
-        assets.load(path)
-    };
-    wait_for_tiled_map(app, &handle);
-    handle
-}
-
-fn wait_for_tiled_map(app: &mut App, handle: &Handle<TiledMapAsset>) {
+fn wait_for_map_spawn(app: &mut App, handle: &Handle<TiledMapAsset>) {
     use bevy::asset::RecursiveDependencyLoadState;
 
     for i in 0..10_000 {
@@ -135,21 +103,58 @@ fn wait_for_tiled_map(app: &mut App, handle: &Handle<TiledMapAsset>) {
         if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
             panic!("failed to load TiledMapAsset {handle:?} at iter {i}: {state:?}");
         }
-        if state.is_loaded()
-            && app
+        if !state.is_loaded()
+            || app
                 .world()
                 .resource::<Assets<TiledMapAsset>>()
                 .get(handle)
-                .is_some()
+                .is_none()
+        {
+            continue;
+        }
+        // Properties are inserted during map spawn after the asset is ready.
+        if app
+            .world_mut()
+            .query::<&FeedAnimal>()
+            .iter(app.world())
+            .next()
+            .is_some()
         {
             return;
         }
     }
-    let server = app.world().resource::<AssetServer>();
-    let state = server.get_recursive_dependency_load_state(handle);
-    panic!("timeout loading TiledMapAsset {handle:?}, last state: {state:?}");
+    panic!(
+        "timeout waiting for FeedAnimal on spawned push_pop interior (property deserialization likely failed)"
+    );
 }
 
-pub fn cleanup_save(save_path: &str) {
-    let _ = std::fs::remove_file(save_path);
+#[test]
+fn push_pop_interior_hydrates_feed_animal_stat() {
+    let mut app = tiled_spawn_app();
+
+    let handle = {
+        let assets = app.world().resource::<AssetServer>();
+        assets.load("maps/interiors/push_pop_enclosure_interior.tmx")
+    };
+    app.world_mut().spawn(TiledMap(handle.clone()));
+    wait_for_map_spawn(&mut app, &handle);
+
+    let feeds: Vec<FeedAnimal> = app
+        .world_mut()
+        .query::<&FeedAnimal>()
+        .iter(app.world())
+        .cloned()
+        .collect();
+
+    assert_eq!(
+        feeds.len(),
+        1,
+        "expected exactly one FeedAnimal from the feeding dish tile, got {feeds:?}"
+    );
+    let feed = &feeds[0];
+    assert_eq!(feed.animal_id, AnimalId::PushPop);
+    assert_eq!(feed.required_item, ItemId::TortoiseLeafyGreens);
+    assert_eq!(feed.delta, FeedStat(Stat(1000)));
+    assert_eq!(feed.delta, CARE_FEED_RESTORE);
+    assert_eq!(feed.prompt, "Place leafy greens for Push Pop");
 }

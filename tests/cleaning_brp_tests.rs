@@ -1,12 +1,13 @@
 #![cfg(feature = "headless")]
 
+use alveus_app::Screen;
 use alveus_cleaning::{CleaningPlugin, PoopWheelbarrow};
 use alveus_collision::CollisionMasks;
 use alveus_headless::register_headless_types;
-use alveus_app::Screen;
 use alveus_stats::{
     EnclosureId, EnclosureStat, EnclosureStats, SavePath, StatTarget, StatsPlugin, WorsenStatEvent,
 };
+use alveus_types::Stat;
 use bevy::prelude::*;
 use bevy::remote::{BrpMessage, BrpSender};
 use bevy::state::app::StatesPlugin;
@@ -19,11 +20,7 @@ fn headless_cleaning_brp_app(save_path: &str) -> App {
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<CollisionMasks>();
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((
-        StatsPlugin,
-        CleaningPlugin,
-        alveus_headless::CommandPlugin,
-    ));
+    app.add_plugins((StatsPlugin, CleaningPlugin, alveus_headless::CommandPlugin));
     app.add_plugins(bevy::remote::RemotePlugin::default());
     register_headless_types(&mut app);
     app.insert_resource(NextState::Pending(Screen::Gameplay));
@@ -72,9 +69,7 @@ fn brp_improve_stat_cleanliness_for_push_pop_enclosure() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure");
 
     app.world_mut().trigger(WorsenStatEvent {
@@ -82,11 +77,14 @@ fn brp_improve_stat_cleanliness_for_push_pop_enclosure() {
             id: EnclosureId::PushPopEnclosure,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: 567,
+        amount: Stat(567),
     });
     assert_eq!(
-        app.world().get::<EnclosureStats>(enc_entity).unwrap().cleanliness,
-        433
+        app.world()
+            .get::<EnclosureStats>(enc_entity)
+            .unwrap()
+            .cleanliness,
+        Stat(433)
     );
 
     let sender = app.world().resource::<BrpSender>().clone();
@@ -118,7 +116,7 @@ fn brp_improve_stat_cleanliness_for_push_pop_enclosure() {
     assert!(response.is_ok(), "expected ok response: {response:?}");
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
-    assert_eq!(stats.cleanliness, 766);
+    assert_eq!(stats.cleanliness, Stat(766));
 
     let _ = std::fs::remove_file(save_path);
 }

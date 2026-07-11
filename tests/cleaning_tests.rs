@@ -9,9 +9,10 @@ use alveus_cleaning::{
 use alveus_collision::{CollisionMasks, DynamicObstacleTiles};
 use alveus_components::TilePosition;
 use alveus_stats::{
-    advance_simulated_hours_world, EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp,
-    StatTarget, WorsenStatEvent,
+    EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp, StatTarget, WorsenStatEvent,
+    advance_simulated_hours_world,
 };
+use alveus_types::{CleanStat, Stat};
 use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
 use moonshine_save::load::TriggerLoad;
 use moonshine_save::prelude::SaveWorld;
@@ -69,15 +70,15 @@ fn test_cleanliness_decay_with_poops() {
 
 #[test]
 fn test_target_poop_count_from_cleanliness_thresholds() {
-    let thresholds = &[800, 500, 200];
-    assert_eq!(target_poop_count(1000, thresholds), 0);
-    assert_eq!(target_poop_count(801, thresholds), 0);
-    assert_eq!(target_poop_count(800, thresholds), 1);
-    assert_eq!(target_poop_count(501, thresholds), 1);
-    assert_eq!(target_poop_count(500, thresholds), 2);
-    assert_eq!(target_poop_count(201, thresholds), 2);
-    assert_eq!(target_poop_count(200, thresholds), 3);
-    assert_eq!(target_poop_count(0, thresholds), 3);
+    let thresholds = &[Stat(800), Stat(500), Stat(200)];
+    assert_eq!(target_poop_count(Stat(1000), thresholds), 0);
+    assert_eq!(target_poop_count(Stat(801), thresholds), 0);
+    assert_eq!(target_poop_count(Stat(800), thresholds), 1);
+    assert_eq!(target_poop_count(Stat(501), thresholds), 1);
+    assert_eq!(target_poop_count(Stat(500), thresholds), 2);
+    assert_eq!(target_poop_count(Stat(201), thresholds), 2);
+    assert_eq!(target_poop_count(Stat(200), thresholds), 3);
+    assert_eq!(target_poop_count(Stat(0), thresholds), 3);
 }
 
 #[test]
@@ -103,14 +104,14 @@ fn test_poop_pickup_restores_cleanliness() {
             id: EnclosureId::PushPopEnclosure,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: 500,
+        amount: Stat(500),
     });
     assert_eq!(
         app.world()
             .get::<EnclosureStats>(enc_entity)
             .unwrap()
             .cleanliness,
-        500
+        Stat(500)
     );
 
     let tile = TilePosition { x: 7, y: 5 };
@@ -134,7 +135,7 @@ fn test_poop_pickup_restores_cleanliness() {
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
-    assert_eq!(stats.cleanliness, 850);
+    assert_eq!(stats.cleanliness, Stat(850));
 
     common::cleanup_save(save_path);
 }
@@ -162,14 +163,14 @@ fn test_poop_dump_does_not_restore_cleanliness() {
             id: EnclosureId::PushPopEnclosure,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: 999,
+        amount: Stat(999),
     });
     assert_eq!(
         app.world()
             .get::<EnclosureStats>(enc_entity)
             .unwrap()
             .cleanliness,
-        1
+        Stat(1)
     );
 
     app.world_mut().trigger(PoopDumpedEvent {
@@ -182,7 +183,7 @@ fn test_poop_dump_does_not_restore_cleanliness() {
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
-    assert_eq!(stats.cleanliness, 1);
+    assert_eq!(stats.cleanliness, Stat(1));
     assert_eq!(app.world().resource::<PoopWheelbarrow>().count(), 0);
 
     common::cleanup_save(save_path);
@@ -237,8 +238,8 @@ fn test_poop_pickup_removes_tile() {
 fn test_cleanliness_after_threshold_decay_24h_from_full() {
     let config = poop_config_for(EnclosureId::PushPopEnclosure);
     assert_eq!(
-        cleanliness_after_threshold_decay(1000, 24.0, 30.0, config),
-        0,
+        cleanliness_after_threshold_decay(Stat(1000), 24.0, 30.0, config),
+        Stat(0),
         "24h segmented decay from 100% should reach 0%"
     );
 }
@@ -284,8 +285,8 @@ fn test_wheelbarrow_persists_in_save() {
 #[test]
 fn push_pop_poop_config_matches_configs() {
     let config = poop_config_for(EnclosureId::PushPopEnclosure);
-    assert_eq!(config.spawn_thresholds, &[800, 500, 200]);
-    assert_eq!(config.cleanliness_restore_per_poop, 350);
+    assert_eq!(config.spawn_thresholds, &[Stat(800), Stat(500), Stat(200)]);
+    assert_eq!(config.cleanliness_restore_per_poop, CleanStat(Stat(350)));
 }
 #[test]
 fn test_poop_count_accelerates_offline_decay() {
@@ -298,15 +299,16 @@ fn test_poop_count_accelerates_offline_decay() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
         // At 20% with three floor poops (threshold band), decay runs at 30 + 3*20 = 90/h.
-        stats.cleanliness = 200;
+        stats.cleanliness = Stat(200);
         let mut tiles = app
             .world_mut()
             .get_mut::<DynamicObstacleTiles>(enc_entity)
@@ -321,7 +323,7 @@ fn test_poop_count_accelerates_offline_decay() {
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
     // 10h * 90/h = 900 decay from 200 -> 0
-    assert_eq!(stats.cleanliness, 0);
+    assert_eq!(stats.cleanliness, Stat(0));
 
     common::cleanup_save(save_path);
 }
@@ -337,14 +339,9 @@ fn test_threshold_poop_spawn_on_cleanliness() {
 
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(alveus_collision::CollisionMapKey::Overview, HashSet::new());
         masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Overview,
-            HashSet::new(),
-        );
-        masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Enclosure(
-                EnclosureId::NutritionHousePlaypen,
-            ),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
             HashSet::new(),
         );
         masks.set_static_mask(
@@ -357,45 +354,43 @@ fn test_threshold_poop_spawn_on_cleanliness() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
-        stats.cleanliness = 800;
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
+        stats.cleanliness = Stat(800);
     }
     app.update();
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert_eq!(tiles.0.len(), 1, "one poop at 80% cleanliness");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
-        stats.cleanliness = 500;
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
+        stats.cleanliness = Stat(500);
     }
     app.update();
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert_eq!(tiles.0.len(), 2, "two poops at 50% cleanliness");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
-        stats.cleanliness = 200;
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
+        stats.cleanliness = Stat(200);
     }
     app.update();
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert_eq!(tiles.0.len(), 3, "three poops at 20% cleanliness");
 
     common::cleanup_save(save_path);
@@ -412,14 +407,9 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
 
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(alveus_collision::CollisionMapKey::Overview, HashSet::new());
         masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Overview,
-            HashSet::new(),
-        );
-        masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Enclosure(
-                EnclosureId::NutritionHousePlaypen,
-            ),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
             HashSet::new(),
         );
         masks.set_static_mask(
@@ -433,21 +423,23 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     advance_simulated_hours_world(app.world_mut(), 7.0);
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
-    assert!(stats.cleanliness <= 800, "decay should reach first threshold");
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
-    assert_eq!(tiles.0.len(), 1, "first poop spawns after decay crosses 80%");
+    assert!(
+        stats.cleanliness <= Stat(800),
+        "decay should reach first threshold"
+    );
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
+    assert_eq!(
+        tiles.0.len(),
+        1,
+        "first poop spawns after decay crosses 80%"
+    );
 
     common::cleanup_save(save_path);
 }
@@ -463,14 +455,9 @@ fn test_offline_decay_from_full_spawns_three_poops() {
 
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(alveus_collision::CollisionMapKey::Overview, HashSet::new());
         masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Overview,
-            HashSet::new(),
-        );
-        masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Enclosure(
-                EnclosureId::NutritionHousePlaypen,
-            ),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
             HashSet::new(),
         );
         masks.set_static_mask(
@@ -483,14 +470,15 @@ fn test_offline_decay_from_full_spawns_three_poops() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
-        stats.cleanliness = 1000;
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
+        stats.cleanliness = Stat(1000);
         app.world_mut()
             .get_mut::<DynamicObstacleTiles>(enc_entity)
             .unwrap()
@@ -504,24 +492,20 @@ fn test_offline_decay_from_full_spawns_three_poops() {
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_secs();
-    app.world_mut().spawn((
-        SaveTimestamp {
-            value: now.saturating_sub((hours_offline * 3600.0) as u64),
-        },
-    ));
+    app.world_mut().spawn((SaveTimestamp {
+        value: now.saturating_sub((hours_offline * 3600.0) as u64),
+    },));
 
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
     assert_eq!(
-        stats.cleanliness, 0,
+        stats.cleanliness,
+        Stat(0),
         "offline catch-up should drain enclosure cleanliness to 0"
     );
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert_eq!(
         tiles.0.len(),
         3,
@@ -542,14 +526,9 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
 
     {
         let mut masks = app.world_mut().resource_mut::<CollisionMasks>();
+        masks.set_static_mask(alveus_collision::CollisionMapKey::Overview, HashSet::new());
         masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Overview,
-            HashSet::new(),
-        );
-        masks.set_static_mask(
-            alveus_collision::CollisionMapKey::Enclosure(
-                EnclosureId::NutritionHousePlaypen,
-            ),
+            alveus_collision::CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
             HashSet::new(),
         );
         masks.set_static_mask(
@@ -562,14 +541,15 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
         .world_mut()
         .query_filtered::<Entity, With<EnclosureId>>()
         .iter(app.world())
-        .find(|&e| {
-            *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure
-        })
+        .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
     {
-        let mut stats = app.world_mut().get_mut::<EnclosureStats>(enc_entity).unwrap();
-        stats.cleanliness = 1000;
+        let mut stats = app
+            .world_mut()
+            .get_mut::<EnclosureStats>(enc_entity)
+            .unwrap();
+        stats.cleanliness = Stat(1000);
         app.world_mut()
             .get_mut::<DynamicObstacleTiles>(enc_entity)
             .unwrap()
@@ -584,24 +564,20 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_secs();
-    app.world_mut().spawn((
-        SaveTimestamp {
-            value: now.saturating_sub((hours_offline * 3600.0) as u64),
-        },
-    ));
+    app.world_mut().spawn((SaveTimestamp {
+        value: now.saturating_sub((hours_offline * 3600.0) as u64),
+    },));
 
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
     assert_eq!(
-        stats.cleanliness, 0,
+        stats.cleanliness,
+        Stat(0),
         "24h offline with threshold poop acceleration should drain to 0, not stop at 280"
     );
 
-    let tiles = app
-        .world()
-        .get::<DynamicObstacleTiles>(enc_entity)
-        .unwrap();
+    let tiles = app.world().get::<DynamicObstacleTiles>(enc_entity).unwrap();
     assert_eq!(
         tiles.0.len(),
         3,
@@ -610,4 +586,3 @@ fn test_offline_decay_accelerates_with_spawned_poops() {
 
     common::cleanup_save(save_path);
 }
-

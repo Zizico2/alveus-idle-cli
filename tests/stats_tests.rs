@@ -4,6 +4,7 @@ use alveus_stats::{
     EnclosureStat, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
     StatsPlugin, WorsenStatEvent, tick_decay_system,
 };
+use alveus_types::Stat;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
@@ -96,7 +97,7 @@ fn test_stat_observers_and_clamping() {
         .expect("Polly should exist");
 
     let initial_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    assert_eq!(initial_stats.hunger, 1000);
+    assert_eq!(initial_stats.hunger, Stat(1000));
 
     // Trigger worsening
     app.world_mut().trigger(WorsenStatEvent {
@@ -104,11 +105,11 @@ fn test_stat_observers_and_clamping() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 300,
+        amount: Stat(300),
     });
     // Observers trigger immediately on world trigger
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    assert_eq!(stats.hunger, 700);
+    assert_eq!(stats.hunger, Stat(700));
 
     // Trigger improve
     app.world_mut().trigger(ImproveStatEvent {
@@ -116,10 +117,10 @@ fn test_stat_observers_and_clamping() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 200,
+        amount: Stat(200),
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    assert_eq!(stats.hunger, 900);
+    assert_eq!(stats.hunger, Stat(900));
 
     // Trigger improve past max to test clamping
     app.world_mut().trigger(ImproveStatEvent {
@@ -127,10 +128,10 @@ fn test_stat_observers_and_clamping() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 500,
+        amount: Stat(500),
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    assert_eq!(stats.hunger, 1000);
+    assert_eq!(stats.hunger, Stat(1000));
 
     // Trigger worsening below 0 to test clamping
     app.world_mut().trigger(WorsenStatEvent {
@@ -138,10 +139,10 @@ fn test_stat_observers_and_clamping() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 1200,
+        amount: Stat(1200),
     });
     let stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    assert_eq!(stats.hunger, 0);
+    assert_eq!(stats.hunger, Stat(0));
     let _ = std::fs::remove_file(save_path);
 }
 
@@ -170,7 +171,7 @@ fn test_shared_enclosure_cleanliness() {
 
     // Initial cleanliness is 1000
     let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
-    assert_eq!(enc_stats.cleanliness, 1000);
+    assert_eq!(enc_stats.cleanliness, Stat(1000));
 
     // Worsen Georgie's cleanliness (targets animal, observer resolves to reptile_enclosure)
     app.world_mut().trigger(WorsenStatEvent {
@@ -178,12 +179,12 @@ fn test_shared_enclosure_cleanliness() {
             id: AnimalId::Georgie,
             stat: AnimalStat::Cleanliness,
         },
-        amount: 400,
+        amount: Stat(400),
     });
 
     // Verify enclosure cleanliness drops
     let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
-    assert_eq!(enc_stats.cleanliness, 600);
+    assert_eq!(enc_stats.cleanliness, Stat(600));
 
     // Improve Siren's cleanliness (should improve the shared reptile enclosure!)
     app.world_mut().trigger(ImproveStatEvent {
@@ -191,12 +192,12 @@ fn test_shared_enclosure_cleanliness() {
             id: AnimalId::Siren,
             stat: AnimalStat::Cleanliness,
         },
-        amount: 250,
+        amount: Stat(250),
     });
 
     // Verify enclosure cleanliness increases
     let enc_stats = app.world().get::<EnclosureStats>(reptile_entity).unwrap();
-    assert_eq!(enc_stats.cleanliness, 850);
+    assert_eq!(enc_stats.cleanliness, Stat(850));
     let _ = std::fs::remove_file(save_path);
 }
 
@@ -222,7 +223,7 @@ fn test_upkeep_calculation() {
             id: AnimalId::Polly,
             stat: AnimalStat::Hunger,
         },
-        amount: 400, // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000*4)/5000 = 0.92
+        amount: Stat(400), // Polly hunger becomes 600, others stay 1000 -> mean hunger = (600+1000*4)/5000 = 0.92
     });
 
     app.world_mut().trigger(WorsenStatEvent {
@@ -230,7 +231,7 @@ fn test_upkeep_calculation() {
             id: EnclosureId::ReptileEnclosure,
             stat: EnclosureStat::Cleanliness,
         },
-        amount: 600, // reptile cleanliness becomes 400, other 3 enclosures stay 1000 -> mean = 3400/4000 = 0.85
+        amount: Stat(600), // reptile cleanliness becomes 400, other 3 enclosures stay 1000 -> mean = 3400/4000 = 0.85
     });
 
     // Run system updates to calculate upkeep
@@ -273,8 +274,8 @@ fn test_decay_rate() {
         .get::<AnimalStats>(polly_entity)
         .unwrap()
         .clone();
-    assert_eq!(initial_stats.hunger, 1000);
-    assert_eq!(initial_stats.happiness, 1000);
+    assert_eq!(initial_stats.hunger, Stat(1000));
+    assert_eq!(initial_stats.happiness, Stat(1000));
 
     // Set custom Time resource with delta of 2 hours
     let mut time = Time::<()>::default();
@@ -290,7 +291,7 @@ fn test_decay_rate() {
     // In 2 hours, hunger should decay by 80 units.
     // Polly's happiness decay rate is 0.05 per hour (50 units per hour out of 1000).
     // In 2 hours, happiness should decay by 100 units.
-    assert_eq!(updated_stats.hunger, 920);
-    assert_eq!(updated_stats.happiness, 900);
+    assert_eq!(updated_stats.hunger, Stat(920));
+    assert_eq!(updated_stats.happiness, Stat(900));
     let _ = std::fs::remove_file(save_path);
 }

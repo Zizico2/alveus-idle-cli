@@ -118,12 +118,15 @@
       <property name=":variant" propertytype="alveus_types::ItemId:::Variant" value="TortoiseLeafyGreens"/>
      </properties>
     </property>
-    <property name="stat" type="class" propertytype="alveus_stats::AnimalStat">
-     <properties>
-      <property name=":variant" propertytype="alveus_stats::AnimalStat:::Variant" value="Hunger"/>
-     </properties>
-    </property>
-      <property name="delta" type="int" value="1000"/>
+      <property name="delta" type="class" propertytype="alveus_types::FeedStat">
+       <properties>
+        <property name="0" type="class" propertytype="alveus_types::Stat">
+         <properties>
+          <property name="0" type="int" value="1000"/>
+         </properties>
+        </property>
+       </properties>
+      </property>
       <property name="prompt" type="string" value="Place leafy greens for Push Pop"/>
      </properties>
     </property>   </properties>
