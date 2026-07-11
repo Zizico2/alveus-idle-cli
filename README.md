@@ -186,9 +186,10 @@ frame** (world geometry plus HUD, menus, and toasts) at the configured
 }
 ```
 
-Prefer writing under `screenshots/` (see `scripts/headless_ui_screenshot_smoke.py`).
-Use ECS queries for logic assertions; treat PNGs as presentation checks. Visual
-pixel tests need a **wgpu device** (GPU or lavapipe) and stay outside plain CI.
+Prefer writing under `screenshots/` (see `scripts/headless_ui_screenshot_smoke.py`,
+which asserts UI overlay pixels and fails on world-only captures). Use ECS
+queries for logic assertions; treat PNGs as presentation checks. Visual pixel
+tests need a **wgpu device** (GPU or lavapipe) and stay outside plain CI.
 
 ### Tests
 
