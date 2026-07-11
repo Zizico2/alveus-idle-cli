@@ -29,6 +29,8 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCREENSHOT_DIR = os.path.join(REPO_ROOT, "screenshots")
 GAMEPLAY_PNG = os.path.join(SCREENSHOT_DIR, "ui_smoke_gameplay.png")
 MENU_PNG = os.path.join(SCREENSHOT_DIR, "ui_smoke_pause_menu.png")
+# Registered in register_headless_types — requires a server built with that registration.
+SCREEN_STATE = "bevy_state::state::resources::State<alveus_app::Screen>"
 
 
 def rpc(method, params=None):
@@ -62,22 +64,50 @@ def get_resource(type_path: str):
     return rpc("world.get_resources", {"resource": type_path})
 
 
-def screen_state():
-    res = get_resource("bevy_state::state::resources::State<alveus_app::Screen>")
-    if not res:
+def player_tile():
+    res = rpc(
+        "world.query",
+        {
+            "data": {
+                "components": ["alveus_components::CurrentTilePosition"],
+                "has": [],
+            },
+            "filter": {"with": ["alveus_components::Player"]},
+        },
+    )
+    row = (res or [None])[0]
+    if not row:
         return None
-    # Reflect shape varies; accept common wrappers.
+    pos = row["components"]["alveus_components::CurrentTilePosition"]
+    inner = pos["0"] if isinstance(pos, dict) and "0" in pos else pos
+    return int(inner["x"]), int(inner["y"])
+
+
+def unwrap_state(res):
+    """Normalize BRP State<T> / resource envelopes to a plain variant name."""
+    if res is None:
+        return None
+    if isinstance(res, str):
+        return res
     if isinstance(res, dict):
+        if "value" in res:
+            return unwrap_state(res["value"])
         if "0" in res:
-            inner = res["0"]
-            if isinstance(inner, str):
-                return inner
-            if isinstance(inner, dict) and "0" in inner:
-                return inner["0"]
-        for key in ("value", "state"):
-            if key in res:
-                return res[key]
+            return unwrap_state(res["0"])
+        if len(res) == 1:
+            (key,) = res.keys()
+            return key
     return res
+
+
+def screen_state():
+    try:
+        return unwrap_state(get_resource(SCREEN_STATE))
+    except RuntimeError as exc:
+        # Older headless builds may lack State<Screen> registration.
+        if "Unknown resource type" in str(exc) or "isn't reflectable" in str(exc):
+            return None
+        raise
 
 
 def wait_until(predicate, timeout_s=30.0, interval=0.25, label="condition"):
@@ -107,6 +137,17 @@ def capture(path: str):
     wait_for_file(path)
 
 
+def in_gameplay() -> bool:
+    # Authoritative: player exists on the overview (or interior) map.
+    if player_tile() is not None:
+        return True
+    # Optional: State<Screen> when the running binary registered it.
+    screen = screen_state()
+    return screen in ("Gameplay", {"Gameplay": None}) or (
+        isinstance(screen, str) and screen.endswith("Gameplay")
+    )
+
+
 def main():
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
@@ -117,16 +158,15 @@ def main():
     time.sleep(0.4)
     trigger("Play")
 
-    wait_until(
-        lambda: screen_state() in ("Gameplay", {"Gameplay": None})
-        or str(screen_state()).endswith("Gameplay"),
-        label="Screen::Gameplay",
-    )
+    wait_until(in_gameplay, label="Gameplay (player tile / Screen::Gameplay)")
 
     # Structured HUD/satchel presence (logic truth).
     satchel = get_resource("alveus_interaction::PlayerSatchel")
     if satchel is None:
         raise SystemExit("PlayerSatchel missing on Gameplay")
+
+    tile = player_tile()
+    print(f"gameplay ready: player_tile={tile}, screen={screen_state()!r}")
 
     capture(GAMEPLAY_PNG)
     print(f"wrote gameplay frame: {GAMEPLAY_PNG} ({os.path.getsize(GAMEPLAY_PNG)} bytes)")

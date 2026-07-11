@@ -35,9 +35,12 @@ use crate::command::{GameCommand, StepRequest};
 
 pub fn register_headless_types(app: &mut App) {
     app.register_type::<Screen>()
+        .register_type::<State<Screen>>()
         .register_type::<InRoom>()
         .register_type::<Menu>()
+        .register_type::<State<Menu>>()
         .register_type::<Pause>()
+        .register_type::<State<Pause>>()
         .register_type::<TilePosition>()
         .register_type::<CurrentTilePosition>()
         .register_type::<DesiredTilePosition>()
