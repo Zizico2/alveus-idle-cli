@@ -9,7 +9,9 @@ pub use reflect::register_headless_types;
 #[cfg(feature = "cli")]
 mod stdio;
 
-pub use camera::{DEFAULT_HEADLESS_RESOLUTION, HeadlessCameraPlugin, HeadlessRenderTarget};
+pub use camera::{
+    DEFAULT_HEADLESS_RESOLUTION, HeadlessCameraPlugin, HeadlessRenderTarget, HeadlessResolution,
+};
 pub use command::{CommandPlugin, GameCommand, StepRequest};
 pub use input::InputPlugin;
 pub const DEFAULT_BRP_PORT: u16 = 15702;

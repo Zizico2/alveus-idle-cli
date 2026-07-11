@@ -115,10 +115,17 @@ verb, advance/await a frame, then read state back.
 `GameCommand::Screenshot { path }` when:
 
 - Checking for **visual bugs** — layout, sprites, camera framing, missing assets,
-  UI overlap, wrong room geometry.
+  UI overlap, wrong room geometry, HUD/menu/toast placement.
 - Logic via queries is inconclusive or painfully indirect, and **seeing the frame**
   gives you another data point (did the interior load? is the player where you
   expect on screen? is the HUD/toast visible?).
+
+Headless captures are the **composed game frame** (world + UI). The offscreen
+`Camera2d` is marked `IsDefaultUiCamera`, so root UI (HUD, menus, toasts, room
+chrome) renders into the same `HeadlessRenderTarget` that `Screenshot` dumps.
+Layout uses `--resolution` / `HeadlessResolution` (no primary window / Xvfb).
+Visual PNG assertions still need a wgpu adapter (GPU or lavapipe); keep them out
+of plain CI. Prefer ECS queries for **game logic**.
 
 Workflow: trigger `Screenshot`, wait ~2 frames, then read/analyze the PNG at
 `path`. In a Python driver, write under the repo's **`screenshots/`** directory
@@ -126,7 +133,8 @@ Workflow: trigger `Screenshot`, wait ~2 frames, then read/analyze the PNG at
 the verb). Create `screenshots/` if needed (`mkdir -p screenshots`). Do not
 scatter captures in the repo root or `/tmp/` unless you have a specific reason.
 Inspect the image in your session and attach it when reporting to the user. This
-rides the normal verb set — no custom BRP observation method.
+rides the normal verb set — no custom BRP observation method. A retained smoke
+driver lives at `scripts/headless_ui_screenshot_smoke.py`.
 
 Use queries as the source of truth for **game logic** (stats, screen state, tile
 position). Use screenshots for **presentation** and as a sanity check when

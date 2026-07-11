@@ -231,6 +231,7 @@ pub fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         Name::new("Camera"),
         Camera2d,
+        IsDefaultUiCamera,
         bevy::camera_controller::pan_camera::PanCamera {
             key_up: None,
             key_down: None,
