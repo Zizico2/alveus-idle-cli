@@ -1,5 +1,6 @@
 //! Loading failure / timeout diagnostics must return to Title without entering Gameplay.
 
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use alveus_app::Screen;
@@ -49,6 +50,10 @@ fn missing_overview_map_records_failure_and_returns_to_title() {
                 COLLISION_LOAD_REASON_RECURSIVE_DEPENDENCY_FAILED
             );
             assert_eq!(failures.entries[0].asset_path, "maps/overview/map.tmx");
+            assert!(
+                !failures.toast_message().contains('\n'),
+                "toast copy must stay single-line"
+            );
         }
         if *app.world().resource::<State<Screen>>().get() == Screen::Title && saw_failure {
             break;
@@ -75,7 +80,7 @@ fn missing_overview_map_records_failure_and_returns_to_title() {
 }
 
 #[test]
-fn loading_retry_clears_stale_failure_entries() {
+fn loading_retry_recovers_after_asset_is_repaired() {
     let mut app = common::loading_diagnostic_app(&[("maps/overview/map.tmx", CORRUPT_TMX)]);
     app.insert_resource(LoadingTiming {
         timeout_secs: 30.0,
@@ -93,6 +98,21 @@ fn loading_retry_clears_stale_failure_entries() {
         }
     }
     assert!(!app.world().resource::<CollisionLoadFailures>().is_empty());
+    assert_eq!(
+        *app.world().resource::<State<Screen>>().get(),
+        Screen::Title
+    );
+
+    // Repair the fixture in the shared memory store, then Play again. Loading
+    // must reload Failed handles — not just clear the diagnostic resource.
+    let good_overview = std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/maps/overview/map.tmx"),
+    )
+    .expect("shipped overview map");
+    app.world()
+        .resource::<common::MemoryAssetStore>()
+        .0
+        .insert_asset(Path::new("maps/overview/map.tmx"), good_overview);
 
     app.world_mut().trigger(PlayClickEvent);
     app.update();
@@ -101,14 +121,24 @@ fn loading_retry_clears_stale_failure_entries() {
         Screen::Loading
     );
 
-    for _ in 0..50 {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
         app.update();
+        if *app.world().resource::<State<Screen>>().get() == Screen::Gameplay {
+            assert!(
+                app.world()
+                    .resource::<CollisionLoadFailures>()
+                    .is_empty(),
+                "successful retry must clear failure entries"
+            );
+            return;
+        }
     }
-    let failures = app.world().resource::<CollisionLoadFailures>();
-    assert!(
-        failures.entries.len() <= 1,
-        "dedupe must keep a single Overview entry, got {}",
-        failures.entries.len()
+
+    panic!(
+        "expected Gameplay after repairing overview map; screen={:?}, failures={:?}",
+        app.world().resource::<State<Screen>>().get(),
+        app.world().resource::<CollisionLoadFailures>()
     );
 }
 
@@ -143,6 +173,8 @@ fn pending_assets_timeout_records_distinct_diagnostic() {
                     !timeout.missing_keys.is_empty(),
                     "timeout should list missing collision keys"
                 );
+                let toast = timeout.player_message().expect("timeout toast");
+                assert!(!toast.contains('\n'));
                 return;
             }
             Screen::Gameplay => {

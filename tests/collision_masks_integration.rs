@@ -110,7 +110,8 @@ fn all_required_collision_maps_load_without_failures() {
             let interior = world.get_resource::<InteriorAssets>();
             let handles =
                 alveus_collision::required_collision_handles(required, level, interior);
-            record_failed_collision_map_loads(asset_server, &handles, &mut failures);
+            let mut gate = alveus_collision::CollisionReloadGate::default();
+            record_failed_collision_map_loads(asset_server, &handles, &mut failures, &mut gate);
         });
 
     let masks = app.world().resource::<CollisionMasks>();

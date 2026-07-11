@@ -58,6 +58,10 @@ fn copy_dir_into_memory(dir: &Dir, disk_root: &Path, rel: &Path, exclude: &[&str
     }
 }
 
+/// Shared memory asset root for headless tiled tests (so fixtures can be repaired).
+#[derive(Resource, Clone)]
+pub struct MemoryAssetStore(pub Dir);
+
 /// Like [`headless_tiled_test_app`], but replace the given asset-relative paths with
 /// `replacement` bytes after seeding (e.g. corrupt a `.tmx` so the loader fails).
 pub fn headless_tiled_test_app_with_replacements(replacements: &[(&str, &[u8])]) -> App {
@@ -81,6 +85,7 @@ fn finish_headless_tiled_app(dir: Dir) -> App {
     let dir_for_reader = dir.clone();
 
     let mut app = App::new();
+    app.insert_resource(MemoryAssetStore(dir.clone()));
     app.register_asset_source(
         AssetSourceId::Default,
         AssetSourceBuilder::new(move || {
@@ -184,6 +189,25 @@ pub fn cleanup_save(save_path: &str) {
     let _ = std::fs::remove_file(save_path);
 }
 
+fn test_clear_loading_diagnostics(
+    mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
+    mut timeout: ResMut<alveus_screens::LoadingTimeoutDiagnostic>,
+    mut gate: ResMut<alveus_collision::CollisionReloadGate>,
+    asset_server: Res<AssetServer>,
+    required: Res<alveus_collision::RequiredCollisionMapHandles>,
+    level_assets: Option<Res<alveus_collision::LevelAssets>>,
+    interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
+) {
+    let handles = alveus_collision::required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    alveus_collision::reload_failed_collision_maps(&asset_server, &handles, &mut gate);
+    failures.clear();
+    timeout.clear();
+}
+
 fn test_all_required_maps_terminal(
     asset_server: Res<AssetServer>,
     required: Res<alveus_collision::RequiredCollisionMapHandles>,
@@ -226,13 +250,19 @@ fn test_detect_collision_failures(
     level_assets: Option<Res<alveus_collision::LevelAssets>>,
     interior_assets: Option<Res<alveus_collision::InteriorAssets>>,
     mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
+    mut gate: ResMut<alveus_collision::CollisionReloadGate>,
 ) {
     let handles = alveus_collision::required_collision_handles(
         &required,
         level_assets.as_deref(),
         interior_assets.as_deref(),
     );
-    alveus_collision::record_failed_collision_map_loads(&asset_server, &handles, &mut failures);
+    alveus_collision::record_failed_collision_map_loads(
+        &asset_server,
+        &handles,
+        &mut failures,
+        &mut gate,
+    );
 }
 
 /// Headless app that exercises Title → Loading → Gameplay with real map assets.
@@ -267,6 +297,7 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     app.add_plugins(alveus_asset_tracking::plugin);
     app.init_resource::<CollisionMasks>();
     app.init_resource::<CollisionLoadFailures>();
+    app.init_resource::<alveus_collision::CollisionReloadGate>();
     app.init_resource::<LoadingTimeoutDiagnostic>();
     app.init_resource::<LoadingTiming>();
     {
@@ -282,11 +313,7 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     app.add_systems(
         OnEnter(Screen::Loading),
         (
-            |mut failures: ResMut<CollisionLoadFailures>,
-             mut timeout: ResMut<LoadingTimeoutDiagnostic>| {
-                failures.clear();
-                timeout.clear();
-            },
+            test_clear_loading_diagnostics,
             |mut commands: Commands| {
                 commands.insert_resource(TestLoadingWatchdog {
                     started: Instant::now(),

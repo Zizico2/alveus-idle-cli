@@ -166,8 +166,20 @@ impl CollisionLoadFailures {
         true
     }
 
-    /// Concise player-facing summary; details are bounded for UI.
-    pub fn player_message(&self) -> String {
+    /// Concise toast copy for the Title screen (fits the fixed 240×60 toast).
+    pub fn toast_message(&self) -> String {
+        match self.entries.len() {
+            0 => String::new(),
+            1 => format!(
+                "Could not load map ({:?}). See log.",
+                self.entries[0].key
+            ),
+            n => format!("Could not load {n} maps. See log."),
+        }
+    }
+
+    /// Detailed Loading-screen copy (dev builds include key/path/reason lines).
+    pub fn loading_detail_message(&self) -> String {
         if self.entries.is_empty() {
             return String::new();
         }
@@ -414,6 +426,7 @@ impl Plugin for CollisionPlugin {
         app.insert_resource(required_handles)
             .init_resource::<CollisionMasks>()
             .init_resource::<CollisionLoadFailures>()
+            .init_resource::<CollisionReloadGate>()
             .register_type::<CollisionMapKey>()
             .register_type::<CollisionLoadFailure>()
             .register_type::<CollisionLoadFailures>()
@@ -528,6 +541,20 @@ pub struct RequiredCollisionMapHandles {
     pub entries: Vec<(CollisionMapKey, Handle<TiledMapAsset>)>,
 }
 
+/// Keys that were reloaded this Loading visit and should not be re-recorded as
+/// failed until their load state leaves `Failed` at least once (Bevy keeps the
+/// previous Failed state until the reload task starts).
+#[derive(Resource, Debug, Default, Clone)]
+pub struct CollisionReloadGate {
+    pub awaiting_retry: HashSet<CollisionMapKey>,
+}
+
+impl CollisionReloadGate {
+    pub fn clear(&mut self) {
+        self.awaiting_retry.clear();
+    }
+}
+
 impl RequiredCollisionMapHandles {
     pub fn from_asset_server(asset_server: &AssetServer) -> Self {
         Self {
@@ -535,6 +562,34 @@ impl RequiredCollisionMapHandles {
                 .iter()
                 .map(|&key| (key, asset_server.load(key.asset_path())))
                 .collect(),
+        }
+    }
+}
+
+/// Re-request any required maps that are currently in a Failed load state.
+///
+/// Call this when starting a fresh Loading attempt so Play can recover after
+/// assets are repaired on disk (or in the test memory store). Keys that were
+/// reloaded are recorded in [`CollisionReloadGate`] so the previous Failed
+/// state is not immediately re-recorded before the reload starts.
+pub fn reload_failed_collision_maps(
+    asset_server: &AssetServer,
+    handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
+    gate: &mut CollisionReloadGate,
+) {
+    gate.clear();
+    for &(key, ref handle) in handles {
+        let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
+            continue;
+        };
+        if matches!(state, bevy::asset::RecursiveDependencyLoadState::Failed(_)) {
+            info!(
+                "Reloading failed collision map {:?} ({})",
+                key,
+                key.asset_path()
+            );
+            asset_server.reload(key.asset_path());
+            gate.awaiting_retry.insert(key);
         }
     }
 }
@@ -552,7 +607,10 @@ pub fn record_failed_collision_map_loads(
     asset_server: &AssetServer,
     handles: &[(CollisionMapKey, Handle<TiledMapAsset>)],
     failures: &mut CollisionLoadFailures,
+    gate: &mut CollisionReloadGate,
 ) {
+    use bevy::asset::RecursiveDependencyLoadState;
+
     for &(key, ref handle) in handles {
         if failures.contains_key(key) {
             continue;
@@ -560,7 +618,17 @@ pub fn record_failed_collision_map_loads(
         let Some(state) = asset_server.get_recursive_dependency_load_state(handle) else {
             continue;
         };
-        if matches!(state, bevy::asset::RecursiveDependencyLoadState::Failed(_)) {
+
+        if gate.awaiting_retry.contains(&key) {
+            // Still seeing the pre-reload Failed result — wait until the reload
+            // advances the state, then allow a fresh Failed to be recorded.
+            if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
+                continue;
+            }
+            gate.awaiting_retry.remove(&key);
+        }
+
+        if matches!(state, RecursiveDependencyLoadState::Failed(_)) {
             let failure = CollisionLoadFailure {
                 key,
                 asset_path: key.asset_path().to_string(),
@@ -968,6 +1036,27 @@ mod tests {
     }
 
     #[test]
+    fn collision_load_failures_toast_message_is_concise() {
+        let mut failures = CollisionLoadFailures::default();
+        for key in [
+            CollisionMapKey::Overview,
+            CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen),
+            CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure),
+        ] {
+            assert!(failures.record(sample_failure(key)));
+        }
+
+        let toast = failures.toast_message();
+        assert!(toast.contains("Could not load 3 maps"));
+        assert!(!toast.contains('\n'));
+        assert!(toast.chars().count() < 80);
+
+        let detail = failures.loading_detail_message();
+        assert!(detail.contains("Could not load a required map"));
+        assert!(detail.chars().count() <= MAX_UI_MESSAGE_CHARS);
+    }
+
+    #[test]
     fn collision_load_failures_player_message_is_bounded() {
         let mut failures = CollisionLoadFailures::default();
         for key in [
@@ -980,7 +1069,7 @@ mod tests {
             assert!(failures.record(sample_failure(key)));
         }
 
-        let msg = failures.player_message();
+        let msg = failures.loading_detail_message();
         assert!(msg.contains("Could not load a required map"));
         assert!(msg.chars().count() <= MAX_UI_MESSAGE_CHARS);
     }

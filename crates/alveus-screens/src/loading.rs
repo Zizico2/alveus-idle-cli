@@ -9,9 +9,10 @@ use bevy_ecs_tiled::prelude::TiledMapAsset;
 use alveus_app::Screen;
 use alveus_asset_tracking::ResourceHandles;
 use alveus_collision::{
-    CollisionLoadFailures, CollisionMasks, InteriorAssets, LevelAssets, REQUIRED_COLLISION_KEYS,
-    RequiredCollisionMapHandles, build_all_collision_masks, collision_ready,
-    record_failed_collision_map_loads, required_collision_handles,
+    CollisionLoadFailures, CollisionMasks, CollisionReloadGate, InteriorAssets, LevelAssets,
+    REQUIRED_COLLISION_KEYS, RequiredCollisionMapHandles, build_all_collision_masks,
+    collision_ready, record_failed_collision_map_loads, reload_failed_collision_maps,
+    required_collision_handles,
 };
 use alveus_configs::{LOADING_FAILURE_RETURN_SECS, LOADING_TIMEOUT_SECS};
 use alveus_theme::prelude::*;
@@ -66,14 +67,8 @@ impl LoadingTimeoutDiagnostic {
         if !self.timed_out {
             return None;
         }
-        let missing = if self.missing_keys.is_empty() {
-            "unknown".to_string()
-        } else {
-            self.missing_keys.join(", ")
-        };
-        Some(format!(
-            "Loading timed out. Missing maps: {missing}. Returning to title…"
-        ))
+        // Keep toast-sized; missing keys stay in this resource and the error log.
+        Some("Loading timed out. Returning to title…".to_string())
     }
 }
 
@@ -125,8 +120,21 @@ pub(super) fn plugin(app: &mut App) {
 fn clear_loading_diagnostics(
     mut failures: ResMut<CollisionLoadFailures>,
     mut timeout: ResMut<LoadingTimeoutDiagnostic>,
+    mut gate: ResMut<CollisionReloadGate>,
+    asset_server: Res<AssetServer>,
+    required: Res<RequiredCollisionMapHandles>,
+    level_assets: Option<Res<LevelAssets>>,
+    interior_assets: Option<Res<InteriorAssets>>,
     mut commands: Commands,
 ) {
+    let handles = required_collision_handles(
+        &required,
+        level_assets.as_deref(),
+        interior_assets.as_deref(),
+    );
+    // Fresh Loading attempt: drop stale diagnostics and re-request any Failed maps
+    // so Play can recover after assets are repaired.
+    reload_failed_collision_maps(&asset_server, &handles, &mut gate);
     failures.clear();
     timeout.clear();
     commands.trigger(DismissToastEvent);
@@ -208,13 +216,14 @@ fn detect_collision_load_failures_during_loading(
     level_assets: Option<Res<LevelAssets>>,
     interior_assets: Option<Res<InteriorAssets>>,
     mut failures: ResMut<CollisionLoadFailures>,
+    mut gate: ResMut<CollisionReloadGate>,
 ) {
     let handles = required_collision_handles(
         &required,
         level_assets.as_deref(),
         interior_assets.as_deref(),
     );
-    record_failed_collision_map_loads(&asset_server, &handles, &mut failures);
+    record_failed_collision_map_loads(&asset_server, &handles, &mut failures, &mut gate);
 }
 
 fn update_loading_status_label(
@@ -224,7 +233,7 @@ fn update_loading_status_label(
     if !failures.is_changed() || failures.is_empty() {
         return;
     }
-    let message = failures.player_message();
+    let message = failures.loading_detail_message();
     for mut text in &mut labels {
         text.0 = message.clone();
     }
@@ -320,7 +329,8 @@ pub(super) fn surface_loading_diagnostic_on_title(
     timeout: Res<LoadingTimeoutDiagnostic>,
 ) {
     if !failures.is_empty() {
-        commands.trigger(TriggerToastEvent::presence(failures.player_message()));
+        // Toast is fixed 240×60 — use the short summary; details stay on Loading/logs.
+        commands.trigger(TriggerToastEvent::presence(failures.toast_message()));
         return;
     }
     if let Some(message) = timeout.player_message() {
