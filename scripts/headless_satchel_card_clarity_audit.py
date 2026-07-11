@@ -3,28 +3,27 @@
 
 Actions are performed exclusively through GameCommand. Run against a fresh
 realtime headless server and stop the server afterward.
+
+Server absence fails by default. Set ALLOW_MISSING_SERVER=1 only for local
+optional skips — validation wrappers must never set it.
 """
 
 from __future__ import annotations
 
 import sys
 
-from headless_care_feedback_audit import (
-    BASE,
-    REQUIRE_SERVER,
-    run_player_feed_flow,
-    wait_for_http,
-)
+from brp_driver import ALLOW_MISSING_SERVER, BASE, wait_for_http
+from headless_care_feedback_audit import run_player_feed_flow
 
 
 def main() -> int:
     if not wait_for_http():
         message = f"headless BRP not reachable at {BASE}"
-        if REQUIRE_SERVER:
-            print(f"FAIL: {message}", file=sys.stderr)
-            return 1
-        print(f"skip: {message}", file=sys.stderr)
-        return 0
+        if ALLOW_MISSING_SERVER:
+            print(f"skip: {message}", file=sys.stderr)
+            return 0
+        print(f"FAIL: {message}", file=sys.stderr)
+        return 1
 
     try:
         result = run_player_feed_flow()
