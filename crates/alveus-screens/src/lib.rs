@@ -8,7 +8,7 @@ mod title;
 use alveus_app::Screen;
 use bevy::prelude::*;
 
-pub use loading::{LoadingTimeoutDiagnostic, LoadingTiming};
+pub use loading::LoadingTiming;
 
 pub fn plugin(app: &mut App) {
     app.init_state::<Screen>();

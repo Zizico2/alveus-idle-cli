@@ -189,18 +189,10 @@ pub fn cleanup_save(save_path: &str) {
     let _ = std::fs::remove_file(save_path);
 }
 
-/// When present, the loading diagnostic harness never builds masks / enters
-/// Gameplay, so the timeout watchdog can be exercised with fast-loading assets.
+/// When present, the loading harness never builds masks / enters Gameplay, so
+/// the timeout watchdog can be exercised with fast-loading assets.
 #[derive(Resource, Debug, Default, Clone, Copy)]
 pub struct StallLoadingForTimeoutTest;
-
-fn test_clear_loading_diagnostics(
-    mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
-    mut timeout: ResMut<alveus_screens::LoadingTimeoutDiagnostic>,
-) {
-    failures.clear();
-    timeout.clear();
-}
 
 fn test_all_required_maps_loaded(
     asset_server: Res<AssetServer>,
@@ -234,16 +226,6 @@ fn test_build_masks_during_loading(
     }
 }
 
-fn test_detect_collision_failures(
-    asset_server: Res<AssetServer>,
-    level_assets: Res<alveus_collision::LevelAssets>,
-    interior_assets: Res<alveus_collision::InteriorAssets>,
-    mut failures: ResMut<alveus_collision::CollisionLoadFailures>,
-) {
-    let handles = alveus_collision::required_collision_handles(&level_assets, &interior_assets);
-    alveus_collision::record_failed_collision_map_loads(&asset_server, &handles, &mut failures);
-}
-
 /// Headless app that exercises Title → Loading → Gameplay with real map assets.
 ///
 /// Loads `LevelAssets` + `InteriorAssets` through [`ResourceHandles`] (same path as
@@ -252,17 +234,16 @@ pub fn loading_transition_app() -> App {
     loading_diagnostic_app(&[])
 }
 
-/// Loading harness with optional replaced map bytes and production-like failure /
-/// timeout diagnostics (no UI spawn).
+/// Loading harness with optional replaced map bytes (no UI spawn).
 pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     use std::time::Instant;
 
     use alveus_collision::{
-        CollisionLoadFailures, CollisionMasks, InteriorAssets, LevelAssets,
-        REQUIRED_COLLISION_KEYS, collision_ready,
+        CollisionMasks, InteriorAssets, LevelAssets, any_required_collision_map_failed,
+        collision_ready, required_collision_handles,
     };
     use alveus_menus::PlayClickEvent;
-    use alveus_screens::{LoadingTimeoutDiagnostic, LoadingTiming};
+    use alveus_screens::LoadingTiming;
 
     #[derive(Resource, Debug)]
     struct TestLoadingWatchdog {
@@ -274,59 +255,50 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     app.init_state::<Screen>();
     app.add_plugins(alveus_asset_tracking::plugin);
     app.init_resource::<CollisionMasks>();
-    app.init_resource::<CollisionLoadFailures>();
-    app.init_resource::<LoadingTimeoutDiagnostic>();
     app.init_resource::<LoadingTiming>();
     app.init_resource::<LevelAssets>()
         .init_resource::<InteriorAssets>();
     app.add_observer(alveus_menus::main_menu::handle_play_click);
 
-    app.add_systems(
-        OnEnter(Screen::Loading),
-        (test_clear_loading_diagnostics, |mut commands: Commands| {
-            commands.insert_resource(TestLoadingWatchdog {
-                started: Instant::now(),
-            });
-        }),
-    );
+    app.add_systems(OnEnter(Screen::Loading), |mut commands: Commands| {
+        commands.insert_resource(TestLoadingWatchdog {
+            started: Instant::now(),
+        });
+    });
 
     app.add_systems(
         Update,
         (
             test_build_masks_during_loading
                 .run_if(in_state(Screen::Loading).and_then(test_all_required_maps_loaded)),
-            test_detect_collision_failures,
+            move |asset_server: Res<AssetServer>,
+                  level_assets: Res<LevelAssets>,
+                  interior_assets: Res<InteriorAssets>,
+                  mut next_screen: ResMut<NextState<Screen>>| {
+                let handles = required_collision_handles(&level_assets, &interior_assets);
+                if any_required_collision_map_failed(&asset_server, &handles) {
+                    next_screen.set(Screen::FatalError);
+                }
+            },
             move |resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
                   masks: Res<CollisionMasks>,
-                  failures: Res<CollisionLoadFailures>,
                   stall: Option<Res<StallLoadingForTimeoutTest>>,
                   screen: Res<State<Screen>>,
                   mut next_screen: ResMut<NextState<Screen>>| {
                 if stall.is_some() || *screen.get() != Screen::Loading {
                     return;
                 }
-                if failures.is_empty() && resource_handles.is_all_done() && collision_ready(&masks)
-                {
+                if resource_handles.is_all_done() && collision_ready(&masks) {
                     next_screen.set(Screen::Gameplay);
-                }
-            },
-            move |failures: Res<CollisionLoadFailures>,
-                  mut next_screen: ResMut<NextState<Screen>>| {
-                if !failures.is_empty() {
-                    next_screen.set(Screen::FatalError);
                 }
             },
             move |watchdog: Option<Res<TestLoadingWatchdog>>,
                   timing: Res<LoadingTiming>,
                   resource_handles: Res<alveus_asset_tracking::ResourceHandles>,
                   masks: Res<CollisionMasks>,
-                  failures: Res<CollisionLoadFailures>,
-                  level_assets: Option<Res<LevelAssets>>,
-                  interior_assets: Option<Res<InteriorAssets>>,
-                  mut timeout: ResMut<LoadingTimeoutDiagnostic>,
                   screen: Res<State<Screen>>,
                   mut next_screen: ResMut<NextState<Screen>>| {
-                if *screen.get() != Screen::Loading || !failures.is_empty() {
+                if *screen.get() != Screen::Loading {
                     return;
                 }
                 let Some(watchdog) = watchdog else {
@@ -338,18 +310,6 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
                 if resource_handles.is_all_done() && collision_ready(&masks) {
                     return;
                 }
-                let missing: Vec<_> = REQUIRED_COLLISION_KEYS
-                    .iter()
-                    .filter(|key| !masks.contains(**key))
-                    .map(|key| format!("{key:?}"))
-                    .collect();
-                *timeout = LoadingTimeoutDiagnostic {
-                    timed_out: true,
-                    missing_keys: missing,
-                    is_all_done: resource_handles.is_all_done(),
-                    has_level_assets: level_assets.is_some(),
-                    has_interior_assets: interior_assets.is_some(),
-                };
                 next_screen.set(Screen::FatalError);
             },
         )

@@ -9,9 +9,9 @@ use bevy_ecs_tiled::prelude::TiledMapAsset;
 use alveus_app::Screen;
 use alveus_asset_tracking::ResourceHandles;
 use alveus_collision::{
-    CollisionLoadFailures, CollisionMasks, InteriorAssets, LevelAssets, REQUIRED_COLLISION_KEYS,
-    RequiredCollisionMapState, build_all_collision_masks, collision_ready,
-    record_failed_collision_map_loads, required_collision_handles, required_collision_map_state,
+    CollisionMasks, InteriorAssets, LevelAssets, REQUIRED_COLLISION_KEYS,
+    RequiredCollisionMapState, any_required_collision_map_failed, build_all_collision_masks,
+    collision_ready, required_collision_handles, required_collision_map_state,
     required_collision_maps_terminal,
 };
 use alveus_configs::LOADING_TIMEOUT_SECS;
@@ -39,44 +39,12 @@ impl Default for LoadingTiming {
     }
 }
 
-/// Distinct from [`CollisionLoadFailures`]: pending assets timed out without an
-/// explicit Failed load state.
-#[derive(Resource, Reflect, Debug, Clone, Default)]
-#[reflect(Resource)]
-pub struct LoadingTimeoutDiagnostic {
-    pub timed_out: bool,
-    pub missing_keys: Vec<String>,
-    pub is_all_done: bool,
-    pub has_level_assets: bool,
-    pub has_interior_assets: bool,
-}
-
-impl LoadingTimeoutDiagnostic {
-    pub fn clear(&mut self) {
-        *self = Self::default();
-    }
-
-    pub fn fatal_message(&self) -> Option<String> {
-        if !self.timed_out {
-            return None;
-        }
-        Some("Loading timed out. Restart the game.".to_string())
-    }
-}
-
 pub(super) fn plugin(app: &mut App) {
-    app.init_resource::<LoadingTimeoutDiagnostic>()
-        .init_resource::<LoadingTiming>()
-        .register_type::<LoadingTimeoutDiagnostic>();
+    app.init_resource::<LoadingTiming>();
 
     app.add_systems(
         OnEnter(Screen::Loading),
-        (
-            clear_loading_diagnostics,
-            spawn_loading_screen,
-            insert_loading_watchdog,
-        )
-            .chain(),
+        (spawn_loading_screen, insert_loading_watchdog),
     );
     app.add_systems(OnExit(Screen::Loading), remove_loading_watchdog);
     app.add_systems(OnEnter(Screen::FatalError), spawn_fatal_error_screen);
@@ -86,7 +54,6 @@ pub(super) fn plugin(app: &mut App) {
         (
             build_collision_masks_during_loading
                 .run_if(in_state(Screen::Loading).and_then(all_required_collision_maps_loaded)),
-            detect_collision_load_failures_during_loading,
             enter_fatal_error_on_collision_failure,
             enter_gameplay_screen,
             loading_timeout_watchdog,
@@ -94,14 +61,6 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .run_if(in_state(Screen::Loading)),
     );
-}
-
-fn clear_loading_diagnostics(
-    mut failures: ResMut<CollisionLoadFailures>,
-    mut timeout: ResMut<LoadingTimeoutDiagnostic>,
-) {
-    failures.clear();
-    timeout.clear();
 }
 
 fn spawn_loading_screen(mut commands: Commands) {
@@ -161,21 +120,14 @@ fn build_collision_masks_during_loading(
     }
 }
 
-fn detect_collision_load_failures_during_loading(
+fn enter_fatal_error_on_collision_failure(
     asset_server: Res<AssetServer>,
     level_assets: Res<LevelAssets>,
     interior_assets: Res<InteriorAssets>,
-    mut failures: ResMut<CollisionLoadFailures>,
-) {
-    let handles = required_collision_handles(&level_assets, &interior_assets);
-    record_failed_collision_map_loads(&asset_server, &handles, &mut failures);
-}
-
-fn enter_fatal_error_on_collision_failure(
-    failures: Res<CollisionLoadFailures>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    if !failures.is_empty() {
+    let handles = required_collision_handles(&level_assets, &interior_assets);
+    if any_required_collision_map_failed(&asset_server, &handles) {
         next_screen.set(Screen::FatalError);
     }
 }
@@ -183,15 +135,9 @@ fn enter_fatal_error_on_collision_failure(
 fn enter_gameplay_screen(
     resource_handles: Res<ResourceHandles>,
     masks: Res<CollisionMasks>,
-    failures: Res<CollisionLoadFailures>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    let loading_complete =
-        failures.is_empty() && resource_handles.is_all_done() && collision_ready(&masks);
-    if loading_complete {
-        // Fetch and write the transition only after failure detection has run in
-        // this frame; a run condition may be evaluated before that mutation.
-        // This prevents stale success from racing a newly observed load failure.
+    if resource_handles.is_all_done() && collision_ready(&masks) {
         next_screen.set(Screen::Gameplay);
     }
 }
@@ -201,24 +147,17 @@ fn loading_timeout_watchdog(
     timing: Res<LoadingTiming>,
     resource_handles: Res<ResourceHandles>,
     masks: Res<CollisionMasks>,
-    failures: Res<CollisionLoadFailures>,
     level_assets: Option<Res<LevelAssets>>,
     interior_assets: Option<Res<InteriorAssets>>,
-    mut timeout: ResMut<LoadingTimeoutDiagnostic>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
-    // Explicit asset failures transition directly to FatalError.
-    if !failures.is_empty() {
-        return;
-    }
-
     let Some(watchdog) = watchdog else {
         return;
     };
     if watchdog.started.elapsed().as_secs_f32() < timing.timeout_secs {
         return;
     }
-    // Success path owns the transition; do not race Title when load just completed.
+    // Success path owns the transition; do not race FatalError when load just completed.
     if resource_handles.is_all_done() && collision_ready(&masks) {
         return;
     }
@@ -238,30 +177,10 @@ fn loading_timeout_watchdog(
         collision_ready(&masks),
         missing.join(", ")
     );
-
-    *timeout = LoadingTimeoutDiagnostic {
-        timed_out: true,
-        missing_keys: missing,
-        is_all_done: resource_handles.is_all_done(),
-        has_level_assets: level_assets.is_some(),
-        has_interior_assets: interior_assets.is_some(),
-    };
     next_screen.set(Screen::FatalError);
 }
 
-fn spawn_fatal_error_screen(
-    mut commands: Commands,
-    failures: Res<CollisionLoadFailures>,
-    timeout: Res<LoadingTimeoutDiagnostic>,
-) {
-    let message = if !failures.is_empty() {
-        failures.loading_detail_message()
-    } else {
-        timeout
-            .fatal_message()
-            .unwrap_or_else(|| "A required game asset could not be loaded.".to_string())
-    };
-
+fn spawn_fatal_error_screen(mut commands: Commands) {
     commands.spawn((
         widget::ui_root("Fatal Error Screen"),
         DespawnOnExit(Screen::FatalError),
@@ -274,7 +193,7 @@ fn spawn_fatal_error_screen(
             ),
             (
                 Name::new("Fatal Error Detail"),
-                Text::new(message),
+                Text::new("A required game asset could not be loaded."),
                 TextFont::from_font_size(20.0),
                 TextColor(ui_palette::LABEL_TEXT),
                 Node {

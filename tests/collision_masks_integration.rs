@@ -1,6 +1,6 @@
 use alveus_collision::{
-    CollisionLoadFailures, CollisionMapKey, REQUIRED_COLLISION_KEYS, build_mask_for_asset,
-    collision_ready, record_failed_collision_map_loads,
+    CollisionMapKey, REQUIRED_COLLISION_KEYS, any_required_collision_map_failed,
+    build_mask_for_asset, collision_ready, required_collision_handles,
 };
 use alveus_components::TilePosition;
 use bevy::prelude::*;
@@ -58,15 +58,12 @@ fn overview_compost_bin_blocked_in_collision_mask() {
 }
 
 #[test]
-fn all_required_collision_maps_load_without_failures() {
-    use alveus_collision::{
-        CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks,
-    };
+fn all_required_collision_maps_load_and_build_masks() {
+    use alveus_collision::{CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks};
     use alveus_types::EnclosureId;
 
     let mut app = common::headless_tiled_test_app();
     app.init_resource::<CollisionMasks>();
-    app.init_resource::<CollisionLoadFailures>();
 
     let (level, interior) = {
         let server = app.world().resource::<AssetServer>();
@@ -99,21 +96,16 @@ fn all_required_collision_maps_load_without_failures() {
             build_all_collision_masks(&mut masks, map_assets, level_assets, interior_assets);
         });
 
-    app.world_mut()
-        .resource_scope(|world, mut failures: Mut<CollisionLoadFailures>| {
-            let asset_server = world.resource::<AssetServer>();
-            let level = world.resource::<LevelAssets>();
-            let interior = world.resource::<InteriorAssets>();
-            let handles = alveus_collision::required_collision_handles(level, interior);
-            record_failed_collision_map_loads(asset_server, &handles, &mut failures);
-        });
+    let failed = {
+        let asset_server = app.world().resource::<AssetServer>();
+        let level = app.world().resource::<LevelAssets>();
+        let interior = app.world().resource::<InteriorAssets>();
+        let handles = required_collision_handles(level, interior);
+        any_required_collision_map_failed(asset_server, &handles)
+    };
+    assert!(!failed, "shipped maps must load");
 
     let masks = app.world().resource::<CollisionMasks>();
-    let failures = app.world().resource::<CollisionLoadFailures>();
-    assert!(
-        failures.is_empty(),
-        "shipped maps must not produce load failures: {failures:?}"
-    );
     assert!(
         collision_ready(masks),
         "all REQUIRED_COLLISION_KEYS must have masks"
