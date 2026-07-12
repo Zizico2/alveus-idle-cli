@@ -67,7 +67,6 @@ fn care_brp_app(save_path: &str) -> App {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
     app.add_plugins(alveus_app::plugin);
     app.init_resource::<ButtonInput<KeyCode>>();
@@ -112,7 +111,7 @@ fn brp_skip_splash_command_changes_screen() {
     let save_path = "brp_test_skip.ron";
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.insert_resource(SavePath(save_path.to_string()));
     app.add_plugins((StatsPlugin, alveus_headless::CommandPlugin));

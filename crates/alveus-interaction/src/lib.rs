@@ -16,6 +16,9 @@ use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
 use alveus_types::{AnimalId, CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat};
 use bevy::prelude::*;
 
+/// Adds player care interactions.
+///
+/// Requires [`alveus_app::plugin`] to initialize the app-wide states first.
 pub struct InteractionPlugin;
 
 impl Plugin for InteractionPlugin {
@@ -38,9 +41,6 @@ impl Plugin for InteractionPlugin {
             .register_type::<AnimalCleanedEvent>()
             .register_type::<CareFeedbackEvent>()
             .register_type::<CareHudPulse>();
-        if !app.world().contains_resource::<State<Menu>>() {
-            app.init_state::<Menu>();
-        }
         app.init_resource::<PlayerSatchel>()
             .init_resource::<ActiveInteractionTarget>()
             .init_resource::<CareMenuState>()

@@ -120,10 +120,11 @@ fn test_mini_chore_satchel_transform() {
 
 #[test]
 fn test_open_menu_confirm_and_cancel() {
-    let mut care_menu = CareMenuState::default();
-    care_menu.menu_id = Some(CareMenuId::Fridge);
-    care_menu.options = care_menu_options(CareMenuId::Fridge).to_vec();
-    care_menu.cursor = 0;
+    let mut care_menu = CareMenuState {
+        menu_id: Some(CareMenuId::Fridge),
+        options: care_menu_options(CareMenuId::Fridge).to_vec(),
+        cursor: 0,
+    };
 
     assert_eq!(
         care_menu.options.as_slice(),

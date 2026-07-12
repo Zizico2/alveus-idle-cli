@@ -15,7 +15,7 @@ fn test_stats_initialization() {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
@@ -78,7 +78,7 @@ fn test_stat_observers_and_clamping() {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
@@ -152,7 +152,7 @@ fn test_shared_enclosure_cleanliness() {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
@@ -207,7 +207,7 @@ fn test_upkeep_calculation() {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
@@ -251,7 +251,7 @@ fn test_decay_rate() {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));

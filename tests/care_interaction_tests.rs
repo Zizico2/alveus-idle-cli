@@ -34,7 +34,6 @@ fn care_test_app(save_path: &str) -> App {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
     app.add_plugins(MinimalPlugins);
     app.add_plugins(alveus_app::plugin);
     app.init_resource::<ButtonInput<KeyCode>>();

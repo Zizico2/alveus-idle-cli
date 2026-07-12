@@ -345,7 +345,7 @@ mod tests {
     fn animal_app(screen: Screen, key: CollisionMapKey) -> App {
         let mut app = App::new();
         app.add_plugins(StatesPlugin);
-        app.init_state::<Screen>();
+        app.add_plugins(alveus_app::plugin);
         app.add_plugins(MinimalPlugins);
         app.insert_resource(TimeUpdateStrategy::ManualDuration(STEP));
         app.insert_resource(open_floor_mask(key));
@@ -512,7 +512,10 @@ mod tests {
         let before = saved_tile(&gameplay, AnimalId::Polly);
         advance(&mut gameplay, 80);
         let after_bg = saved_tile(&gameplay, AnimalId::Polly);
-        assert_ne!(after_bg, before, "background wander should move on Gameplay");
+        assert_ne!(
+            after_bg, before,
+            "background wander should move on Gameplay"
+        );
         assert!(
             gameplay
                 .world_mut()
@@ -692,15 +695,17 @@ mod tests {
         assert!(
             app.world()
                 .iter_entities()
-                .filter(|e| e.get::<AnimalNpc>().is_some())
-                .next()
+                .find(|e| e.get::<AnimalNpc>().is_some())
                 .is_none(),
             "no stale NPC after leaving the room"
         );
 
         app.insert_resource(NextState::Pending(Screen::Gameplay));
         app.update();
-        assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Gameplay);
+        assert_eq!(
+            *app.world().resource::<State<Screen>>().get(),
+            Screen::Gameplay
+        );
 
         // Background resumes from the persisted tile (may already step on the enter frame).
         let after_exit = saved_tile(&app, AnimalId::Polly);

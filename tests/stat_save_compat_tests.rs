@@ -37,7 +37,7 @@ fn old_scalar_stat_save_loads_into_stat_fields() {
 
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();

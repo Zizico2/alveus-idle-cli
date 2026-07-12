@@ -5,14 +5,14 @@ pub mod loading;
 mod splash;
 mod title;
 
-use alveus_app::Screen;
 use bevy::prelude::*;
 
 pub use loading::LoadingTiming;
 
+/// Adds screen UI and transitions.
+///
+/// Requires [`alveus_app::plugin`] to initialize the app-wide states first.
 pub fn plugin(app: &mut App) {
-    app.init_state::<Screen>();
-
     app.add_plugins((
         gameplay::plugin,
         loading::plugin,

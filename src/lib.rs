@@ -157,6 +157,7 @@ pub fn build_app(mode: RunMode) -> App {
     // the `gen_tiled_types` exporter).
     alveus_headless::register_headless_types(&mut app);
 
+    // `alveus_app::plugin` owns app-wide state and must precede all consumers.
     app.add_plugins((
         alveus_app::plugin,
         alveus_asset_tracking::plugin,

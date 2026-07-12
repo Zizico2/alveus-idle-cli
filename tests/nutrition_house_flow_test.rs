@@ -9,7 +9,7 @@ use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE,
 use alveus_content::ItemId;
 use alveus_headless::{CommandPlugin, GameCommand};
 use alveus_interaction::{
-    ActiveInteractionTarget, AnimalFedEvent, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal,
+    ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal,
     InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel, try_give_item,
 };
 use alveus_stats::{AnimalId, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin};
@@ -21,7 +21,7 @@ fn nutrition_test_app(save_path: &str) -> App {
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));

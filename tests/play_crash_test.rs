@@ -10,10 +10,10 @@ use moonshine_save::save::TriggerSave;
 fn is_valid_save_format(content: &str) -> bool {
     if let Ok(ron::Value::Map(map)) = ron::from_str::<ron::Value>(content) {
         for key in map.keys() {
-            if let ron::Value::String(s) = key {
-                if s == "resources" || s == "entities" {
-                    return true;
-                }
+            if let ron::Value::String(s) = key
+                && (s == "resources" || s == "entities")
+            {
+                return true;
             }
         }
     }
@@ -48,7 +48,7 @@ fn test_play_crash_on_invalid_save() {
 
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
@@ -79,7 +79,7 @@ fn test_save_exclude_and_hydration() {
 
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
@@ -247,7 +247,7 @@ fn test_save_exclude_and_hydration() {
 fn test_play_without_save() {
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();

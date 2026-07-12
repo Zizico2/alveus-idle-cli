@@ -6,14 +6,12 @@ pub use main_menu::PlayClickEvent;
 mod pause;
 mod settings;
 
-use alveus_app::Menu;
 use bevy::prelude::*;
 
+/// Adds menu UI and transitions.
+///
+/// Requires [`alveus_app::plugin`] to initialize the app-wide states first.
 pub fn plugin(app: &mut App) {
-    if !app.world().contains_resource::<State<Menu>>() {
-        app.init_state::<Menu>();
-    }
-
     app.add_plugins((
         credits::plugin,
         main_menu::plugin,

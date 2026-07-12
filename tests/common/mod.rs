@@ -18,7 +18,7 @@ use bevy_ecs_tiled::prelude::*;
 pub fn minimal_stats_app(save_path: &str) -> App {
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
     app.init_resource::<ButtonInput<KeyCode>>();
@@ -252,7 +252,7 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
 
     let mut app = headless_tiled_test_app_with_replacements(map_replacements);
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(alveus_asset_tracking::plugin);
     app.init_resource::<CollisionMasks>();
     app.init_resource::<LoadingTiming>();
