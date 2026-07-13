@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use alveus_app::Screen;
-use alveus_headless::CommandPlugin;
+use alveus_command::CommandPlugin;
 use alveus_stats::{SavePath, StatsPlugin};
 use bevy::asset::AssetMetaCheck;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};

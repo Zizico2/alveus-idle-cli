@@ -1,6 +1,6 @@
 //! Tile-based character controller: translate movement intent into tile steps.
 //!
-//! - [`MovementController`] intent is set from keyboard input (in `alveus_headless`)
+//! - [`MovementController`] intent is set from keyboard input (in `alveus_input`)
 //!   or from `GameCommand::Move` over BRP.
 //! - Movement is applied one tile at a time, snapping to the tile grid.
 

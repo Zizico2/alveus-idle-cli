@@ -1,13 +1,14 @@
 use alveus_app::{Menu, Screen};
 use alveus_cleaning::CleaningPlugin;
+use alveus_command::{CommandPlugin, GameCommand};
 use alveus_components::{
     CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
     MovementController, MovementIntent, Player, TilePosition,
 };
 use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE};
 use alveus_content::ItemId;
-use alveus_headless::{CommandPlugin, GameCommand, InputPlugin};
 use alveus_hud::satchel_slots_label;
+use alveus_input::InputPlugin;
 use alveus_interaction::{
     ActiveInteractionTarget, AnimalCleanedEvent, AnimalEnrichedEvent, AnimalFedEvent,
     CareMenuState, CleanAnimal, EMPTY_CARE_MENU_MESSAGE, EnrichAnimal, GiveItem, InteractionPlugin,
@@ -808,7 +809,7 @@ fn drop_item_via_game_command() {
 #[test]
 fn care_feedback_event_is_registered() {
     let mut app = App::new();
-    alveus_headless::register_headless_types(&mut app);
+    alveus_reflect::register_types(&mut app);
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();
     assert!(

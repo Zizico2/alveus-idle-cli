@@ -1,15 +1,17 @@
 use alveus_app::{Menu, Pause, Screen};
-use alveus_headless::{GameCommand, register_headless_types};
+use alveus_command::{GameCommand, HeadlessRenderTarget};
 use alveus_interaction::{CleanAnimal, PlayerSatchel};
+use alveus_reflect::register_types;
 use alveus_stats::SanctuaryUpkeep;
 use alveus_types::{CleanStat, EnrichStat, FeedStat, Stat};
 use bevy::prelude::*;
+use bevy::reflect::TypePath;
 
 #[test]
 fn reflect_registry_exposes_headless_control_types() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
-    register_headless_types(&mut app);
+    register_types(&mut app);
 
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();
@@ -32,4 +34,20 @@ fn reflect_registry_exposes_headless_control_types() {
             "missing type registration for {type_id:?}"
         );
     }
+}
+
+#[test]
+fn game_command_preserves_the_legacy_brp_event_path() {
+    assert_eq!(
+        GameCommand::type_path(),
+        "alveus_headless::command::GameCommand"
+    );
+}
+
+#[test]
+fn headless_render_target_preserves_its_legacy_reflect_path() {
+    assert_eq!(
+        HeadlessRenderTarget::type_path(),
+        "alveus_headless::camera::HeadlessRenderTarget"
+    );
 }

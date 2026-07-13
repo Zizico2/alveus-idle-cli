@@ -15,9 +15,11 @@ use std::time::Duration;
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
+use alveus_command::{CommandPlugin, StepRequest};
+use alveus_headless::DEFAULT_HEADLESS_RESOLUTION;
 #[cfg(feature = "headless")]
 use alveus_headless::HeadlessPlugin;
-use alveus_headless::{CommandPlugin, DEFAULT_HEADLESS_RESOLUTION, InputPlugin, StepRequest};
+use alveus_input::InputPlugin;
 
 /// How the application is run.
 #[derive(Debug, Clone)]
@@ -153,9 +155,11 @@ pub fn build_app(mode: RunMode) -> App {
         app.add_plugins(default_plugins);
     }
 
-    // Single canonical Reflect registration (shared with the headless server and
-    // the `gen_tiled_types` exporter).
-    alveus_headless::register_headless_types(&mut app);
+    // HeadlessPlugin installs the same registry before starting BRP. Windowed
+    // mode registers it here for tooling and runtime reflection.
+    if !headless {
+        alveus_reflect::register_types(&mut app);
+    }
 
     // `alveus_app::plugin` owns app-wide state and must precede all consumers.
     app.add_plugins((

@@ -1,4 +1,4 @@
-//! Reflect registration for BRP introspection (`registry.schema`, `world.query`, etc.).
+//! Shared Reflect registration for runtime and tooling consumers.
 //!
 //! This is the single canonical registration entry point, reused by the game
 //! binary, the headless server, and the `gen_tiled_types` exporter.
@@ -30,10 +30,9 @@ use alveus_world::entrance::{PlayerEnteredBuildingEvent, PlayerExitedBuildingEve
 use alveus_world::room::PlayerSpawnPoint;
 use alveus_world::toast::{DismissToastEvent, TriggerToastEvent};
 
-use crate::camera::HeadlessRenderTarget;
-use crate::command::{GameCommand, StepRequest};
+use alveus_command::{GameCommand, HeadlessRenderTarget, StepRequest};
 
-pub fn register_headless_types(app: &mut App) {
+pub fn register_types(app: &mut App) {
     app.register_type::<Screen>()
         .register_type::<State<Screen>>()
         .register_type::<InRoom>()

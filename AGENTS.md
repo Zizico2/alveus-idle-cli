@@ -34,7 +34,7 @@ There is no bespoke "agent API" to keep in sync; the ECS *is* the API.
    keypress, an agent shouldn't get a shortcut for it either. Walk tile-by-tile
    with `Move`/`MoveStop`, just like a player.
 2. **The verb list is the enum.** The curated, canonical list of things an agent
-   may do is `GameCommand` in `crates/alveus-headless/src/command.rs`. There is no separate
+   may do is `GameCommand` in `crates/alveus-command/src/lib.rs`. There is no separate
    catalogue. When you add or change a verb, update its doc comment — those
    comments are the source of truth agents read.
 3. **No custom BRP methods, no bespoke observation struct.** Commands go through
@@ -132,7 +132,7 @@ back to the lead. Prefer counts, names of failing tests, and the first
 actionable error.
 
 
-The authoritative list lives in `crates/alveus-headless/src/command.rs` (`GameCommand`), fully
+The authoritative list lives in `crates/alveus-command/src/lib.rs` (`GameCommand`), fully
 documented per-variant in that enum's doc comments. Do not treat line-number
 citations elsewhere in this file as stable anchors — search for the type/name.
 
@@ -423,11 +423,11 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
   `GameCommand`s into `PendingGameCommands` and applies them once per frame in
   `First`, `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests`
   in `RemoteLast`, re-running `StateTransition` so effects land in-frame. Preserve
-  this ordering when touching `crates/alveus-headless/src/command.rs`.
+  this ordering when touching `crates/alveus-command/src/lib.rs`.
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,
   `#[reflect(Component/Resource/Event)]`, and registration in
-  `register_headless_types` (`crates/alveus-headless/src/reflect.rs`). If it's not registered,
+  `register_types` (`crates/alveus-reflect/src/lib.rs`). If it's not registered,
   `world.query`/`registry.schema`/`world.trigger_event` can't see it.
 - **Observation stays client-side.** Derived facts (adjacency, joins like animal
   cleanliness via enclosure) are computed by the client/script/test from raw query
@@ -467,5 +467,5 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 | Mundane builds/tests/scrapes on a costly lead | Delegate to a mid-tier worker; require the fixed summary (Cost-tier delegation) |
 
 BRP event path: `alveus_headless::command::GameCommand` (defined in
-`crates/alveus-headless/src/command.rs`). Default port: `15702` (`DEFAULT_BRP_PORT` in
+`crates/alveus-command/src/lib.rs` with a compatibility type path). Default port: `15702` (`DEFAULT_BRP_PORT` in
 `crates/alveus-headless/src/lib.rs`) unless overridden with `--port`.

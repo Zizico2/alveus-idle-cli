@@ -19,6 +19,9 @@ members = [
     "crates/alveus-screens",
     "crates/alveus-menus",
     "crates/alveus-hud",
+    "crates/alveus-command",
+    "crates/alveus-input",
+    "crates/alveus-reflect",
     "crates/alveus-headless",
 ]
 
@@ -46,6 +49,9 @@ alveus-world = { path = "crates/alveus-world" }
 alveus-screens = { path = "crates/alveus-screens" }
 alveus-menus = { path = "crates/alveus-menus" }
 alveus-hud = { path = "crates/alveus-hud" }
+alveus-command = { path = "crates/alveus-command" }
+alveus-input = { path = "crates/alveus-input" }
+alveus-reflect = { path = "crates/alveus-reflect" }
 alveus-headless = { path = "crates/alveus-headless" }
 
 # External crates
@@ -103,6 +109,9 @@ alveus-world.workspace = true
 alveus-screens.workspace = true
 alveus-menus.workspace = true
 alveus-hud.workspace = true
+alveus-command.workspace = true
+alveus-input.workspace = true
+alveus-reflect.workspace = true
 alveus-headless.workspace = true
 bevy = { workspace = true, features = ["pan_camera", "debug"] }
 
@@ -119,7 +128,7 @@ async-channel.workspace = true
 default = ["dev_native", "tiled-render"]
 tiled-render = ["alveus-collision/tiled-render", "alveus-world/tiled-render"]
 tiled-asset-tests = []
-remote = ["alveus-headless/remote"]
+remote = ["alveus-command/remote", "alveus-headless/remote"]
 cli = ["alveus-headless/cli"]
 headless = ["remote", "cli"]
 dev = [

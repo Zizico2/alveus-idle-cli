@@ -65,7 +65,9 @@ Cargo workspace: thin binary in `src/`, feature crates under `crates/`.
 * `crates/alveus-world`: Level, player, movement, rooms, entrances, camera, toast.
 * `crates/alveus-stats` / `alveus-cleaning` / `alveus-interaction` / `alveus-animals` / `alveus-collision`: Gameplay plugins.
 * `crates/alveus-screens` / `alveus-menus` / `alveus-hud` / `alveus-theme`: UI.
-* `crates/alveus-headless`: BRP/`GameCommand`, reflect registration, offscreen camera, stdio.
+* `crates/alveus-command` / `alveus-input` / `alveus-reflect`: semantic verbs,
+  keyboard mapping, and shared Reflect registration.
+* `crates/alveus-headless`: offscreen camera plus HTTP/stdio BRP transports.
 * `assets/`:
   * `images/`: Sprite and UI textures (such as `ducky.png`).
   * `maps/overview/`: Tiled `.tmx` maps, tilesets, and exports.
@@ -202,7 +204,8 @@ Headless integration tests cover `GameCommand` dispatch, BRP in-process round-tr
 
 ### Module layout
 
-* `crates/alveus-headless/src/command.rs` — `GameCommand` enum + dispatcher
+* `crates/alveus-command/src/lib.rs` — `GameCommand` enum + dispatcher
+* `crates/alveus-input/src/lib.rs` — keyboard-to-command mapping
+* `crates/alveus-reflect/src/lib.rs` — shared `register_types()` composition entry point
 * `crates/alveus-headless/src/camera.rs` — offscreen `Camera2d` → `RenderTarget::Image`
 * `crates/alveus-headless/src/stdio.rs` — stdin/stdout BRP carrier
-* `crates/alveus-headless/src/reflect.rs` — `register_headless_types()` for BRP introspection

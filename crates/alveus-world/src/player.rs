@@ -1,5 +1,5 @@
 //! Player bundle construction. The `Player` marker and movement components live
-//! in `alveus_components`; keyboard input mapping lives in `alveus_headless`.
+//! in `alveus_components`; keyboard input mapping lives in `alveus_input`.
 
 use bevy::prelude::*;
 

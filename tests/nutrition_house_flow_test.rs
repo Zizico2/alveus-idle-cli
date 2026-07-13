@@ -4,10 +4,10 @@
 
 use alveus_app::{Menu, Screen};
 use alveus_cleaning::CleaningPlugin;
+use alveus_command::{CommandPlugin, GameCommand};
 use alveus_components::{CurrentTilePosition, Interactable, MovementIntent, Player, TilePosition};
 use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE, STAT_FULL};
 use alveus_content::ItemId;
-use alveus_headless::{CommandPlugin, GameCommand};
 use alveus_interaction::{
     ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal,
     InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel, try_give_item,

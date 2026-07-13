@@ -7,18 +7,11 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
 };
 
+pub use alveus_command::HeadlessRenderTarget;
 use alveus_world::camera::camera_follow;
 
 /// Default offscreen resolution (width x height).
 pub const DEFAULT_HEADLESS_RESOLUTION: (u32, u32) = (1280, 720);
-
-#[derive(Resource, Debug, Clone, Reflect)]
-#[reflect(Resource)]
-pub struct HeadlessRenderTarget {
-    pub image: Handle<Image>,
-    pub width: u32,
-    pub height: u32,
-}
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct HeadlessResolution(pub (u32, u32));
