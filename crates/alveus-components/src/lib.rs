@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 
 pub use alveus_configs::{PLAYER_MOVE_DURATION_SECS, TILE_SIZE};
-use alveus_types::{CareMenuId, ItemId};
+use alveus_types::ItemId;
 pub use alveus_types::{EnclosureId, TilePosition};
 
 // ---------------------------------------------------------
@@ -159,19 +159,6 @@ impl PlayerSatchel {
     pub fn first_item(&self) -> Option<ItemId> {
         self.slots.iter().flatten().copied().next()
     }
-}
-
-/// Presentation-neutral state for the care item picker overlay.
-///
-/// The explicit type path keeps `alveus_interaction::CareMenuState` stable for
-/// BRP clients even though the Rust type now lives in this shared crate.
-#[derive(Resource, Debug, Default, Clone, Reflect)]
-#[reflect(Resource)]
-#[type_path = "alveus_interaction"]
-pub struct CareMenuState {
-    pub menu_id: Option<CareMenuId>,
-    pub options: Vec<ItemId>,
-    pub cursor: usize,
 }
 
 /// Poops carried in the wheelbarrow, in pickup order (max `WHEELBARROW_CAPACITY`).

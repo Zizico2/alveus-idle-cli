@@ -81,12 +81,12 @@ fn fridge_menu_move_down_selects_greens() {
         *app.world().resource::<State<Menu>>().get(),
         Menu::CareItemPicker
     );
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 0);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 0);
 
     app.world_mut()
         .trigger(GameCommand::Move(MovementIntent::Down));
     app.update();
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     app.world_mut().trigger(GameCommand::Continue);
     app.update();

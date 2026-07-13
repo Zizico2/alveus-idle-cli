@@ -1,71 +1,28 @@
-//! Reusable full-screen overlay presentation built from Bevy's list widgets.
+//! A dimmed card shell for menus presented over a running scene.
 
+use alveus_menus_models::ListMenuState;
 use alveus_theme::widget;
-use bevy::{
-    input_focus::AutoFocus,
-    prelude::*,
-    ui::Selected,
-    ui_widgets::{ActiveDescendant, ListBox, ListItem},
-};
+use bevy::prelude::*;
 
-pub(crate) struct OverlayMenuPlugin;
-
-impl Plugin for OverlayMenuPlugin {
-    fn build(&self, app: &mut App) {
-        app.configure_sets(
-            Update,
-            (OverlayMenuSystems::SyncSelection, OverlayMenuSystems::Style).chain(),
-        )
-        .add_systems(
-            Update,
-            style_overlay_entries.in_set(OverlayMenuSystems::Style),
-        );
-    }
-}
-
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum OverlayMenuSystems {
-    SyncSelection,
-    Style,
-}
+use crate::list_menu::{ListMenuSpec, SpawnedListMenu, spawn_list_menu};
 
 pub(crate) struct OverlayMenuSpec {
     title: String,
     summary: Option<String>,
-    entries: Vec<String>,
-    selected: Option<usize>,
-    empty_copy: String,
     controls: Option<String>,
 }
 
 impl OverlayMenuSpec {
-    pub(crate) fn new<I, S>(title: impl Into<String>, entries: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
+    pub(crate) fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
             summary: None,
-            entries: entries.into_iter().map(Into::into).collect(),
-            selected: None,
-            empty_copy: "No options are available.".to_string(),
             controls: None,
         }
     }
 
     pub(crate) fn with_summary(mut self, summary: impl Into<String>) -> Self {
         self.summary = Some(summary.into());
-        self
-    }
-
-    pub(crate) fn with_selected(mut self, selected: Option<usize>) -> Self {
-        self.selected = selected;
-        self
-    }
-
-    pub(crate) fn with_empty_copy(mut self, empty_copy: impl Into<String>) -> Self {
-        self.empty_copy = empty_copy.into();
         self
     }
 
@@ -78,46 +35,28 @@ impl OverlayMenuSpec {
 #[derive(Component)]
 pub(crate) struct OverlayMenuRoot;
 
-#[derive(Component)]
-pub(crate) struct OverlayMenuList {}
-
-#[derive(Component)]
-pub(crate) struct OverlayMenuEntry {
-    pub(crate) list: Entity,
-    pub(crate) index: usize,
-}
-
-#[derive(Component)]
-struct OverlayMenuEntryLabel;
-
-#[derive(Component)]
-pub(crate) struct OverlayMenuEmptyState;
-
 pub(crate) struct SpawnedOverlayMenu {
     pub(crate) root: Entity,
-    pub(crate) list: Option<Entity>,
+    pub(crate) list: SpawnedListMenu,
 }
 
-pub(crate) fn spawn_overlay_menu(
+pub(crate) fn spawn_overlay_menu<T>(
     commands: &mut Commands,
     name: impl Into<String>,
-    spec: OverlayMenuSpec,
+    state: &ListMenuState<T>,
+    overlay_spec: OverlayMenuSpec,
+    list_spec: ListMenuSpec,
+    label: impl Fn(&T) -> String,
 ) -> SpawnedOverlayMenu {
     let OverlayMenuSpec {
         title,
         summary,
-        entries,
-        selected,
-        empty_copy,
         controls,
-    } = spec;
-    let selected = selected.filter(|index| *index < entries.len());
-
+    } = overlay_spec;
     let root = commands
         .spawn((
             Name::new(name.into()),
             OverlayMenuRoot,
-            AutoFocus,
             Node {
                 position_type: PositionType::Absolute,
                 width: percent(100),
@@ -132,7 +71,7 @@ pub(crate) fn spawn_overlay_menu(
         ))
         .id();
 
-    let mut list_entity = None;
+    let mut spawned_list = None;
     commands.entity(root).with_children(|overlay| {
         overlay
             .spawn((
@@ -156,62 +95,7 @@ pub(crate) fn spawn_overlay_menu(
                 if let Some(summary) = summary {
                     card.spawn(widget::label(summary));
                 }
-
-                if entries.is_empty() {
-                    card.spawn((
-                        Name::new("Overlay Menu Empty State"),
-                        OverlayMenuEmptyState,
-                        Text::new(empty_copy),
-                        TextFont::from_font_size(21.0),
-                        TextColor(Color::srgb(0.92, 0.76, 0.48)),
-                    ));
-                } else {
-                    let mut list_commands = card.spawn((
-                        Name::new("Overlay Menu ListBox"),
-                        ListBox,
-                        OverlayMenuList {},
-                        Node {
-                            width: percent(100),
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(8),
-                            ..default()
-                        },
-                    ));
-                    let list = list_commands.id();
-                    list_entity = Some(list);
-                    list_commands.with_children(|rows| {
-                        for (index, label) in entries.into_iter().enumerate() {
-                            let mut row = rows.spawn((
-                                Name::new(format!("Overlay Menu Entry {index}")),
-                                ListItem,
-                                OverlayMenuEntry { list, index },
-                                Node {
-                                    width: percent(100),
-                                    min_height: px(54),
-                                    align_items: AlignItems::Center,
-                                    padding: UiRect::horizontal(px(18)),
-                                    border: UiRect::all(px(1)),
-                                    border_radius: BorderRadius::all(px(10)),
-                                    ..default()
-                                },
-                                BackgroundColor(entry_background(selected == Some(index))),
-                                BorderColor::all(entry_border(selected == Some(index))),
-                                children![(
-                                    Name::new("Overlay Menu Entry Label"),
-                                    OverlayMenuEntryLabel,
-                                    Text::new(label),
-                                    TextFont::from_font_size(22.0),
-                                    TextColor(entry_text(selected == Some(index))),
-                                    Pickable::IGNORE,
-                                )],
-                            ));
-                            if selected == Some(index) {
-                                row.insert(Selected);
-                            }
-                        }
-                    });
-                }
-
+                spawned_list = Some(spawn_list_menu(card, state, list_spec, label));
                 if let Some(controls) = controls {
                     card.spawn((
                         Name::new("Overlay Menu Controls"),
@@ -225,77 +109,6 @@ pub(crate) fn spawn_overlay_menu(
 
     SpawnedOverlayMenu {
         root,
-        list: list_entity,
-    }
-}
-
-pub(crate) fn project_selection(
-    commands: &mut Commands,
-    list: Entity,
-    selected: Option<usize>,
-    entries: &Query<(Entity, &OverlayMenuEntry, Has<Selected>)>,
-) {
-    let mut active = None;
-    for (entity, entry, is_selected) in entries.iter() {
-        if entry.list != list {
-            continue;
-        }
-        let should_select = selected == Some(entry.index);
-        if should_select {
-            active = Some(entity);
-        }
-        if should_select && !is_selected {
-            commands.entity(entity).insert(Selected);
-        } else if !should_select && is_selected {
-            commands.entity(entity).remove::<Selected>();
-        }
-    }
-    commands.entity(list).insert(ActiveDescendant(active));
-}
-
-fn style_overlay_entries(
-    mut entries: Query<
-        (
-            Has<Selected>,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &Children,
-        ),
-        With<OverlayMenuEntry>,
-    >,
-    mut labels: Query<&mut TextColor, With<OverlayMenuEntryLabel>>,
-) {
-    for (selected, mut background, mut border, children) in &mut entries {
-        *background = entry_background(selected).into();
-        *border = BorderColor::all(entry_border(selected));
-        for child in children.iter() {
-            if let Ok(mut color) = labels.get_mut(child) {
-                *color = TextColor(entry_text(selected));
-            }
-        }
-    }
-}
-
-fn entry_background(selected: bool) -> Color {
-    if selected {
-        Color::srgba(0.12, 0.33, 0.27, 0.98)
-    } else {
-        Color::srgba(0.065, 0.09, 0.11, 0.96)
-    }
-}
-
-fn entry_border(selected: bool) -> Color {
-    if selected {
-        Color::srgb(0.45, 0.95, 0.72)
-    } else {
-        Color::srgba(0.34, 0.4, 0.43, 0.8)
-    }
-}
-
-fn entry_text(selected: bool) -> Color {
-    if selected {
-        Color::WHITE
-    } else {
-        Color::srgb(0.82, 0.85, 0.87)
+        list: spawned_list.expect("overlay card always spawns its list menu"),
     }
 }

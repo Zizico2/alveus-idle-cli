@@ -315,8 +315,8 @@ fn keyboard_picker_navigation_moves_once_per_press() {
     {
         let mut care_menu = app.world_mut().resource_mut::<CareMenuState>();
         care_menu.menu_id = Some(CareMenuId::Fridge);
-        care_menu.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
-        care_menu.cursor = 0;
+        care_menu.list.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
+        care_menu.list.cursor = 0;
     }
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
@@ -329,7 +329,7 @@ fn keyboard_picker_navigation_moves_once_per_press() {
         .press(KeyCode::KeyS);
     app.update();
 
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     let _ = std::fs::remove_file(save_path);
 }
@@ -535,8 +535,8 @@ fn keyboard_space_confirms_care_menu_via_game_command() {
     {
         let mut care_menu = app.world_mut().resource_mut::<CareMenuState>();
         care_menu.menu_id = Some(CareMenuId::Fridge);
-        care_menu.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
-        care_menu.cursor = 0;
+        care_menu.list.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
+        care_menu.list.cursor = 0;
     }
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
@@ -567,8 +567,8 @@ fn keyboard_escape_cancels_care_menu_via_game_command() {
     {
         let mut care_menu = app.world_mut().resource_mut::<CareMenuState>();
         care_menu.menu_id = Some(CareMenuId::Fridge);
-        care_menu.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
-        care_menu.cursor = 0;
+        care_menu.list.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
+        care_menu.list.cursor = 0;
     }
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
@@ -596,8 +596,8 @@ fn picker_left_and_right_are_noops_and_interact_confirms() {
     {
         let mut care_menu = app.world_mut().resource_mut::<CareMenuState>();
         care_menu.menu_id = Some(CareMenuId::Fridge);
-        care_menu.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
-        care_menu.cursor = 1;
+        care_menu.list.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
+        care_menu.list.cursor = 1;
     }
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
@@ -609,7 +609,7 @@ fn picker_left_and_right_are_noops_and_interact_confirms() {
     app.world_mut()
         .trigger(GameCommand::Move(MovementIntent::Right));
     app.update();
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     app.world_mut().trigger(GameCommand::Interact);
     app.update();
@@ -626,11 +626,7 @@ fn picker_left_and_right_are_noops_and_interact_confirms() {
 fn empty_picker_confirms_by_cancelling_with_explicit_copy() {
     let save_path = "test_care_menu_empty.ron";
     let mut app = care_test_app(save_path);
-    app.insert_resource(CareMenuState {
-        menu_id: Some(CareMenuId::Fridge),
-        options: Vec::new(),
-        cursor: 0,
-    });
+    app.insert_resource(CareMenuState::new(Some(CareMenuId::Fridge), []));
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
@@ -653,11 +649,7 @@ fn empty_picker_confirms_by_cancelling_with_explicit_copy() {
 fn missing_picker_id_confirms_by_cancelling_with_explicit_copy() {
     let save_path = "test_care_menu_missing_id.ron";
     let mut app = care_test_app(save_path);
-    app.insert_resource(CareMenuState {
-        menu_id: None,
-        options: vec![ItemId::RawVeggieTub],
-        cursor: 0,
-    });
+    app.insert_resource(CareMenuState::new(None, [ItemId::RawVeggieTub]));
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
@@ -684,11 +676,10 @@ fn picker_inventory_edges_follow_satchel_capacity_rules() {
     app.insert_resource(PlayerSatchel {
         slots: [Some(ItemId::RawVeggieTub), None],
     });
-    app.insert_resource(CareMenuState {
-        menu_id: Some(CareMenuId::Fridge),
-        options: vec![ItemId::RawVeggieTub],
-        cursor: 0,
-    });
+    app.insert_resource(CareMenuState::new(
+        Some(CareMenuId::Fridge),
+        [ItemId::RawVeggieTub],
+    ));
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
@@ -700,11 +691,10 @@ fn picker_inventory_edges_follow_satchel_capacity_rules() {
         [Some(ItemId::RawVeggieTub), Some(ItemId::RawVeggieTub)]
     );
 
-    app.insert_resource(CareMenuState {
-        menu_id: Some(CareMenuId::Fridge),
-        options: vec![ItemId::TortoiseLeafyGreens],
-        cursor: 0,
-    });
+    app.insert_resource(CareMenuState::new(
+        Some(CareMenuId::Fridge),
+        [ItemId::TortoiseLeafyGreens],
+    ));
     app.world_mut()
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);

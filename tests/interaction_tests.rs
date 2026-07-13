@@ -120,29 +120,28 @@ fn test_mini_chore_satchel_transform() {
 
 #[test]
 fn test_open_menu_confirm_and_cancel() {
-    let mut care_menu = CareMenuState {
-        menu_id: Some(CareMenuId::Fridge),
-        options: care_menu_options(CareMenuId::Fridge).to_vec(),
-        cursor: 0,
-    };
+    let mut care_menu = CareMenuState::new(
+        Some(CareMenuId::Fridge),
+        care_menu_options(CareMenuId::Fridge).iter().copied(),
+    );
 
     assert_eq!(
-        care_menu.options.as_slice(),
+        care_menu.list.options.as_slice(),
         care_menu_options(CareMenuId::Fridge)
     );
 
     care_menu_move_cursor(&mut care_menu, 1);
-    assert_eq!(care_menu.cursor, 1);
+    assert_eq!(care_menu.list.cursor, 1);
     care_menu_move_cursor(&mut care_menu, 1);
-    assert_eq!(care_menu.cursor, 0);
+    assert_eq!(care_menu.list.cursor, 0);
     assert!(care_menu_set_cursor(&mut care_menu, 1));
-    assert_eq!(care_menu.cursor, 1);
+    assert_eq!(care_menu.list.cursor, 1);
     assert!(!care_menu_set_cursor(&mut care_menu, 99));
-    assert_eq!(care_menu.cursor, 1);
+    assert_eq!(care_menu.list.cursor, 1);
     assert!(care_menu_set_cursor(&mut care_menu, 0));
 
     let mut satchel = PlayerSatchel::default();
-    let item = care_menu.options[care_menu.cursor];
+    let item = care_menu.list.options[care_menu.list.cursor];
     try_give_item(&mut satchel, item).unwrap();
     assert!(satchel_contains(&satchel, ItemId::RawVeggieTub));
 

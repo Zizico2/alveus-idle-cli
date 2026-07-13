@@ -11,7 +11,7 @@ use alveus_interaction::{
     CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
     perform_drop_in_world, perform_interact_in_world,
 };
-use alveus_screens::{begin_play_in_world, gameplay::spawn_pause_overlay};
+use alveus_screens::begin_play_in_world;
 use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
 use alveus_types::Stat;
 use alveus_world::room::{force_exit_room_in_world, try_enter_room};
@@ -325,7 +325,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             match (screen, menu) {
                 (Screen::Gameplay, Menu::None) => {
                     world.resource_mut::<NextState<Pause>>().set(Pause(true));
-                    spawn_pause_overlay(&mut world.commands());
                     world.resource_mut::<NextState<Menu>>().set(Menu::Pause);
                 }
                 (Screen::Gameplay, _) => {

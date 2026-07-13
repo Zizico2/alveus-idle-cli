@@ -14,6 +14,7 @@ alveus-components.workspace = true
 alveus-cleaning.workspace = true
 alveus-stats.workspace = true
 alveus-app.workspace = true
+alveus-menus-models.workspace = true
 
 [lints]
 workspace = true

@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use bevy::{
-    ecs::{spawn::SpawnWith, system::IntoObserverSystem},
+    ecs::{hierarchy::ChildSpawnerCommands, spawn::SpawnWith, system::IntoObserverSystem},
     input_focus::{AutoFocus, tab_navigation::TabIndex},
     prelude::*,
     ui::auto_directional_navigation::AutoDirectionalNavigation,
@@ -117,6 +117,51 @@ where
             ..default()
         },
     )
+}
+
+/// Spawn a standard large button whose meaning is supplied by an ECS bundle.
+/// App-level `Activate` observers can inspect that bundle to route the action.
+pub fn spawn_button(
+    parent: &mut ChildSpawnerCommands,
+    text: impl Into<String>,
+    auto_focus: bool,
+    extra: impl Bundle,
+) -> Entity {
+    let mut button = parent.spawn((
+        Name::new("Button Inner"),
+        UiButton,
+        ThemedButton,
+        TabIndex(0),
+        AutoDirectionalNavigation::default(),
+        BackgroundColor(BUTTON_BACKGROUND),
+        BorderColor::all(Color::NONE),
+        InteractionPalette {
+            none: BUTTON_BACKGROUND,
+            hovered: BUTTON_HOVERED_BACKGROUND,
+            pressed: BUTTON_PRESSED_BACKGROUND,
+        },
+        Node {
+            width: px(380),
+            height: px(80),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(px(3)),
+            border_radius: BorderRadius::MAX,
+            ..default()
+        },
+        extra,
+        children![(
+            Name::new("Button Text"),
+            Text(text.into()),
+            TextFont::from_font_size(40.0),
+            TextColor(BUTTON_TEXT),
+            Pickable::IGNORE,
+        )],
+    ));
+    if auto_focus {
+        button.insert(AutoFocus);
+    }
+    button.id()
 }
 
 /// A simple button with text and an action defined as an [`Observer`]. The button's layout is provided by `button_bundle`.

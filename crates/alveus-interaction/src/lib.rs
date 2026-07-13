@@ -12,14 +12,32 @@ use alveus_components::{
 };
 use alveus_configs::{care_menu_options, item_display_name, prep_recipe_for};
 use alveus_content::{ItemId, can_interact};
+use alveus_menus_models::ListMenuState;
 use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
 use alveus_types::{AnimalId, CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat};
 use bevy::prelude::*;
 
-// Compatibility re-exports: Rust callers and BRP clients keep the established
-// `alveus_interaction` API while the presentation-neutral resources live below
-// both interaction behaviour and menu rendering.
-pub use alveus_components::{CareMenuState, PlayerSatchel};
+// Compatibility re-export: the satchel remains available from the established
+// interaction API even though its shared storage type lives below this crate.
+pub use alveus_components::PlayerSatchel;
+
+/// Care-specific context wrapped around the shared list-menu model.
+/// `list.cursor` is authoritative for keyboard, pointer, and BRP interaction.
+#[derive(Resource, Debug, Default, Clone, Reflect)]
+#[reflect(Resource)]
+pub struct CareMenuState {
+    pub menu_id: Option<CareMenuId>,
+    pub list: ListMenuState<ItemId>,
+}
+
+impl CareMenuState {
+    pub fn new(menu_id: Option<CareMenuId>, options: impl IntoIterator<Item = ItemId>) -> Self {
+        Self {
+            menu_id,
+            list: ListMenuState::new(options),
+        }
+    }
+}
 
 /// Adds player care interactions.
 ///
@@ -477,18 +495,14 @@ pub fn open_care_menu(
     care_menu: &mut CareMenuState,
     next_menu: &mut NextState<Menu>,
 ) {
-    care_menu.menu_id = Some(menu_id);
-    care_menu.options = care_menu_options(menu_id).to_vec();
-    care_menu.cursor = 0;
+    *care_menu = CareMenuState::new(Some(menu_id), care_menu_options(menu_id).iter().copied());
     next_menu.set(Menu::CareItemPicker);
 }
 
 fn open_care_menu_in_world(world: &mut World, menu_id: CareMenuId) {
     {
         let mut care_menu = world.resource_mut::<CareMenuState>();
-        care_menu.menu_id = Some(menu_id);
-        care_menu.options = care_menu_options(menu_id).to_vec();
-        care_menu.cursor = 0;
+        *care_menu = CareMenuState::new(Some(menu_id), care_menu_options(menu_id).iter().copied());
     }
     world
         .resource_mut::<NextState<Menu>>()
@@ -496,22 +510,13 @@ fn open_care_menu_in_world(world: &mut World, menu_id: CareMenuId) {
 }
 
 pub fn care_menu_move_cursor(care_menu: &mut CareMenuState, delta: i32) {
-    if care_menu.options.is_empty() {
-        return;
-    }
-    let len = care_menu.options.len() as i32;
-    let next = (care_menu.cursor as i32 + delta).rem_euclid(len) as usize;
-    care_menu.cursor = next;
+    care_menu.list.move_cursor(delta);
 }
 
 /// Select an available care-menu row. UI hover/click adapters use this same
 /// authoritative cursor as keyboard, gamepad, and BRP commands.
 pub fn care_menu_set_cursor(care_menu: &mut CareMenuState, index: usize) -> bool {
-    if index >= care_menu.options.len() || care_menu.cursor == index {
-        return false;
-    }
-    care_menu.cursor = index;
-    true
+    care_menu.list.set_cursor(index)
 }
 
 pub const EMPTY_CARE_MENU_MESSAGE: &str = "No items are available";
@@ -522,8 +527,8 @@ fn selected_care_menu_item(care_menu: &CareMenuState) -> Result<ItemId, &'static
         return Err(MISSING_CARE_MENU_MESSAGE);
     }
     care_menu
-        .options
-        .get(care_menu.cursor)
+        .list
+        .selected()
         .copied()
         .ok_or(EMPTY_CARE_MENU_MESSAGE)
 }

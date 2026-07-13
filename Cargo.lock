@@ -335,6 +335,7 @@ dependencies = [
  "alveus-components",
  "alveus-configs",
  "alveus-content",
+ "alveus-menus-models",
  "alveus-stats",
  "alveus-types",
  "bevy",
@@ -352,9 +353,18 @@ dependencies = [
  "alveus-components",
  "alveus-configs",
  "alveus-interaction",
+ "alveus-menus-models",
  "alveus-theme",
  "alveus-types",
  "bevy",
+]
+
+[[package]]
+name = "alveus-menus-models"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_reflect",
 ]
 
 [[package]]

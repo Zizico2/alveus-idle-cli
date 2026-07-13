@@ -5,6 +5,7 @@ members = [
     "crates/alveus-types",
     "crates/alveus-configs",
     "crates/alveus-app",
+    "crates/alveus-menus-models",
     "crates/alveus-components",
     "crates/alveus-content",
     "crates/alveus-asset-tracking",
@@ -35,6 +36,7 @@ authors = ["Bernardo António Borda d'Água <berna.agua@protonmail.com>"]
 alveus-types = { path = "crates/alveus-types" }
 alveus-configs = { path = "crates/alveus-configs" }
 alveus-app = { path = "crates/alveus-app" }
+alveus-menus-models = { path = "crates/alveus-menus-models" }
 alveus-components = { path = "crates/alveus-components" }
 alveus-content = { path = "crates/alveus-content" }
 alveus-asset-tracking = { path = "crates/alveus-asset-tracking" }
