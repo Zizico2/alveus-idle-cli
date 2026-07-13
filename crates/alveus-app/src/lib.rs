@@ -3,6 +3,7 @@
 //! the single owner that initializes [`Screen`], [`Menu`], and [`Pause`].
 
 use bevy::prelude::*;
+use strum::EnumIter;
 
 /// High-level groupings of systems for the app in the `Update` schedule.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
@@ -25,8 +26,9 @@ pub struct Pause(pub bool);
 pub struct PausableSystems;
 
 /// A room interior the player can be inside.
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Reflect)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
 pub enum InRoom {
+    #[default]
     NutritionHouse,
     PushPopEnclosure,
     /// Reserved for a future pasture interior; not enterable in gameplay yet.
@@ -36,7 +38,7 @@ pub enum InRoom {
 }
 
 /// The game's main screen states.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
 pub enum Screen {
     #[default]
     Splash,
@@ -50,7 +52,7 @@ pub enum Screen {
 }
 
 /// The game's menu states.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
 pub enum Menu {
     #[default]
     None,
@@ -115,26 +117,15 @@ pub fn plugin(app: &mut App) {
 mod tests {
     use super::*;
     use bevy::state::app::StatesPlugin;
+    use strum::IntoEnumIterator;
 
-    const SCREENS: [Screen; 9] = [
-        Screen::Splash,
-        Screen::Title,
-        Screen::Loading,
-        Screen::FatalError,
-        Screen::Gameplay,
-        Screen::InRoom(InRoom::NutritionHouse),
-        Screen::InRoom(InRoom::PushPopEnclosure),
-        Screen::InRoom(InRoom::Pasture),
-        Screen::InRoom(InRoom::ReptileEnclosure),
-    ];
-    const MENUS: [Menu; 6] = [
-        Menu::None,
-        Menu::Main,
-        Menu::Credits,
-        Menu::Settings,
-        Menu::Pause,
-        Menu::CareItemPicker,
-    ];
+    /// Every concrete [`Screen`] value, expanding [`Screen::InRoom`] across
+    /// all [`InRoom`] variants (`EnumIter` alone only yields one default room).
+    fn all_screens() -> impl Iterator<Item = Screen> {
+        Screen::iter()
+            .filter(|screen| !matches!(screen, Screen::InRoom(_)))
+            .chain(InRoom::iter().map(Screen::InRoom))
+    }
 
     fn expected_tile_interaction_policy(screen: Screen, menu: Menu) -> bool {
         match screen {
@@ -159,8 +150,8 @@ mod tests {
 
     #[test]
     fn tile_interaction_policy_covers_every_screen_and_menu_variant() {
-        for screen in SCREENS {
-            for menu in MENUS {
+        for screen in all_screens() {
+            for menu in Menu::iter() {
                 assert_eq!(
                     tile_interaction_allowed(screen, menu),
                     expected_tile_interaction_policy(screen, menu),
