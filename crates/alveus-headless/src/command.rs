@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
-use alveus_app::{InRoom, Menu, Pause, Screen};
+use alveus_app::{InRoom, Menu, Pause, Screen, tile_interaction_enabled_for};
 use alveus_components::{
     BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition,
 };
@@ -247,7 +247,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
                 }
                 return;
             }
-            if *world.resource::<State<Menu>>().get() != Menu::None {
+            let screen = *world.resource::<State<Screen>>().get();
+            let menu = *world.resource::<State<Menu>>().get();
+            if !tile_interaction_enabled_for(screen, menu) {
                 return;
             }
             let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
@@ -264,7 +266,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
         GameCommand::Interact => perform_interact_in_world(world),
         GameCommand::DropItem => perform_drop_in_world(world),
         GameCommand::EnterBuilding => {
-            if world.resource::<State<Screen>>().get() != &Screen::Gameplay {
+            let screen = *world.resource::<State<Screen>>().get();
+            let menu = *world.resource::<State<Menu>>().get();
+            if screen != Screen::Gameplay || !tile_interaction_enabled_for(screen, menu) {
                 return;
             }
             let entrance = {
@@ -297,6 +301,10 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
         }
         GameCommand::ExitRoom => {
             let screen = *world.resource::<State<Screen>>().get();
+            let menu = *world.resource::<State<Menu>>().get();
+            if !tile_interaction_enabled_for(screen, menu) {
+                return;
+            }
             let player_pos = {
                 let mut pos_query = world.query_filtered::<&CurrentTilePosition, With<Player>>();
                 pos_query.single(world).ok().map(|pos| pos.0)

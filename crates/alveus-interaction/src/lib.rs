@@ -1,7 +1,7 @@
 //! Player care interaction dispatch: give, feed, enrich, clean, mini-chore,
 //! open menu, and cleaning hand-off (poop pickup/dump).
 
-use alveus_app::Menu;
+use alveus_app::{Menu, Screen, tile_interaction_enabled, tile_interaction_enabled_for};
 use alveus_cleaning::{
     PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow, try_dump_poop,
     try_pickup_poop,
@@ -10,11 +10,16 @@ use alveus_components::{
     CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
     MovementController, Player, TilePosition,
 };
-use alveus_configs::{SATCHEL_MAX_SLOTS, care_menu_options, item_display_name, prep_recipe_for};
+use alveus_configs::{care_menu_options, item_display_name, prep_recipe_for};
 use alveus_content::{ItemId, can_interact};
 use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
 use alveus_types::{AnimalId, CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat};
 use bevy::prelude::*;
+
+// Compatibility re-exports: Rust callers and BRP clients keep the established
+// `alveus_interaction` API while the presentation-neutral resources live below
+// both interaction behaviour and menu rendering.
+pub use alveus_components::{CareMenuState, PlayerSatchel};
 
 /// Adds player care interactions.
 ///
@@ -49,7 +54,7 @@ impl Plugin for InteractionPlugin {
             .add_systems(OnExit(Menu::None), clear_world_input_state)
             .add_systems(
                 Update,
-                update_interaction_target.run_if(in_state(Menu::None)),
+                update_interaction_target.run_if(tile_interaction_enabled),
             )
             .add_systems(Update, (decay_pickup_message, tick_care_hud_pulse))
             .add_observer(apply_animal_fed)
@@ -138,52 +143,10 @@ pub struct OpenMenu {
     pub prompt: String,
 }
 
-/// Two-slot caretaker satchel. Fill first empty slot; drop removes the first occupied.
-#[derive(Resource, Debug, Clone, Copy, Reflect)]
-#[reflect(Resource)]
-pub struct PlayerSatchel {
-    pub slots: [Option<ItemId>; SATCHEL_MAX_SLOTS as usize],
-}
-
-impl Default for PlayerSatchel {
-    fn default() -> Self {
-        Self {
-            slots: [None; SATCHEL_MAX_SLOTS as usize],
-        }
-    }
-}
-
-impl PlayerSatchel {
-    pub fn occupied_count(&self) -> u8 {
-        self.slots.iter().filter(|s| s.is_some()).count() as u8
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.occupied_count() == 0
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.occupied_count() >= SATCHEL_MAX_SLOTS
-    }
-
-    pub fn first_item(&self) -> Option<ItemId> {
-        self.slots.iter().flatten().copied().next()
-    }
-}
-
 #[derive(Resource, Debug, Default, Reflect)]
 #[reflect(Resource)]
 pub struct ActiveInteractionTarget {
     pub interactable: Option<Entity>,
-}
-
-/// State for [`Menu::CareItemPicker`].
-#[derive(Resource, Debug, Default, Clone, Reflect)]
-#[reflect(Resource)]
-pub struct CareMenuState {
-    pub menu_id: Option<CareMenuId>,
-    pub options: Vec<ItemId>,
-    pub cursor: usize,
 }
 
 /// Emitted when the player successfully feeds an animal at a dish.
@@ -245,7 +208,9 @@ pub fn perform_drop(satchel: &mut PlayerSatchel, commands: &mut Commands) {
 
 /// Drops an item only while a live player owns world input.
 pub fn perform_drop_in_world(world: &mut World) {
-    if *world.resource::<State<Menu>>().get() != Menu::None || !has_player(world) {
+    let screen = *world.resource::<State<Screen>>().get();
+    let menu = *world.resource::<State<Menu>>().get();
+    if !tile_interaction_enabled_for(screen, menu) || !has_player(world) {
         return;
     }
 
@@ -294,7 +259,8 @@ pub fn perform_interact_in_world(world: &mut World) {
         confirm_care_menu_in_world(world);
         return;
     }
-    if menu != Menu::None || !has_player(world) {
+    let screen = *world.resource::<State<Screen>>().get();
+    if !tile_interaction_enabled_for(screen, menu) || !has_player(world) {
         return;
     }
 
@@ -538,15 +504,33 @@ pub fn care_menu_move_cursor(care_menu: &mut CareMenuState, delta: i32) {
     care_menu.cursor = next;
 }
 
+pub const EMPTY_CARE_MENU_MESSAGE: &str = "No items are available";
+pub const MISSING_CARE_MENU_MESSAGE: &str = "This item menu is unavailable";
+
+fn selected_care_menu_item(care_menu: &CareMenuState) -> Result<ItemId, &'static str> {
+    if care_menu.menu_id.is_none() {
+        return Err(MISSING_CARE_MENU_MESSAGE);
+    }
+    care_menu
+        .options
+        .get(care_menu.cursor)
+        .copied()
+        .ok_or(EMPTY_CARE_MENU_MESSAGE)
+}
+
 pub fn confirm_care_menu(
     care_menu: &mut CareMenuState,
     satchel: &mut PlayerSatchel,
     next_menu: &mut NextState<Menu>,
     commands: &mut Commands,
 ) {
-    let Some(item) = care_menu.options.get(care_menu.cursor).copied() else {
-        cancel_care_menu(care_menu, next_menu);
-        return;
+    let item = match selected_care_menu_item(care_menu) {
+        Ok(item) => item,
+        Err(message) => {
+            set_pickup_message(commands, message.to_string());
+            cancel_care_menu(care_menu, next_menu);
+            return;
+        }
     };
     match try_give_item(satchel, item) {
         Ok(()) => {
@@ -561,13 +545,20 @@ pub fn confirm_care_menu(
 }
 
 pub fn confirm_care_menu_in_world(world: &mut World) {
-    let item = {
+    let selected_item = {
         let care_menu = world.resource::<CareMenuState>();
-        care_menu.options.get(care_menu.cursor).copied()
+        selected_care_menu_item(care_menu)
     };
-    let Some(item) = item else {
-        cancel_care_menu_in_world(world);
-        return;
+    let item = match selected_item {
+        Ok(item) => item,
+        Err(message) => {
+            world.commands().insert_resource(LastPickupMessage {
+                text: Some(message.to_string()),
+                timer: Timer::from_seconds(2.5, TimerMode::Once),
+            });
+            cancel_care_menu_in_world(world);
+            return;
+        }
     };
     let result = {
         let mut satchel = world.resource_mut::<PlayerSatchel>();

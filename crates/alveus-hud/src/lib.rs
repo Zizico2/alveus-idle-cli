@@ -4,8 +4,8 @@ use alveus_components::{CareHudPulse, LastPickupMessage};
 use alveus_configs::{ANIMALS_DATA, NEGLECT_UPKEEP_THRESHOLD, STAT_SCALE};
 use alveus_content::item_display_name;
 use alveus_interaction::{
-    ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem,
-    MiniChore, OpenMenu, PlayerSatchel,
+    ActiveInteractionTarget, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem, MiniChore, OpenMenu,
+    PlayerSatchel,
 };
 use alveus_stats::{AnimalEnclosure, AnimalStat, AnimalStats, EnclosureStats, SanctuaryUpkeep};
 use alveus_types::{AnimalId, EnclosureId, Stat};
@@ -219,7 +219,6 @@ fn spawn_hud_system(
                         row_gap: Val::Px(6.0),
                         border_radius: BorderRadius::all(Val::Px(10.0)),
                         border: UiRect::all(Val::Px(1.0)),
-                        display: Display::None,
                         ..default()
                     },
                     BackgroundColor(Color::srgba(0.1, 0.1, 0.12, 0.75)),
@@ -598,16 +597,13 @@ fn update_room_feedback_hud_system(world: &mut World) {
     let menu = *world.resource::<State<Menu>>().get();
     let satchel = *world.resource::<PlayerSatchel>();
     let wheelbarrow_count = world.resource::<PoopWheelbarrow>().count();
-    let care_menu = world.resource::<CareMenuState>().clone();
     let pulse_active = world.resource::<CareHudPulse>().is_active();
     let pickup_message = world.resource::<LastPickupMessage>().clone();
     let active_entity = world.resource::<ActiveInteractionTarget>().interactable;
 
     let in_cleaning_room = matches!(screen, Screen::InRoom(InRoom::PushPopEnclosure));
 
-    let prompt_message = if menu == Menu::CareItemPicker {
-        Some(care_menu_prompt(&care_menu))
-    } else if menu == Menu::None {
+    let prompt_message = if menu == Menu::None {
         active_entity.and_then(|entity| {
             if let Some(give) = world.get::<GiveItem>(entity) {
                 return Some(format!("Press [Space] to {}", give.prompt));
@@ -664,30 +660,14 @@ fn update_room_feedback_hud_system(world: &mut World) {
         }
     }
 
-    let in_interactive_room = matches!(
-        screen,
-        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
-    );
-    let on_overview = matches!(screen, Screen::Gameplay);
-    let show_satchel = in_interactive_room || on_overview;
-    let satchel_display = if show_satchel {
-        Display::Flex
-    } else {
-        Display::None
-    };
-
     let pulse_color = if pulse_active {
         Color::srgba(0.25, 0.55, 0.35, 0.85)
     } else {
         Color::srgba(0.1, 0.1, 0.12, 0.75)
     };
 
-    let mut satchel_root_q =
-        world.query_filtered::<(&mut Node, &mut BackgroundColor), With<SatchelHudRoot>>();
-    for (mut node, mut bg) in satchel_root_q.iter_mut(world) {
-        if node.display != satchel_display {
-            node.display = satchel_display;
-        }
+    let mut satchel_root_q = world.query_filtered::<&mut BackgroundColor, With<SatchelHudRoot>>();
+    for mut bg in satchel_root_q.iter_mut(world) {
         if bg.0 != pulse_color {
             bg.0 = pulse_color;
         }
@@ -727,18 +707,6 @@ fn update_room_feedback_hud_system(world: &mut World) {
             txt.0 = wheelbarrow_label.clone();
         }
     }
-}
-
-fn care_menu_prompt(care_menu: &CareMenuState) -> String {
-    if care_menu.options.is_empty() {
-        return "Fridge empty — [Esc] to close".to_string();
-    }
-    let mut lines = vec!["Fridge — Up/Down, Space to take, Esc to close".to_string()];
-    for (i, item) in care_menu.options.iter().enumerate() {
-        let marker = if i == care_menu.cursor { ">" } else { " " };
-        lines.push(format!("{marker} {}", item_display_name(*item)));
-    }
-    lines.join("\n")
 }
 
 /// Format the satchel card body: always both slots (+ drop hint when non-empty).
