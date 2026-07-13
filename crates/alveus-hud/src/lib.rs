@@ -219,7 +219,6 @@ fn spawn_hud_system(
                         row_gap: Val::Px(6.0),
                         border_radius: BorderRadius::all(Val::Px(10.0)),
                         border: UiRect::all(Val::Px(1.0)),
-                        display: Display::None,
                         ..default()
                     },
                     BackgroundColor(Color::srgba(0.1, 0.1, 0.12, 0.75)),
@@ -661,32 +660,14 @@ fn update_room_feedback_hud_system(world: &mut World) {
         }
     }
 
-    let in_interactive_room = matches!(
-        screen,
-        Screen::InRoom(InRoom::NutritionHouse) | Screen::InRoom(InRoom::PushPopEnclosure)
-    );
-    let on_overview = matches!(screen, Screen::Gameplay);
-    // The picker overlay includes capacity/occupancy. Hide the separate HUD card
-    // while it is open so the centered card has one clear inventory summary.
-    let show_satchel = menu != Menu::CareItemPicker && (in_interactive_room || on_overview);
-    let satchel_display = if show_satchel {
-        Display::Flex
-    } else {
-        Display::None
-    };
-
     let pulse_color = if pulse_active {
         Color::srgba(0.25, 0.55, 0.35, 0.85)
     } else {
         Color::srgba(0.1, 0.1, 0.12, 0.75)
     };
 
-    let mut satchel_root_q =
-        world.query_filtered::<(&mut Node, &mut BackgroundColor), With<SatchelHudRoot>>();
-    for (mut node, mut bg) in satchel_root_q.iter_mut(world) {
-        if node.display != satchel_display {
-            node.display = satchel_display;
-        }
+    let mut satchel_root_q = world.query_filtered::<&mut BackgroundColor, With<SatchelHudRoot>>();
+    for mut bg in satchel_root_q.iter_mut(world) {
         if bg.0 != pulse_color {
             bg.0 = pulse_color;
         }
