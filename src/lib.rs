@@ -63,6 +63,11 @@ pub fn run_with_mode(mode: RunMode) -> AppExit {
     };
     let mut app = build_app(mode);
     if step_mode {
+        // Enhanced input installs its registered context schedules during
+        // plugin finalization. `App::run` does this automatically; the manual
+        // deterministic loop must do it explicitly.
+        app.finish();
+        app.cleanup();
         run_headless_loop(&mut app)
     } else {
         app.run()

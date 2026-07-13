@@ -6,18 +6,15 @@ use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
 use alveus_app::{InRoom, Menu, Pause, Screen, tile_interaction_enabled_for};
-use alveus_components::{
-    BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition,
-};
+use alveus_components::{BuildingEntrance, MovementController, MovementIntent, Player};
 use alveus_interaction::{
     CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
     perform_drop_in_world, perform_interact_in_world,
 };
-use alveus_menus::PlayClickEvent;
-use alveus_screens::gameplay::spawn_pause_overlay;
+use alveus_screens::{begin_play_in_world, gameplay::spawn_pause_overlay};
 use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
 use alveus_types::Stat;
-use alveus_world::room::{PlayerSpawnPoint, try_enter_room};
+use alveus_world::room::{force_exit_room_in_world, try_enter_room};
 
 /// The complete, semantic verb set for the game.
 ///
@@ -49,13 +46,14 @@ pub enum GameCommand {
     /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
     /// to advance a single tile predictably. While [`Menu::CareItemPicker`] is
-    /// open, Up/Down moves its cursor instead; other overlay menus make this a
-    /// no-op. Requires an active [`Player`] entity.
+    /// open, a single Up/Down press (keyboard, D-pad, or left stick) moves its
+    /// cursor instead; other overlay menus make this a no-op. Requires an
+    /// active [`Player`] entity.
     Move(MovementIntent),
     /// Clear the player's movement intent (stop walking).
     MoveStop,
     /// Interact with whatever is currently in front of / under the player
-    /// (`Space` in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
+    /// (`Space` / gamepad South in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
     /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
     /// menu (`OpenMenu`), pick up a `PoopPile`, or empty the wheelbarrow at
     /// `PoopDump`. While [`Menu::CareItemPicker`] is open, confirms the
@@ -63,24 +61,24 @@ pub enum GameCommand {
     /// overlay, it is also a no-op without an active [`Player`] and interaction
     /// target.
     Interact,
-    /// Drop the first occupied satchel slot (`K` in-game). No-op if empty.
+    /// Drop the first occupied satchel slot (`K` / gamepad West in-game). No-op if empty.
     /// Requires an active [`Player`] and no overlay menu.
     DropItem,
-    /// Enter the building whose entrance the player is standing on (`Enter`
-    /// in-game). Only valid while in [`Screen::Gameplay`] and while the player
+    /// Enter the building whose entrance the player is standing on (`Enter` /
+    /// gamepad North in-game). Only valid while in [`Screen::Gameplay`] and while the player
     /// has a `BuildingEntrance` component (i.e. actually on an entrance tile);
     /// otherwise it is a no-op.
     EnterBuilding,
     /// Leave the current room interior back to the overview (`Backspace` /
-    /// walking onto the door in-game). No-op unless currently in an `InRoom`
+    /// gamepad East / walking onto the door in-game). No-op unless currently in an `InRoom`
     /// state. Force-exits regardless of the player's tile within the room.
     ExitRoom,
-    /// Toggle the pause menu during gameplay (`P` / `Esc`).
+    /// Toggle the pause menu during gameplay (`P` / `Esc` / gamepad Start).
     PauseToggle,
     /// Press "Play" on the title screen — equivalent to the main-menu button.
     /// Transitions Title -> Gameplay.
     Play,
-    /// Go back one level in the current menu (`Esc` in menus): Settings/Credits
+    /// Go back one level in the current menu (`Esc` / `P` / gamepad East or Start): Settings/Credits
     /// -> previous menu, Pause -> resume, CareItemPicker -> close picker.
     Back,
     /// Skip the splash screen (`Esc` during splash). Transitions to Title.
@@ -317,21 +315,8 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             if !tile_interaction_enabled_for(screen, menu) {
                 return;
             }
-            let player_pos = {
-                let mut pos_query = world.query_filtered::<&CurrentTilePosition, With<Player>>();
-                pos_query.single(world).ok().map(|pos| pos.0)
-            };
-            let Some(player_pos) = player_pos else {
-                return;
-            };
-            match screen {
-                Screen::InRoom(InRoom::NutritionHouse) => {
-                    exit_room_world(world, player_pos, TilePosition { x: 33, y: 12 });
-                }
-                Screen::InRoom(InRoom::PushPopEnclosure) => {
-                    exit_room_world(world, player_pos, TilePosition { x: 40, y: 33 });
-                }
-                _ => {}
+            if let Screen::InRoom(room) = screen {
+                force_exit_room_in_world(world, room);
             }
         }
         GameCommand::PauseToggle => {
@@ -350,7 +335,7 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             }
         }
         GameCommand::Play => {
-            world.trigger(PlayClickEvent);
+            begin_play_in_world(world);
         }
         GameCommand::Back => {
             let screen = *world.resource::<State<Screen>>().get();
@@ -416,14 +401,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             world.resource_mut::<StepRequest>().add(frames);
         }
     }
-}
-
-fn exit_room_world(world: &mut World, _player_pos: TilePosition, exit_spawn: TilePosition) {
-    info!("Exiting room interior!");
-    world.resource_mut::<PlayerSpawnPoint>().position = exit_spawn;
-    world
-        .resource_mut::<NextState<Screen>>()
-        .set(Screen::Gameplay);
 }
 
 fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {

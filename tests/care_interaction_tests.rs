@@ -38,8 +38,11 @@ fn care_test_app(save_path: &str) -> App {
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
     app.add_plugins(MinimalPlugins);
+    app.add_plugins((
+        bevy::input::InputPlugin,
+        bevy::input_focus::InputFocusPlugin,
+    ));
     app.add_plugins(alveus_app::plugin);
-    app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
     app.init_resource::<CapturedCareFeedback>();
     app.add_plugins((
@@ -53,6 +56,8 @@ fn care_test_app(save_path: &str) -> App {
     app.world_mut()
         .spawn((Player, CurrentTilePosition(TilePosition { x: 0, y: 0 })));
     app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.finish();
+    app.cleanup();
     app.update();
     app
 }
@@ -317,6 +322,7 @@ fn keyboard_picker_navigation_moves_once_per_press() {
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
     app.update();
+    app.update(); // Let require_reset observe neutral bindings after the context switch.
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -536,6 +542,7 @@ fn keyboard_space_confirms_care_menu_via_game_command() {
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
     app.update();
+    app.update(); // Let require_reset observe neutral bindings after the context switch.
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -567,6 +574,7 @@ fn keyboard_escape_cancels_care_menu_via_game_command() {
         .resource_mut::<NextState<Menu>>()
         .set(Menu::CareItemPicker);
     app.update();
+    app.update(); // Let require_reset observe neutral bindings after the context switch.
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()

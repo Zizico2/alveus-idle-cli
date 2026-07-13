@@ -1,5 +1,5 @@
 use alveus_app::Screen;
-use alveus_menus::PlayClickEvent;
+use alveus_screens::begin_play_in_world;
 use alveus_stats::{SavePath, StatsPlugin};
 use alveus_types::Stat;
 use bevy::prelude::*;
@@ -55,15 +55,12 @@ fn test_play_crash_on_invalid_save() {
     app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
 
-    // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions
     app.update();
 
-    // Trigger PlayClickEvent directly
-    app.world_mut().trigger(PlayClickEvent);
+    begin_play_in_world(app.world_mut());
 
     // Update app: should transition to Gameplay, load invalid save, and crash
     app.update();
@@ -86,15 +83,12 @@ fn test_save_exclude_and_hydration() {
     app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath(test_save_path.to_string()));
 
-    // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions (this spawns default stats because no save exists)
     app.update();
 
-    // Trigger PlayClickEvent directly to gameplay
-    app.world_mut().trigger(PlayClickEvent);
+    begin_play_in_world(app.world_mut());
     app.update();
 
     // Verify screen is gameplay
@@ -254,15 +248,12 @@ fn test_play_without_save() {
     app.init_resource::<alveus_asset_tracking::ResourceHandles>();
     app.insert_resource(SavePath("nonexistent_play_without_save.ron".to_string()));
 
-    // Manually register only the play click observer and stats plugin
-    app.add_observer(alveus_menus::main_menu::handle_play_click);
     app.add_plugins(StatsPlugin);
 
     // Initialize state transitions
     app.update();
 
-    // Trigger PlayClickEvent directly
-    app.world_mut().trigger(PlayClickEvent);
+    begin_play_in_world(app.world_mut());
 
     // Update app: should transition to Gameplay screen and initialize stats without crashing
     app.update();

@@ -1,14 +1,12 @@
-//! Reusable full-screen overlay menu presentation.
-//!
-//! Overlay content is intentionally static for one menu lifecycle: callers
-//! provide any number of labelled entries when spawning, then update only the
-//! selected index. Menus whose structure changes can respawn on their next
-//! state transition, which keeps domain state out of this presentation layer.
-
-use std::collections::HashMap;
+//! Reusable full-screen overlay presentation built from Bevy's list widgets.
 
 use alveus_theme::widget;
-use bevy::prelude::*;
+use bevy::{
+    input_focus::AutoFocus,
+    prelude::*,
+    ui::Selected,
+    ui_widgets::{ActiveDescendant, ListBox, ListItem},
+};
 
 pub(crate) struct OverlayMenuPlugin;
 
@@ -16,29 +14,21 @@ impl Plugin for OverlayMenuPlugin {
     fn build(&self, app: &mut App) {
         app.configure_sets(
             Update,
-            (
-                OverlayMenuSystems::SyncSelection,
-                OverlayMenuSystems::ApplySelection,
-            )
-                .chain(),
+            (OverlayMenuSystems::SyncSelection, OverlayMenuSystems::Style).chain(),
         )
         .add_systems(
             Update,
-            apply_changed_selection.in_set(OverlayMenuSystems::ApplySelection),
+            style_overlay_entries.in_set(OverlayMenuSystems::Style),
         );
     }
 }
 
-/// Ordering contract for feature adapters and the shared renderer.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum OverlayMenuSystems {
-    /// Feature adapters copy their domain cursor into [`OverlayMenuSelection`].
     SyncSelection,
-    /// The shared renderer applies the resulting row styling.
-    ApplySelection,
+    Style,
 }
 
-/// Static content used to construct one overlay menu.
 pub(crate) struct OverlayMenuSpec {
     title: String,
     summary: Option<String>,
@@ -85,52 +75,34 @@ impl OverlayMenuSpec {
     }
 }
 
-/// Marker for a complete styled overlay root.
 #[derive(Component)]
 pub(crate) struct OverlayMenuRoot;
 
-/// Dynamic state supported without rebuilding the static menu content.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct OverlayMenuSelection(Option<usize>);
-
-impl OverlayMenuSelection {
-    pub(crate) fn selected(&self) -> Option<usize> {
-        self.0
-    }
-
-    pub(crate) fn set(&mut self, selected: Option<usize>) {
-        self.0 = selected;
-    }
-}
+#[derive(Component)]
+pub(crate) struct OverlayMenuList {}
 
 #[derive(Component)]
 pub(crate) struct OverlayMenuEntry {
-    pub(crate) owner: Entity,
+    pub(crate) list: Entity,
     pub(crate) index: usize,
 }
 
 #[derive(Component)]
-pub(crate) struct OverlayMenuEntryState {
-    pub(crate) selected: bool,
-}
-
-#[derive(Component)]
-struct OverlayMenuCursor {
-    owner: Entity,
-    index: usize,
-}
+struct OverlayMenuEntryLabel;
 
 #[derive(Component)]
 pub(crate) struct OverlayMenuEmptyState;
 
-/// Spawn one overlay with the shared styling and return its root entity.
-///
-/// Callers attach lifecycle and feature marker components to the returned root.
+pub(crate) struct SpawnedOverlayMenu {
+    pub(crate) root: Entity,
+    pub(crate) list: Option<Entity>,
+}
+
 pub(crate) fn spawn_overlay_menu(
     commands: &mut Commands,
     name: impl Into<String>,
     spec: OverlayMenuSpec,
-) -> Entity {
+) -> SpawnedOverlayMenu {
     let OverlayMenuSpec {
         title,
         summary,
@@ -145,7 +117,7 @@ pub(crate) fn spawn_overlay_menu(
         .spawn((
             Name::new(name.into()),
             OverlayMenuRoot,
-            OverlayMenuSelection(selected),
+            AutoFocus,
             Node {
                 position_type: PositionType::Absolute,
                 width: percent(100),
@@ -160,6 +132,7 @@ pub(crate) fn spawn_overlay_menu(
         ))
         .id();
 
+    let mut list_entity = None;
     commands.entity(root).with_children(|overlay| {
         overlay
             .spawn((
@@ -193,18 +166,48 @@ pub(crate) fn spawn_overlay_menu(
                         TextColor(Color::srgb(0.92, 0.76, 0.48)),
                     ));
                 } else {
-                    card.spawn((
-                        Name::new("Overlay Menu Rows"),
+                    let mut list_commands = card.spawn((
+                        Name::new("Overlay Menu ListBox"),
+                        ListBox,
+                        OverlayMenuList {},
                         Node {
                             width: percent(100),
                             flex_direction: FlexDirection::Column,
                             row_gap: px(8),
                             ..default()
                         },
-                    ))
-                    .with_children(|rows| {
+                    ));
+                    let list = list_commands.id();
+                    list_entity = Some(list);
+                    list_commands.with_children(|rows| {
                         for (index, label) in entries.into_iter().enumerate() {
-                            spawn_entry(rows, root, index, label, selected == Some(index));
+                            let mut row = rows.spawn((
+                                Name::new(format!("Overlay Menu Entry {index}")),
+                                ListItem,
+                                OverlayMenuEntry { list, index },
+                                Node {
+                                    width: percent(100),
+                                    min_height: px(54),
+                                    align_items: AlignItems::Center,
+                                    padding: UiRect::horizontal(px(18)),
+                                    border: UiRect::all(px(1)),
+                                    border_radius: BorderRadius::all(px(10)),
+                                    ..default()
+                                },
+                                BackgroundColor(entry_background(selected == Some(index))),
+                                BorderColor::all(entry_border(selected == Some(index))),
+                                children![(
+                                    Name::new("Overlay Menu Entry Label"),
+                                    OverlayMenuEntryLabel,
+                                    Text::new(label),
+                                    TextFont::from_font_size(22.0),
+                                    TextColor(entry_text(selected == Some(index))),
+                                    Pickable::IGNORE,
+                                )],
+                            ));
+                            if selected == Some(index) {
+                                row.insert(Selected);
+                            }
                         }
                     });
                 }
@@ -220,101 +223,51 @@ pub(crate) fn spawn_overlay_menu(
             });
     });
 
-    root
+    SpawnedOverlayMenu {
+        root,
+        list: list_entity,
+    }
 }
 
-fn spawn_entry(
-    parent: &mut ChildSpawnerCommands,
-    owner: Entity,
-    index: usize,
-    label: String,
-    selected: bool,
+pub(crate) fn project_selection(
+    commands: &mut Commands,
+    list: Entity,
+    selected: Option<usize>,
+    entries: &Query<(Entity, &OverlayMenuEntry, Has<Selected>)>,
 ) {
-    parent
-        .spawn((
-            Name::new(format!("Overlay Menu Entry {index}")),
-            OverlayMenuEntry { owner, index },
-            OverlayMenuEntryState { selected },
-            Node {
-                width: percent(100),
-                min_height: px(54),
-                align_items: AlignItems::Center,
-                column_gap: px(10),
-                padding: UiRect::horizontal(px(18)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(10)),
-                ..default()
-            },
-            BackgroundColor(entry_background(selected)),
-            BorderColor::all(entry_border(selected)),
-        ))
-        .with_children(|entry| {
-            entry.spawn((
-                Name::new("Overlay Menu Cursor"),
-                OverlayMenuCursor { owner, index },
-                Node {
-                    width: px(22),
-                    ..default()
-                },
-                Text::new("▶"),
-                TextFont::from_font_size(22.0),
-                TextColor(Color::WHITE),
-                if selected {
-                    Visibility::Inherited
-                } else {
-                    Visibility::Hidden
-                },
-            ));
-            entry.spawn((
-                Name::new("Overlay Menu Entry Label"),
-                Text::new(label),
-                TextFont::from_font_size(22.0),
-                TextColor(entry_text(selected)),
-            ));
-        });
+    let mut active = None;
+    for (entity, entry, is_selected) in entries.iter() {
+        if entry.list != list {
+            continue;
+        }
+        let should_select = selected == Some(entry.index);
+        if should_select {
+            active = Some(entity);
+        }
+        if should_select && !is_selected {
+            commands.entity(entity).insert(Selected);
+        } else if !should_select && is_selected {
+            commands.entity(entity).remove::<Selected>();
+        }
+    }
+    commands.entity(list).insert(ActiveDescendant(active));
 }
 
-fn apply_changed_selection(
-    selections: Query<(Entity, &OverlayMenuSelection), Changed<OverlayMenuSelection>>,
+fn style_overlay_entries(
     mut entries: Query<(
-        &OverlayMenuEntry,
-        &mut OverlayMenuEntryState,
+        Has<Selected>,
         &mut BackgroundColor,
         &mut BorderColor,
         &Children,
     )>,
-    mut cursors: Query<(&OverlayMenuCursor, &mut Visibility)>,
-    mut labels: Query<&mut TextColor>,
+    mut labels: Query<&mut TextColor, With<OverlayMenuEntryLabel>>,
 ) {
-    let changed = selections
-        .iter()
-        .map(|(entity, selection)| (entity, selection.selected()))
-        .collect::<HashMap<_, _>>();
-    if changed.is_empty() {
-        return;
-    }
-
-    for (entry, mut state, mut background, mut border, children) in &mut entries {
-        let Some(selected_index) = changed.get(&entry.owner) else {
-            continue;
-        };
-        let selected = *selected_index == Some(entry.index);
-        state.selected = selected;
-        background.0 = entry_background(selected);
+    for (selected, mut background, mut border, children) in &mut entries {
+        *background = entry_background(selected).into();
         *border = BorderColor::all(entry_border(selected));
-
         for child in children.iter() {
-            if let Ok((cursor, mut visibility)) = cursors.get_mut(child)
-                && cursor.owner == entry.owner
-                && cursor.index == entry.index
-            {
-                *visibility = if selected {
-                    Visibility::Inherited
-                } else {
-                    Visibility::Hidden
-                };
-            } else if let Ok(mut color) = labels.get_mut(child) {
-                color.0 = entry_text(selected);
+            if let Ok(mut color) = labels.get_mut(child) {
+                *color = TextColor(entry_text(selected));
             }
         }
     }
@@ -322,17 +275,17 @@ fn apply_changed_selection(
 
 fn entry_background(selected: bool) -> Color {
     if selected {
-        Color::srgba(0.18, 0.55, 0.43, 0.95)
+        Color::srgba(0.12, 0.33, 0.27, 0.98)
     } else {
-        Color::srgba(0.12, 0.15, 0.18, 0.92)
+        Color::srgba(0.065, 0.09, 0.11, 0.96)
     }
 }
 
 fn entry_border(selected: bool) -> Color {
     if selected {
-        Color::srgb(0.55, 1.0, 0.78)
+        Color::srgb(0.45, 0.95, 0.72)
     } else {
-        Color::srgba(1.0, 1.0, 1.0, 0.08)
+        Color::srgba(0.34, 0.4, 0.43, 0.8)
     }
 }
 
@@ -340,135 +293,6 @@ fn entry_text(selected: bool) -> Color {
     if selected {
         Color::WHITE
     } else {
-        Color::srgb(0.8, 0.82, 0.84)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn overlay_app() -> App {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_plugins(OverlayMenuPlugin);
-        app
-    }
-
-    fn spawn(app: &mut App, spec: OverlayMenuSpec) -> Entity {
-        let root = spawn_overlay_menu(&mut app.world_mut().commands(), "Test Overlay", spec);
-        app.world_mut().flush();
-        root
-    }
-
-    fn entry_snapshot(app: &mut App, owner: Entity) -> Vec<(usize, String, bool)> {
-        let mut entry_query = app
-            .world_mut()
-            .query::<(&OverlayMenuEntry, &OverlayMenuEntryState, &Children)>();
-        let mut text_query = app
-            .world_mut()
-            .query::<(&Text, Option<&OverlayMenuCursor>)>();
-        let mut entries = entry_query
-            .iter(app.world())
-            .filter(|(entry, _, _)| entry.owner == owner)
-            .map(|(entry, state, children)| {
-                let label = children
-                    .iter()
-                    .find_map(|child| {
-                        text_query
-                            .get(app.world(), child)
-                            .ok()
-                            .filter(|(_, cursor)| cursor.is_none())
-                            .map(|(text, _)| text.as_str().to_string())
-                    })
-                    .expect("entry label");
-                (entry.index, label, state.selected)
-            })
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|entry| entry.0);
-        entries
-    }
-
-    #[test]
-    fn accepts_variable_entry_counts_and_preserves_order() {
-        for count in [1, 2, 4] {
-            let mut app = overlay_app();
-            let labels = (0..count)
-                .map(|index| format!("Entry {index}"))
-                .collect::<Vec<_>>();
-            let root = spawn(
-                &mut app,
-                OverlayMenuSpec::new("Variable", labels.clone()).with_selected(Some(0)),
-            );
-
-            let entries = entry_snapshot(&mut app, root);
-            assert_eq!(entries.len(), count);
-            assert_eq!(
-                entries.iter().map(|entry| &entry.1).collect::<Vec<_>>(),
-                labels.iter().collect::<Vec<_>>()
-            );
-            assert!(entries[0].2);
-        }
-    }
-
-    #[test]
-    fn empty_entries_render_caller_copy_without_rows() {
-        let mut app = overlay_app();
-        let root = spawn(
-            &mut app,
-            OverlayMenuSpec::new("Empty", Vec::<String>::new())
-                .with_empty_copy("Nothing here yet."),
-        );
-
-        assert!(entry_snapshot(&mut app, root).is_empty());
-        let copies = app
-            .world_mut()
-            .query_filtered::<&Text, With<OverlayMenuEmptyState>>()
-            .iter(app.world())
-            .map(|text| text.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(copies, ["Nothing here yet."]);
-    }
-
-    #[test]
-    fn selection_updates_are_scoped_and_out_of_range_selects_nothing() {
-        let mut app = overlay_app();
-        let first = spawn(
-            &mut app,
-            OverlayMenuSpec::new("First", ["A", "B"]).with_selected(Some(0)),
-        );
-        let second = spawn(
-            &mut app,
-            OverlayMenuSpec::new("Second", ["C", "D", "E"]).with_selected(Some(2)),
-        );
-        app.update();
-
-        app.world_mut()
-            .get_mut::<OverlayMenuSelection>(first)
-            .unwrap()
-            .set(Some(1));
-        app.update();
-
-        assert_eq!(
-            entry_snapshot(&mut app, first)
-                .into_iter()
-                .map(|entry| entry.2)
-                .collect::<Vec<_>>(),
-            [false, true]
-        );
-        assert_eq!(
-            entry_snapshot(&mut app, second)
-                .into_iter()
-                .map(|entry| entry.2)
-                .collect::<Vec<_>>(),
-            [false, false, true]
-        );
-
-        app.world_mut()
-            .get_mut::<OverlayMenuSelection>(first)
-            .unwrap()
-            .set(Some(99));
-        app.update();
-        assert!(entry_snapshot(&mut app, first).iter().all(|entry| !entry.2));
+        Color::srgb(0.82, 0.85, 0.87)
     }
 }

@@ -2,8 +2,8 @@ use alveus_components::TilePosition;
 use alveus_configs::{SATCHEL_MAX_SLOTS, care_menu_options};
 use alveus_content::{ItemId, can_interact};
 use alveus_interaction::{
-    CareMenuState, PlayerSatchel, care_menu_move_cursor, satchel_contains, try_drop_item,
-    try_enrich_animal, try_feed_animal, try_give_item, try_take_item,
+    CareMenuState, PlayerSatchel, care_menu_move_cursor, care_menu_set_cursor, satchel_contains,
+    try_drop_item, try_enrich_animal, try_feed_animal, try_give_item, try_take_item,
 };
 use alveus_types::{CareMenuId, ChoreId};
 
@@ -135,6 +135,11 @@ fn test_open_menu_confirm_and_cancel() {
     assert_eq!(care_menu.cursor, 1);
     care_menu_move_cursor(&mut care_menu, 1);
     assert_eq!(care_menu.cursor, 0);
+    assert!(care_menu_set_cursor(&mut care_menu, 1));
+    assert_eq!(care_menu.cursor, 1);
+    assert!(!care_menu_set_cursor(&mut care_menu, 99));
+    assert_eq!(care_menu.cursor, 1);
+    assert!(care_menu_set_cursor(&mut care_menu, 0));
 
     let mut satchel = PlayerSatchel::default();
     let item = care_menu.options[care_menu.cursor];

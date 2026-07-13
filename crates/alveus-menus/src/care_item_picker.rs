@@ -1,13 +1,15 @@
 //! Care-specific adapter for the reusable overlay menu presentation.
 
 use alveus_app::Menu;
+use alveus_command::GameCommand;
 use alveus_components::{CareMenuState, PlayerSatchel};
 use alveus_configs::{SATCHEL_MAX_SLOTS, item_display_name};
+use alveus_interaction::care_menu_set_cursor;
 use alveus_types::CareMenuId;
 use bevy::prelude::*;
 
 use crate::overlay_menu::{
-    OverlayMenuSelection, OverlayMenuSpec, OverlayMenuSystems, spawn_overlay_menu,
+    OverlayMenuEntry, OverlayMenuSpec, OverlayMenuSystems, project_selection, spawn_overlay_menu,
 };
 
 pub(super) fn plugin(app: &mut App) {
@@ -18,12 +20,17 @@ pub(super) fn plugin(app: &mut App) {
             sync_care_selection
                 .run_if(in_state(Menu::CareItemPicker))
                 .in_set(OverlayMenuSystems::SyncSelection),
-        );
+        )
+        .add_observer(hover_care_row)
+        .add_observer(click_care_row);
 }
 
 /// Stable marker for lifecycle tests and UI inspection.
 #[derive(Component)]
 pub struct CareItemPickerOverlay;
+
+#[derive(Component)]
+struct CareItemPickerList;
 
 fn menu_title(menu_id: Option<CareMenuId>) -> &'static str {
     match menu_id {
@@ -67,35 +74,56 @@ fn spawn_care_item_picker(
         ))
         .with_selected(selected_index(&care_menu))
         .with_empty_copy(empty_copy(&care_menu))
-        .with_controls("↑/↓ Select   Space/Enter Take   Esc Back");
+        .with_controls("↑/↓ Select   Space/Enter/A Take   Esc/P/B Back");
 
-    let root = spawn_overlay_menu(&mut commands, "Care Item Picker Overlay", spec);
+    let spawned = spawn_overlay_menu(&mut commands, "Care Item Picker Overlay", spec);
     commands
-        .entity(root)
+        .entity(spawned.root)
         .insert((CareItemPickerOverlay, DespawnOnExit(Menu::CareItemPicker)));
+    if let Some(list) = spawned.list {
+        commands.entity(list).insert(CareItemPickerList);
+    }
 }
 
 fn sync_care_selection(
+    mut commands: Commands,
     care_menu: Res<CareMenuState>,
-    mut overlay: Single<&mut OverlayMenuSelection, With<CareItemPickerOverlay>>,
+    list: Single<Entity, With<CareItemPickerList>>,
+    entries: Query<(Entity, &OverlayMenuEntry, Has<bevy::ui::Selected>)>,
 ) {
-    if !care_menu.is_changed() {
-        return;
+    project_selection(&mut commands, *list, selected_index(&care_menu), &entries);
+}
+
+fn hover_care_row(
+    over: On<Pointer<Over>>,
+    entries: Query<&OverlayMenuEntry>,
+    mut care_menu: ResMut<CareMenuState>,
+) {
+    if let Ok(entry) = entries.get(over.entity) {
+        care_menu_set_cursor(&mut care_menu, entry.index);
     }
-    let selected = selected_index(&care_menu);
-    if overlay.selected() != selected {
-        overlay.set(selected);
+}
+
+fn click_care_row(
+    mut click: On<Pointer<Click>>,
+    entries: Query<&OverlayMenuEntry>,
+    mut care_menu: ResMut<CareMenuState>,
+    mut commands: Commands,
+) {
+    if let Ok(entry) = entries.get(click.entity) {
+        click.propagate(false);
+        care_menu_set_cursor(&mut care_menu, entry.index);
+        commands.trigger(GameCommand::Continue);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::overlay_menu::{
-        OverlayMenuEmptyState, OverlayMenuEntry, OverlayMenuEntryState, OverlayMenuRoot,
-    };
+    use crate::overlay_menu::{OverlayMenuEmptyState, OverlayMenuEntry, OverlayMenuRoot};
     use alveus_types::ItemId;
     use bevy::state::app::StatesPlugin;
+    use bevy::{input_focus::tab_navigation::TabIndex, ui::Selected, ui_widgets::ListItem};
 
     fn picker_app(care_menu: CareMenuState) -> App {
         let mut app = App::new();
@@ -119,22 +147,21 @@ mod tests {
             .expect("one care overlay root")
     }
 
-    fn care_entries(app: &mut App, root: Entity) -> Vec<(usize, String, bool)> {
+    fn care_entries(app: &mut App) -> Vec<(usize, String, bool)> {
         let mut entry_query = app
             .world_mut()
-            .query::<(&OverlayMenuEntry, &OverlayMenuEntryState, &Children)>();
+            .query::<(&OverlayMenuEntry, Has<Selected>, &Children)>();
         let mut text_query = app.world_mut().query::<&Text>();
         let mut entries = entry_query
             .iter(app.world())
-            .filter(|(entry, _, _)| entry.owner == root)
-            .map(|(entry, state, children)| {
+            .map(|(entry, selected, children)| {
                 let label = children
                     .iter()
                     .filter_map(|child| text_query.get(app.world(), child).ok())
-                    .find(|text| text.as_str() != "▶")
+                    .next()
                     .map(|text| text.as_str().to_string())
                     .expect("entry label");
-                (entry.index, label, state.selected)
+                (entry.index, label, selected)
             })
             .collect::<Vec<_>>();
         entries.sort_by_key(|entry| entry.0);
@@ -171,9 +198,9 @@ mod tests {
             options: vec![ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
             cursor: 0,
         });
-        let root = care_root(&mut app);
+        care_root(&mut app);
 
-        let entries = care_entries(&mut app, root);
+        let entries = care_entries(&mut app);
         assert_eq!(
             entries,
             [
@@ -185,11 +212,34 @@ mod tests {
         app.world_mut().resource_mut::<CareMenuState>().cursor = 1;
         app.update();
         assert_eq!(
-            care_entries(&mut app, root)
+            care_entries(&mut app)
                 .into_iter()
                 .map(|entry| entry.2)
                 .collect::<Vec<_>>(),
             [false, true]
+        );
+    }
+
+    #[test]
+    fn care_rows_are_list_items_without_individual_tab_stops() {
+        let mut app = picker_app(CareMenuState {
+            menu_id: Some(CareMenuId::Fridge),
+            options: vec![ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
+            cursor: 0,
+        });
+        care_root(&mut app);
+        let mut rows = app
+            .world_mut()
+            .query_filtered::<(Entity, &OverlayMenuEntry), With<ListItem>>();
+        let entries = rows
+            .iter(app.world())
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries
+                .iter()
+                .all(|entity| app.world().get::<TabIndex>(*entity).is_none())
         );
     }
 

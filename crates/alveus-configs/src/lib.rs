@@ -35,6 +35,15 @@ pub const AUTOSAVE_INTERVAL_SECS: f32 = 5.0;
 /// Wall-clock seconds before Loading aborts back to Title.
 pub const LOADING_TIMEOUT_SECS: f32 = 15.0;
 
+/// Debug-key stat improvement used by the local development input context.
+pub const DEBUG_STAT_IMPROVE_AMOUNT: Stat = Stat(250);
+
+/// Debug-key all-stat decrease used by the local development input context.
+pub const DEBUG_STAT_WORSEN_AMOUNT: Stat = Stat(100);
+
+/// Simulated hours advanced by the local development fast-forward shortcut.
+pub const DEBUG_ADVANCE_HOURS: f32 = 4.0;
+
 /// Upkeep score at or below this shows the neglect banner (and related Epic 5 effects).
 pub const NEGLECT_UPKEEP_THRESHOLD: f32 = 0.30;
 

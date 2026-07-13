@@ -10,7 +10,7 @@ use alveus_asset_tracking::ResourceHandles;
 use alveus_collision::{
     CollisionMasks, InteriorAssets, LevelAssets, REQUIRED_COLLISION_KEYS, collision_ready,
 };
-use alveus_menus::PlayClickEvent;
+use alveus_screens::begin_play_in_world;
 use bevy::prelude::*;
 
 mod common;
@@ -43,7 +43,7 @@ fn play_reaches_gameplay_within_five_seconds() {
         "test harness should start on Title"
     );
 
-    app.world_mut().trigger(PlayClickEvent);
+    begin_play_in_world(app.world_mut());
     app.update();
 
     let screen = *app.world().resource::<State<Screen>>().get();

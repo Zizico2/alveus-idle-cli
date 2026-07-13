@@ -14,7 +14,6 @@ alveus-interaction.workspace = true
 alveus-stats.workspace = true
 alveus-world.workspace = true
 alveus-screens.workspace = true
-alveus-menus.workspace = true
 
 [features]
 remote = ["bevy/bevy_remote"]

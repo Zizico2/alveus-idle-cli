@@ -504,6 +504,16 @@ pub fn care_menu_move_cursor(care_menu: &mut CareMenuState, delta: i32) {
     care_menu.cursor = next;
 }
 
+/// Select an available care-menu row. UI hover/click adapters use this same
+/// authoritative cursor as keyboard, gamepad, and BRP commands.
+pub fn care_menu_set_cursor(care_menu: &mut CareMenuState, index: usize) -> bool {
+    if index >= care_menu.options.len() || care_menu.cursor == index {
+        return false;
+    }
+    care_menu.cursor = index;
+    true
+}
+
 pub const EMPTY_CARE_MENU_MESSAGE: &str = "No items are available";
 pub const MISSING_CARE_MENU_MESSAGE: &str = "This item menu is unavailable";
 

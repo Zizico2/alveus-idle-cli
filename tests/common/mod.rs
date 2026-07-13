@@ -242,7 +242,6 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
         CollisionMasks, InteriorAssets, LevelAssets, any_required_collision_map_failed,
         collision_ready, required_collision_handles,
     };
-    use alveus_menus::PlayClickEvent;
     use alveus_screens::LoadingTiming;
 
     #[derive(Resource, Debug)]
@@ -258,7 +257,6 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     app.init_resource::<LoadingTiming>();
     app.init_resource::<LevelAssets>()
         .init_resource::<InteriorAssets>();
-    app.add_observer(alveus_menus::main_menu::handle_play_click);
 
     app.add_systems(OnEnter(Screen::Loading), |mut commands: Commands| {
         commands.insert_resource(TestLoadingWatchdog {
@@ -320,6 +318,5 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     // Start on Title so Play routes through Loading when assets are still pending.
     app.insert_resource(NextState::Pending(Screen::Title));
     app.update();
-    let _ = PlayClickEvent;
     app
 }

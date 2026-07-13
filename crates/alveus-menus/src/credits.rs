@@ -1,18 +1,16 @@
 //! The credits menu.
 
-use bevy::{ecs::spawn::SpawnIter, input::common_conditions::input_just_pressed, prelude::*};
+use bevy::ui_widgets::Activate;
+use bevy::{ecs::spawn::SpawnIter, prelude::*};
 
 use alveus_app::Menu;
 use alveus_asset_tracking::LoadResource;
 use alveus_audio::music;
+use alveus_command::GameCommand;
 use alveus_theme::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Menu::Credits), spawn_credits_menu);
-    app.add_systems(
-        Update,
-        go_back.run_if(in_state(Menu::Credits).and_then(input_just_pressed(KeyCode::Escape))),
-    );
 
     app.load_resource::<CreditsAssets>();
     app.add_systems(OnEnter(Menu::Credits), start_credits_music);
@@ -28,7 +26,7 @@ fn spawn_credits_menu(mut commands: Commands) {
             created_by(),
             widget::header("Assets"),
             assets(),
-            widget::button("Back", go_back_on_click),
+            widget::button_autofocus("Back", go_back_on_click),
         ],
     ));
 }
@@ -82,12 +80,8 @@ fn grid(content: Vec<[&'static str; 2]>) -> impl Bundle {
     )
 }
 
-fn go_back_on_click(_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<Menu>>) {
-    next_menu.set(Menu::Main);
-}
-
-fn go_back(mut next_menu: ResMut<NextState<Menu>>) {
-    next_menu.set(Menu::Main);
+fn go_back_on_click(_: On<Activate>, mut commands: Commands) {
+    commands.trigger(GameCommand::Back);
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]

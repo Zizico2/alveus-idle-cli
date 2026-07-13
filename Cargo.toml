@@ -56,6 +56,7 @@ alveus-headless = { path = "crates/alveus-headless" }
 
 # External crates
 bevy = { version = "0.19", default-features = true }
+bevy_enhanced_input = "0.26"
 bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
 bevy_reflect = "0.19"
 bevy_ecs_tiled = { version = "0.13", default-features = false, features = ["user_properties", "png"] }

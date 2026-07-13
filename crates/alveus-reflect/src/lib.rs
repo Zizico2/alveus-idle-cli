@@ -19,7 +19,6 @@ use alveus_interaction::{
     CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem, MiniChore, OpenMenu,
     PlayerSatchel,
 };
-use alveus_menus::PlayClickEvent;
 use alveus_stats::{
     AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition,
     EnclosureId, EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath,
@@ -91,7 +90,6 @@ pub fn register_types(app: &mut App) {
         .register_type::<HeadlessRenderTarget>()
         .register_type::<StepRequest>()
         .register_type::<GameCommand>()
-        .register_type::<PlayClickEvent>()
         .register_type::<AnimalFedEvent>()
         .register_type::<AnimalEnrichedEvent>()
         .register_type::<AnimalCleanedEvent>()
