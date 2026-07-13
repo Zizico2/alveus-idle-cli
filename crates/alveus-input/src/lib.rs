@@ -2,7 +2,7 @@
 //!
 //! Per the project's golden rules, keyboard handlers are thin and only
 //! `trigger(GameCommand::...)`; the same verbs are what external BRP clients
-//! send. Keeping this mapping in the command crate centralizes the input →
+//! send. Keeping this mapping in the input crate centralizes the input →
 //! verb boundary and avoids the `world`/`screens` crates depending on the
 //! dispatcher.
 
@@ -11,7 +11,7 @@ use bevy::{input::common_conditions::input_just_pressed, prelude::*};
 use alveus_app::{AppSystems, Menu, PausableSystems, Screen, tile_interaction_enabled};
 use alveus_components::{MovementIntent, Player};
 
-use crate::command::GameCommand;
+use alveus_command::GameCommand;
 
 /// Registers the keyboard readers that map key presses to [`GameCommand`]s.
 ///
@@ -148,4 +148,133 @@ fn cancel_care_menu_from_keyboard(mut commands: Commands) {
 
 fn drop_item_from_keyboard(mut commands: Commands) {
     commands.trigger(GameCommand::DropItem);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::state::app::StatesPlugin;
+
+    #[derive(Resource, Default)]
+    struct CapturedCommands(Vec<GameCommand>);
+
+    fn capture_command(trigger: On<GameCommand>, mut captured: ResMut<CapturedCommands>) {
+        captured.0.push(trigger.event().clone());
+    }
+
+    fn keyboard_app(screen: Screen, menu: Menu) -> App {
+        let mut app = App::new();
+        app.add_plugins((StatesPlugin, MinimalPlugins));
+        app.add_plugins(alveus_app::plugin);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<CapturedCommands>()
+            .add_plugins(InputPlugin)
+            .add_observer(capture_command);
+        app.world_mut().spawn(Player);
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(screen);
+        app.world_mut().resource_mut::<NextState<Menu>>().set(menu);
+        app.update();
+        app.world_mut().resource_mut::<CapturedCommands>().0.clear();
+        app
+    }
+
+    fn press_once(screen: Screen, menu: Menu, key: KeyCode) -> Vec<String> {
+        let mut app = keyboard_app(screen, menu);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(key);
+        app.update();
+        app.world()
+            .resource::<CapturedCommands>()
+            .0
+            .iter()
+            .map(command_name)
+            .collect()
+    }
+
+    fn command_name(command: &GameCommand) -> String {
+        match command {
+            GameCommand::Move(intent) => format!("Move::{intent:?}"),
+            GameCommand::MoveStop => "MoveStop".into(),
+            GameCommand::Interact => "Interact".into(),
+            GameCommand::DropItem => "DropItem".into(),
+            GameCommand::EnterBuilding => "EnterBuilding".into(),
+            GameCommand::ExitRoom => "ExitRoom".into(),
+            GameCommand::PauseToggle => "PauseToggle".into(),
+            GameCommand::Play => "Play".into(),
+            GameCommand::Back => "Back".into(),
+            GameCommand::SkipSplash => "SkipSplash".into(),
+            GameCommand::OpenSettings => "OpenSettings".into(),
+            GameCommand::OpenCredits => "OpenCredits".into(),
+            GameCommand::Continue => "Continue".into(),
+            GameCommand::QuitToTitle => "QuitToTitle".into(),
+            GameCommand::ImproveStat { .. } => "ImproveStat".into(),
+            GameCommand::WorsenStat { .. } => "WorsenStat".into(),
+            GameCommand::AdvanceTime { .. } => "AdvanceTime".into(),
+            GameCommand::AdjustVolume { .. } => "AdjustVolume".into(),
+            GameCommand::Screenshot { .. } => "Screenshot".into(),
+            GameCommand::AdvanceFrames(_) => "AdvanceFrames".into(),
+        }
+    }
+
+    #[test]
+    fn gameplay_keys_emit_the_canonical_verbs() {
+        let cases: &[(KeyCode, &[&str])] = &[
+            (KeyCode::KeyW, &["Move::Up"]),
+            (KeyCode::ArrowUp, &["Move::Up"]),
+            (KeyCode::KeyS, &["Move::Down"]),
+            (KeyCode::ArrowDown, &["Move::Down"]),
+            (KeyCode::KeyA, &["Move::Left"]),
+            (KeyCode::ArrowLeft, &["Move::Left"]),
+            (KeyCode::KeyD, &["Move::Right"]),
+            (KeyCode::ArrowRight, &["Move::Right"]),
+            (KeyCode::Space, &["MoveStop", "Interact"]),
+            (KeyCode::KeyK, &["MoveStop", "DropItem"]),
+            (KeyCode::KeyP, &["MoveStop", "PauseToggle"]),
+            (KeyCode::Escape, &["MoveStop", "PauseToggle"]),
+        ];
+
+        for (key, expected) in cases {
+            assert_eq!(
+                press_once(Screen::Gameplay, Menu::None, *key),
+                *expected,
+                "unexpected mapping for {key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn splash_and_overlay_keys_emit_the_canonical_verbs() {
+        assert_eq!(
+            press_once(Screen::Splash, Menu::None, KeyCode::Escape),
+            ["SkipSplash"]
+        );
+        assert_eq!(
+            press_once(Screen::Gameplay, Menu::Settings, KeyCode::KeyP),
+            ["PauseToggle"]
+        );
+    }
+
+    #[test]
+    fn care_picker_keys_emit_navigation_confirm_and_cancel_verbs() {
+        let cases = [
+            (KeyCode::KeyW, "Move::Up"),
+            (KeyCode::ArrowUp, "Move::Up"),
+            (KeyCode::KeyS, "Move::Down"),
+            (KeyCode::ArrowDown, "Move::Down"),
+            (KeyCode::Enter, "Continue"),
+            (KeyCode::Space, "Continue"),
+            (KeyCode::Escape, "Back"),
+        ];
+
+        for (key, expected) in cases {
+            assert_eq!(
+                press_once(Screen::Gameplay, Menu::CareItemPicker, key),
+                [expected],
+                "unexpected care-picker mapping for {key:?}"
+            );
+        }
+    }
 }

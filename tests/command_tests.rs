@@ -1,10 +1,10 @@
 mod common;
 
 use alveus_app::Screen;
+use alveus_command::GameCommand;
 use alveus_components::{
     LastPickupMessage, MovementController, MovementDuration, MovementIntent, Player,
 };
-use alveus_headless::GameCommand;
 use alveus_interaction::{InteractionPlugin, PlayerSatchel};
 use alveus_stats::{AnimalId, AnimalStat, AnimalStats, StatTarget};
 use alveus_types::Stat;

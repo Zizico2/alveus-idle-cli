@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use alveus_app::{Menu, Pause, Screen};
-use alveus_headless::CommandPlugin;
+use alveus_command::CommandPlugin;
 use alveus_interaction::InteractionPlugin;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;

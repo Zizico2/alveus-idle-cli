@@ -1,7 +1,7 @@
 #![cfg(feature = "headless")]
 
 use alveus_app::Screen;
-use alveus_headless::register_headless_types;
+use alveus_reflect::register_agent_types;
 use alveus_stats::{SavePath, StatsPlugin};
 use bevy::prelude::*;
 use bevy::remote::{BrpMessage, BrpSender};
@@ -16,9 +16,9 @@ fn stdio_json_line_triggers_game_command() {
     app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((StatsPlugin, alveus_headless::CommandPlugin));
+    app.add_plugins((StatsPlugin, alveus_command::CommandPlugin));
     app.add_plugins(bevy::remote::RemotePlugin::default());
-    register_headless_types(&mut app);
+    register_agent_types(&mut app);
     app.insert_resource(State::new(Screen::Splash));
     app.update();
 

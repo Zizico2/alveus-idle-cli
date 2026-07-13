@@ -211,6 +211,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "alveus-command"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-components",
+ "alveus-interaction",
+ "alveus-menus",
+ "alveus-screens",
+ "alveus-stats",
+ "alveus-types",
+ "alveus-world",
+ "bevy",
+]
+
+[[package]]
 name = "alveus-components"
 version = "0.1.0"
 dependencies = [
@@ -241,16 +256,8 @@ dependencies = [
 name = "alveus-headless"
 version = "0.1.0"
 dependencies = [
- "alveus-app",
- "alveus-cleaning",
- "alveus-collision",
- "alveus-components",
- "alveus-content",
- "alveus-interaction",
- "alveus-menus",
- "alveus-screens",
- "alveus-stats",
- "alveus-types",
+ "alveus-command",
+ "alveus-reflect",
  "alveus-world",
  "async-channel",
  "bevy",
@@ -282,13 +289,16 @@ dependencies = [
  "alveus-audio",
  "alveus-cleaning",
  "alveus-collision",
+ "alveus-command",
  "alveus-components",
  "alveus-configs",
  "alveus-content",
  "alveus-headless",
  "alveus-hud",
+ "alveus-input",
  "alveus-interaction",
  "alveus-menus",
+ "alveus-reflect",
  "alveus-screens",
  "alveus-stats",
  "alveus-theme",
@@ -301,6 +311,16 @@ dependencies = [
  "rand 0.10.1",
  "ron",
  "serde_json",
+]
+
+[[package]]
+name = "alveus-input"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-command",
+ "alveus-components",
+ "bevy",
 ]
 
 [[package]]
@@ -329,6 +349,23 @@ dependencies = [
  "alveus-configs",
  "alveus-theme",
  "alveus-types",
+ "bevy",
+]
+
+[[package]]
+name = "alveus-reflect"
+version = "0.1.0"
+dependencies = [
+ "alveus-app",
+ "alveus-cleaning",
+ "alveus-command",
+ "alveus-components",
+ "alveus-content",
+ "alveus-interaction",
+ "alveus-menus",
+ "alveus-stats",
+ "alveus-types",
+ "alveus-world",
  "bevy",
 ]
 

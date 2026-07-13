@@ -3,7 +3,7 @@
 use alveus_app::Screen;
 use alveus_cleaning::{CleaningPlugin, PoopWheelbarrow};
 use alveus_collision::CollisionMasks;
-use alveus_headless::register_headless_types;
+use alveus_reflect::register_agent_types;
 use alveus_stats::{
     EnclosureId, EnclosureStat, EnclosureStats, SavePath, StatTarget, StatsPlugin, WorsenStatEvent,
 };
@@ -20,9 +20,9 @@ fn headless_cleaning_brp_app(save_path: &str) -> App {
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<CollisionMasks>();
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins((StatsPlugin, CleaningPlugin, alveus_headless::CommandPlugin));
+    app.add_plugins((StatsPlugin, CleaningPlugin, alveus_command::CommandPlugin));
     app.add_plugins(bevy::remote::RemotePlugin::default());
-    register_headless_types(&mut app);
+    register_agent_types(&mut app);
     app.insert_resource(NextState::Pending(Screen::Gameplay));
     app
 }

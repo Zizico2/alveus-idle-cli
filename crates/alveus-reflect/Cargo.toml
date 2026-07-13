@@ -1,0 +1,22 @@
+[package]
+name = "alveus-reflect"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Composition-root Reflect registration for agent-observable alveus-idle types"
+
+[dependencies]
+bevy.workspace = true
+alveus-app.workspace = true
+alveus-types.workspace = true
+alveus-components.workspace = true
+alveus-content.workspace = true
+alveus-cleaning.workspace = true
+alveus-interaction.workspace = true
+alveus-stats.workspace = true
+alveus-world.workspace = true
+alveus-menus.workspace = true
+alveus-command.workspace = true
+
+[lints]
+workspace = true

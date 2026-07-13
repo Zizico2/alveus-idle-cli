@@ -1,19 +1,12 @@
-//! Headless / remote control: semantic verbs, keyboard input mapping, offscreen
-//! rendering, and BRP transports.
+//! Windowless rendering and BRP transports.
 
 mod camera;
-mod command;
-pub mod input;
-pub mod reflect;
-pub use reflect::register_headless_types;
 #[cfg(feature = "cli")]
 mod stdio;
 
 pub use camera::{
     DEFAULT_HEADLESS_RESOLUTION, HeadlessCameraPlugin, HeadlessRenderTarget, HeadlessResolution,
 };
-pub use command::{CommandPlugin, GameCommand, StepRequest};
-pub use input::InputPlugin;
 pub const DEFAULT_BRP_PORT: u16 = 15702;
 
 use bevy::prelude::*;
@@ -38,7 +31,7 @@ impl Default for HeadlessPlugin {
 
 impl Plugin for HeadlessPlugin {
     fn build(&self, app: &mut App) {
-        reflect::register_headless_types(app);
+        alveus_reflect::register_agent_types(app);
 
         app.add_plugins(HeadlessCameraPlugin {
             resolution: self.resolution,

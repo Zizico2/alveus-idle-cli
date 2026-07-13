@@ -1,0 +1,15 @@
+[package]
+name = "alveus-input"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Keyboard-to-GameCommand mapping for alveus-idle"
+
+[dependencies]
+bevy.workspace = true
+alveus-app.workspace = true
+alveus-components.workspace = true
+alveus-command.workspace = true
+
+[lints]
+workspace = true

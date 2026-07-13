@@ -35,7 +35,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCREENSHOT_DIR = os.path.join(REPO_ROOT, "screenshots")
 GAMEPLAY_PNG = os.path.join(SCREENSHOT_DIR, "ui_smoke_gameplay.png")
 MENU_PNG = os.path.join(SCREENSHOT_DIR, "ui_smoke_pause_menu.png")
-# Registered in register_headless_types — requires a server built with that registration.
+# Registered in register_agent_types — requires a server built with that registration.
 SCREEN_STATE = "bevy_state::state::resources::State<alveus_app::Screen>"
 
 # Sample stride keeps runtime low; thresholds are fractions of sampled pixels.

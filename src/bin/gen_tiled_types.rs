@@ -2,7 +2,7 @@
 //!
 //! The Tiled user-property type export is otherwise a side-effect of a normal
 //! game run. This binary builds a minimal app (no render stack), registers every
-//! Tiled-facing Reflect type via the shared `register_headless_types`, and calls
+//! Tiled-facing Reflect type via the shared `register_agent_types`, and calls
 //! `export_types` directly — avoiding `TiledPlugin` / `TilemapPlugin`, which
 //! require a `RenderApp` when the `render` feature is enabled.
 //!
@@ -19,7 +19,7 @@ fn main() {
         .join("tiled_types.json");
 
     let mut app = App::new();
-    alveus_headless::register_headless_types(&mut app);
+    alveus_reflect::register_agent_types(&mut app);
     alveus_world::level::export_tiled_types(&app, &path);
 
     println!("Wrote {}", path.display());

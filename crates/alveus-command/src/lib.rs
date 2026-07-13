@@ -19,8 +19,6 @@ use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simula
 use alveus_types::Stat;
 use alveus_world::room::{PlayerSpawnPoint, try_enter_room};
 
-use crate::camera::HeadlessRenderTarget;
-
 /// The complete, semantic verb set for the game.
 ///
 /// This enum **is** the public API for any external controller (LLM, script,
@@ -43,6 +41,7 @@ use crate::camera::HeadlessRenderTarget;
 /// authoritative: agents read them as the source of truth for what they may do.
 #[derive(Event, Debug, Clone, Reflect)]
 #[reflect(Event)]
+#[type_path = "alveus_headless::command"]
 pub enum GameCommand {
     /// Start (or change) the player walking one direction. The player keeps
     /// walking tile-by-tile until [`GameCommand::MoveStop`] is sent or movement
@@ -134,6 +133,19 @@ pub enum GameCommand {
 #[reflect(Resource)]
 pub struct StepRequest {
     pub pending: u32,
+}
+
+/// Optional image target used by [`GameCommand::Screenshot`].
+///
+/// Windowless rendering installs this resource; windowed builds fall back to
+/// the primary window when it is absent.
+#[derive(Resource, Debug, Clone, Reflect)]
+#[reflect(Resource)]
+#[type_path = "alveus_headless::camera"]
+pub struct HeadlessRenderTarget {
+    pub image: Handle<Image>,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Commands collected by the observer and applied before state transitions.
@@ -426,5 +438,19 @@ fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {
         Menu::Credits => next_menu.set(Menu::Main),
         Menu::Pause | Menu::CareItemPicker => next_menu.set(Menu::None),
         Menu::Main | Menu::None => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GameCommand;
+    use bevy::reflect::TypePath;
+
+    #[test]
+    fn game_command_keeps_legacy_brp_type_path() {
+        assert_eq!(
+            GameCommand::type_path(),
+            "alveus_headless::command::GameCommand"
+        );
     }
 }

@@ -59,7 +59,9 @@ fn overview_compost_bin_blocked_in_collision_mask() {
 
 #[test]
 fn all_required_collision_maps_load_and_build_masks() {
-    use alveus_collision::{CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks};
+    use alveus_collision::{
+        CollisionMasks, InteriorAssets, LevelAssets, build_all_collision_masks,
+    };
     use alveus_types::EnclosureId;
 
     let mut app = common::headless_tiled_test_app();
