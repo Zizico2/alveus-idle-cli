@@ -10,19 +10,23 @@ use std::collections::HashMap;
 use alveus_theme::widget;
 use bevy::prelude::*;
 
-pub(super) fn plugin(app: &mut App) {
-    app.configure_sets(
-        Update,
-        (
-            OverlayMenuSystems::SyncSelection,
-            OverlayMenuSystems::ApplySelection,
+pub(crate) struct OverlayMenuPlugin;
+
+impl Plugin for OverlayMenuPlugin {
+    fn build(&self, app: &mut App) {
+        app.configure_sets(
+            Update,
+            (
+                OverlayMenuSystems::SyncSelection,
+                OverlayMenuSystems::ApplySelection,
+            )
+                .chain(),
         )
-            .chain(),
-    )
-    .add_systems(
-        Update,
-        apply_changed_selection.in_set(OverlayMenuSystems::ApplySelection),
-    );
+        .add_systems(
+            Update,
+            apply_changed_selection.in_set(OverlayMenuSystems::ApplySelection),
+        );
+    }
 }
 
 /// Ordering contract for feature adapters and the shared renderer.
@@ -347,7 +351,7 @@ mod tests {
     fn overlay_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
-        app.add_plugins(plugin);
+        app.add_plugins(OverlayMenuPlugin);
         app
     }
 

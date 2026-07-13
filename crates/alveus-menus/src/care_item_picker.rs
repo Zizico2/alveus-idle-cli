@@ -11,6 +11,7 @@ use crate::overlay_menu::{
 };
 
 pub(super) fn plugin(app: &mut App) {
+    alveus_app::ensure_plugin(app, crate::overlay_menu::OverlayMenuPlugin);
     app.add_systems(OnEnter(Menu::CareItemPicker), spawn_care_item_picker)
         .add_systems(
             Update,
@@ -103,7 +104,7 @@ mod tests {
         app.add_plugins(alveus_app::plugin);
         app.insert_resource(care_menu);
         app.init_resource::<PlayerSatchel>();
-        app.add_plugins((crate::overlay_menu::plugin, super::plugin));
+        app.add_plugins(super::plugin);
         app.world_mut()
             .resource_mut::<NextState<Menu>>()
             .set(Menu::CareItemPicker);

@@ -16,7 +16,6 @@ use bevy::prelude::*;
 pub fn plugin(app: &mut App) {
     app.add_plugins((
         credits::plugin,
-        overlay_menu::plugin,
         care_item_picker::plugin,
         main_menu::plugin,
         settings::plugin,

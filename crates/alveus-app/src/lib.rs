@@ -4,6 +4,16 @@
 
 use bevy::prelude::*;
 
+/// Adds a unique plugin unless an earlier feature plugin already registered it.
+///
+/// This lets independently composed feature plugins declare a shared internal
+/// dependency without requiring their parent composition root to know about it.
+pub fn ensure_plugin<P: Plugin>(app: &mut App, plugin: P) {
+    if !app.is_plugin_added::<P>() {
+        app.add_plugins(plugin);
+    }
+}
+
 /// High-level groupings of systems for the app in the `Update` schedule.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum AppSystems {
@@ -109,6 +119,43 @@ pub fn plugin(app: &mut App) {
 mod tests {
     use super::*;
     use bevy::state::app::StatesPlugin;
+
+    #[derive(Resource, Default)]
+    struct PluginBuildCount(usize);
+
+    struct SharedPlugin;
+
+    impl Plugin for SharedPlugin {
+        fn build(&self, app: &mut App) {
+            app.init_resource::<PluginBuildCount>();
+            app.world_mut().resource_mut::<PluginBuildCount>().0 += 1;
+        }
+    }
+
+    struct FirstConsumer;
+
+    impl Plugin for FirstConsumer {
+        fn build(&self, app: &mut App) {
+            ensure_plugin(app, SharedPlugin);
+        }
+    }
+
+    struct SecondConsumer;
+
+    impl Plugin for SecondConsumer {
+        fn build(&self, app: &mut App) {
+            ensure_plugin(app, SharedPlugin);
+        }
+    }
+
+    #[test]
+    fn ensure_plugin_registers_a_shared_dependency_once() {
+        let mut app = App::new();
+
+        app.add_plugins((FirstConsumer, SecondConsumer));
+
+        assert_eq!(app.world().resource::<PluginBuildCount>().0, 1);
+    }
 
     #[test]
     fn plugin_owns_app_wide_state_defaults_and_transitions() {
