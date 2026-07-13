@@ -254,12 +254,15 @@ pub(crate) fn project_selection(
 }
 
 fn style_overlay_entries(
-    mut entries: Query<(
-        Has<Selected>,
-        &mut BackgroundColor,
-        &mut BorderColor,
-        &Children,
-    )>,
+    mut entries: Query<
+        (
+            Has<Selected>,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &Children,
+        ),
+        With<OverlayMenuEntry>,
+    >,
     mut labels: Query<&mut TextColor, With<OverlayMenuEntryLabel>>,
 ) {
     for (selected, mut background, mut border, children) in &mut entries {
