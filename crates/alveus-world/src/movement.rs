@@ -6,7 +6,7 @@
 
 use bevy::prelude::*;
 
-use alveus_app::{AppSystems, PausableSystems, Screen};
+use alveus_app::{AppSystems, PausableSystems, Screen, tile_interaction_enabled};
 use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem, is_walkable,
 };
@@ -22,7 +22,8 @@ pub(super) fn plugin(app: &mut App) {
         (update_desired_position, start_movement, apply_movement)
             .chain()
             .in_set(AppSystems::Update)
-            .in_set(PausableSystems),
+            .in_set(PausableSystems)
+            .run_if(tile_interaction_enabled),
     );
 }
 
@@ -122,5 +123,66 @@ fn apply_movement(
         transform.translation.y = desired.0.y as f32 * TILE_SIZE as f32;
 
         current.0 = desired.0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alveus_app::Menu;
+    use alveus_collision::CollisionMapKey;
+    use alveus_components::{Player, TilePosition};
+    use bevy::state::app::StatesPlugin;
+    use bevy::time::TimeUpdateStrategy;
+    use std::collections::HashSet;
+    use std::time::Duration;
+
+    #[test]
+    fn care_picker_freezes_an_in_flight_player_tile_step() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(alveus_app::plugin);
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs(1)));
+
+        let mut masks = CollisionMasks::default();
+        masks.set_static_mask(CollisionMapKey::Overview, HashSet::new());
+        app.insert_resource(masks);
+        app.add_plugins(plugin);
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(Screen::Gameplay);
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::CareItemPicker);
+        app.update();
+
+        let start = TilePosition { x: 4, y: 7 };
+        let player = app
+            .world_mut()
+            .spawn((
+                Player,
+                CurrentTilePosition(start),
+                DesiredTilePosition(TilePosition { x: 5, y: 7 }),
+                MovementController {
+                    intent: Some(MovementIntent::Right),
+                },
+                MovementDuration(Timer::from_seconds(0.1, TimerMode::Once)),
+                Transform::default(),
+            ))
+            .id();
+
+        for _ in 0..3 {
+            app.update();
+        }
+
+        assert_eq!(
+            app.world().get::<CurrentTilePosition>(player).unwrap().0,
+            start
+        );
+        assert_eq!(
+            app.world().get::<DesiredTilePosition>(player).unwrap().0,
+            TilePosition { x: 5, y: 7 }
+        );
     }
 }

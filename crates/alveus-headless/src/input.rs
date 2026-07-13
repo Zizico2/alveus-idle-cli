@@ -8,7 +8,7 @@
 
 use bevy::{input::common_conditions::input_just_pressed, prelude::*};
 
-use alveus_app::{AppSystems, Menu, PausableSystems, Screen};
+use alveus_app::{AppSystems, Menu, PausableSystems, Screen, tile_interaction_enabled};
 use alveus_components::{MovementIntent, Player};
 
 use crate::command::GameCommand;
@@ -25,7 +25,7 @@ impl Plugin for InputPlugin {
             Update,
             (
                 record_player_directional_input
-                    .run_if(in_state(Menu::None).and_then(any_with_component::<Player>)),
+                    .run_if(tile_interaction_enabled.and_then(any_with_component::<Player>)),
                 record_care_picker_navigation
                     .run_if(in_state(Menu::CareItemPicker).and_then(any_with_component::<Player>)),
             )
@@ -64,12 +64,12 @@ impl Plugin for InputPlugin {
             Update,
             (
                 interact_from_keyboard.run_if(
-                    in_state(Menu::None)
+                    tile_interaction_enabled
                         .and_then(any_with_component::<Player>)
                         .and_then(input_just_pressed(KeyCode::Space)),
                 ),
                 drop_item_from_keyboard.run_if(
-                    in_state(Menu::None)
+                    tile_interaction_enabled
                         .and_then(any_with_component::<Player>)
                         .and_then(input_just_pressed(KeyCode::KeyK)),
                 ),

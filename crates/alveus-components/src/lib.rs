@@ -8,6 +8,7 @@
 use bevy::prelude::*;
 
 pub use alveus_configs::{PLAYER_MOVE_DURATION_SECS, TILE_SIZE};
+use alveus_types::{CareMenuId, ItemId};
 pub use alveus_types::{EnclosureId, TilePosition};
 
 // ---------------------------------------------------------
@@ -122,6 +123,56 @@ pub struct MovementDuration(pub Timer);
 // ---------------------------------------------------------
 // Shared cross-feature resources
 // ---------------------------------------------------------
+
+/// Two-slot caretaker satchel. Fill first empty slot; drop removes the first occupied.
+///
+/// The explicit type path preserves the existing BRP resource name after this
+/// presentation-neutral state moved below both interaction behaviour and menus.
+#[derive(Resource, Debug, Clone, Copy, Reflect)]
+#[reflect(Resource)]
+#[type_path = "alveus_interaction"]
+pub struct PlayerSatchel {
+    pub slots: [Option<ItemId>; alveus_configs::SATCHEL_MAX_SLOTS as usize],
+}
+
+impl Default for PlayerSatchel {
+    fn default() -> Self {
+        Self {
+            slots: [None; alveus_configs::SATCHEL_MAX_SLOTS as usize],
+        }
+    }
+}
+
+impl PlayerSatchel {
+    pub fn occupied_count(&self) -> u8 {
+        self.slots.iter().filter(|slot| slot.is_some()).count() as u8
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.occupied_count() == 0
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.occupied_count() >= alveus_configs::SATCHEL_MAX_SLOTS
+    }
+
+    pub fn first_item(&self) -> Option<ItemId> {
+        self.slots.iter().flatten().copied().next()
+    }
+}
+
+/// Presentation-neutral state for the care item picker overlay.
+///
+/// The explicit type path keeps `alveus_interaction::CareMenuState` stable for
+/// BRP clients even though the Rust type now lives in this shared crate.
+#[derive(Resource, Debug, Default, Clone, Reflect)]
+#[reflect(Resource)]
+#[type_path = "alveus_interaction"]
+pub struct CareMenuState {
+    pub menu_id: Option<CareMenuId>,
+    pub options: Vec<ItemId>,
+    pub cursor: usize,
+}
 
 /// Poops carried in the wheelbarrow, in pickup order (max `WHEELBARROW_CAPACITY`).
 #[derive(Resource, Debug, Clone, Default, Reflect)]

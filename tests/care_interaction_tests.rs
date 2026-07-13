@@ -10,8 +10,9 @@ use alveus_headless::{CommandPlugin, GameCommand, InputPlugin};
 use alveus_hud::satchel_slots_label;
 use alveus_interaction::{
     ActiveInteractionTarget, AnimalCleanedEvent, AnimalEnrichedEvent, AnimalFedEvent,
-    CareMenuState, CleanAnimal, EnrichAnimal, GiveItem, InteractionPlugin, MiniChore, OpenMenu,
-    PlayerSatchel, care_outcome_message, try_give_item,
+    CareMenuState, CleanAnimal, EMPTY_CARE_MENU_MESSAGE, EnrichAnimal, GiveItem, InteractionPlugin,
+    MISSING_CARE_MENU_MESSAGE, MiniChore, OpenMenu, PlayerSatchel, care_outcome_message,
+    try_give_item,
 };
 use alveus_stats::{
     AnimalId, AnimalStat, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin,
@@ -574,6 +575,141 @@ fn keyboard_escape_cancels_care_menu_via_game_command() {
     assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
     assert!(app.world().resource::<CareMenuState>().menu_id.is_none());
     assert!(app.world().resource::<PlayerSatchel>().is_empty());
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn picker_left_and_right_are_noops_and_interact_confirms() {
+    let save_path = "test_care_menu_direction_parity.ron";
+    let mut app = care_test_app(save_path);
+
+    {
+        let mut care_menu = app.world_mut().resource_mut::<CareMenuState>();
+        care_menu.menu_id = Some(CareMenuId::Fridge);
+        care_menu.options = alveus_configs::care_menu_options(CareMenuId::Fridge).to_vec();
+        care_menu.cursor = 1;
+    }
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+    app.update();
+
+    app.world_mut()
+        .trigger(GameCommand::Move(MovementIntent::Left));
+    app.world_mut()
+        .trigger(GameCommand::Move(MovementIntent::Right));
+    app.update();
+    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.update();
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+    assert_eq!(
+        app.world().resource::<PlayerSatchel>().slots[0],
+        Some(ItemId::TortoiseLeafyGreens)
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn empty_picker_confirms_by_cancelling_with_explicit_copy() {
+    let save_path = "test_care_menu_empty.ron";
+    let mut app = care_test_app(save_path);
+    app.insert_resource(CareMenuState {
+        menu_id: Some(CareMenuId::Fridge),
+        options: Vec::new(),
+        cursor: 0,
+    });
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+    app.update();
+
+    app.world_mut().trigger(GameCommand::Continue);
+    app.update();
+
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+    assert_eq!(
+        app.world().resource::<LastPickupMessage>().text.as_deref(),
+        Some(EMPTY_CARE_MENU_MESSAGE)
+    );
+    assert!(app.world().resource::<CareMenuState>().menu_id.is_none());
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn missing_picker_id_confirms_by_cancelling_with_explicit_copy() {
+    let save_path = "test_care_menu_missing_id.ron";
+    let mut app = care_test_app(save_path);
+    app.insert_resource(CareMenuState {
+        menu_id: None,
+        options: vec![ItemId::RawVeggieTub],
+        cursor: 0,
+    });
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+    app.update();
+
+    app.world_mut().trigger(GameCommand::Continue);
+    app.update();
+
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+    assert_eq!(
+        app.world().resource::<LastPickupMessage>().text.as_deref(),
+        Some(MISSING_CARE_MENU_MESSAGE)
+    );
+    assert!(app.world().resource::<PlayerSatchel>().is_empty());
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn picker_inventory_edges_follow_satchel_capacity_rules() {
+    let save_path = "test_care_menu_inventory_edges.ron";
+    let mut app = care_test_app(save_path);
+
+    app.insert_resource(PlayerSatchel {
+        slots: [Some(ItemId::RawVeggieTub), None],
+    });
+    app.insert_resource(CareMenuState {
+        menu_id: Some(CareMenuId::Fridge),
+        options: vec![ItemId::RawVeggieTub],
+        cursor: 0,
+    });
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+    app.update();
+    app.world_mut().trigger(GameCommand::Continue);
+    app.update();
+    assert_eq!(
+        app.world().resource::<PlayerSatchel>().slots,
+        [Some(ItemId::RawVeggieTub), Some(ItemId::RawVeggieTub)]
+    );
+
+    app.insert_resource(CareMenuState {
+        menu_id: Some(CareMenuId::Fridge),
+        options: vec![ItemId::TortoiseLeafyGreens],
+        cursor: 0,
+    });
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::CareItemPicker);
+    app.update();
+    app.world_mut().trigger(GameCommand::Continue);
+    app.update();
+    assert_eq!(
+        app.world().resource::<PlayerSatchel>().slots,
+        [Some(ItemId::RawVeggieTub), Some(ItemId::RawVeggieTub)]
+    );
+    assert_eq!(
+        app.world().resource::<LastPickupMessage>().text.as_deref(),
+        Some("Satchel is full")
+    );
 
     let _ = std::fs::remove_file(save_path);
 }

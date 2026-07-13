@@ -108,6 +108,32 @@ fn registered_types_include_game_command_and_screen() {
 }
 
 #[test]
+fn care_menu_state_keeps_its_existing_brp_resource_path() {
+    use bevy::reflect::TypePath;
+
+    assert_eq!(
+        CareMenuState::type_path(),
+        "alveus_interaction::CareMenuState"
+    );
+
+    let save_path = "brp_test_care_menu_resource_path.ron";
+    let mut app = care_brp_app(save_path);
+    let response = brp_request(
+        &mut app,
+        "world.get_resources",
+        Some(serde_json::json!({
+            "resource": "alveus_interaction::CareMenuState"
+        })),
+    )
+    .expect("existing CareMenuState BRP resource path remains queryable");
+    let value = response.get("value").unwrap_or(&response);
+    assert_eq!(value["cursor"], serde_json::json!(0));
+    assert_eq!(value["menu_id"], serde_json::Value::Null);
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
 fn brp_skip_splash_command_changes_screen() {
     let save_path = "brp_test_skip.ron";
     let mut app = App::new();

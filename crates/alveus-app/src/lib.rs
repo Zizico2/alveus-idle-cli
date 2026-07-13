@@ -58,9 +58,24 @@ pub enum Menu {
     Credits,
     Settings,
     Pause,
-    /// In-world care item picker (fridge, etc.). Cursor via Move Up/Down;
+    /// Care item picker overlay (fridge, etc.). Cursor via Move Up/Down;
     /// confirm with Interact/Continue; cancel with Back.
     CareItemPicker,
+}
+
+/// True while world movement and tile interaction may run.
+///
+/// Menus own input while open. Keeping this predicate in the app-state crate
+/// lets keyboard, interaction, player movement, and animal movement share the
+/// same definition instead of drifting apart.
+pub fn tile_interaction_enabled(screen: Res<State<Screen>>, menu: Res<State<Menu>>) -> bool {
+    tile_interaction_enabled_for(*screen.get(), *menu.get())
+}
+
+/// Value-based form of [`tile_interaction_enabled`] for exclusive-world command
+/// dispatch, which cannot use ordinary system parameters.
+pub fn tile_interaction_enabled_for(screen: Screen, menu: Menu) -> bool {
+    matches!(screen, Screen::Gameplay | Screen::InRoom(_)) && menu == Menu::None
 }
 
 /// Initializes all app-wide states and configures the shared `Update` system-set
@@ -117,5 +132,19 @@ mod tests {
         app.update();
 
         assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::Settings);
+    }
+
+    #[test]
+    fn tile_interaction_requires_a_playable_screen_without_an_overlay() {
+        assert!(tile_interaction_enabled_for(Screen::Gameplay, Menu::None));
+        assert!(tile_interaction_enabled_for(
+            Screen::InRoom(InRoom::NutritionHouse),
+            Menu::None
+        ));
+        assert!(!tile_interaction_enabled_for(
+            Screen::Gameplay,
+            Menu::CareItemPicker
+        ));
+        assert!(!tile_interaction_enabled_for(Screen::Title, Menu::None));
     }
 }

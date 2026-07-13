@@ -1,5 +1,6 @@
 //! The game's menus and transitions between them.
 
+pub mod care_item_picker;
 mod credits;
 pub mod main_menu;
 pub use main_menu::PlayClickEvent;
@@ -14,6 +15,7 @@ use bevy::prelude::*;
 pub fn plugin(app: &mut App) {
     app.add_plugins((
         credits::plugin,
+        care_item_picker::plugin,
         main_menu::plugin,
         settings::plugin,
         pause::plugin,

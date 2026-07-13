@@ -12,6 +12,9 @@ alveus-asset-tracking.workspace = true
 alveus-audio.workspace = true
 alveus-collision.workspace = true
 alveus-theme.workspace = true
+alveus-components.workspace = true
+alveus-configs.workspace = true
+alveus-types.workspace = true
 
 [lints]
 workspace = true

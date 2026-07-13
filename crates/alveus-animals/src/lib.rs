@@ -1,4 +1,4 @@
-use alveus_app::Screen;
+use alveus_app::{Screen, tile_interaction_enabled};
 use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, LiveObstacleItem,
     collision_key_for_animal, is_walkable, walkable_neighbors,
@@ -36,7 +36,7 @@ impl Plugin for AnimalsPlugin {
                 AnimalNpcSystems::PersistPosition,
             )
                 .chain()
-                .run_if(any_with_component::<AnimalNpc>),
+                .run_if(any_with_component::<AnimalNpc>.and_then(tile_interaction_enabled)),
         )
         .add_systems(
             Update,
@@ -49,7 +49,8 @@ impl Plugin for AnimalsPlugin {
         )
         .add_systems(
             Update,
-            tick_background_animal_wander.run_if(in_state(Screen::Gameplay)),
+            tick_background_animal_wander
+                .run_if(in_state(Screen::Gameplay).and_then(tile_interaction_enabled)),
         );
     }
 }
@@ -326,7 +327,7 @@ fn tile_to_world(tile: TilePosition) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alveus_app::InRoom;
+    use alveus_app::{InRoom, Menu, Screen};
     use alveus_content::{POLLY_PLACEMENT, PUSH_POP_PLACEMENT};
     use bevy::state::app::StatesPlugin;
     use bevy::time::TimeUpdateStrategy;
@@ -406,6 +407,64 @@ mod tests {
         for _ in 0..frames {
             app.update();
         }
+    }
+
+    #[test]
+    fn care_picker_freezes_foreground_animal_movement() {
+        let key = CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure);
+        let mut app = animal_app(Screen::InRoom(InRoom::PushPopEnclosure), key);
+        let placement = PUSH_POP_PLACEMENT;
+        let animal = spawn_npc(
+            &mut app,
+            AnimalId::PushPop,
+            placement.home_position,
+            placement.wander_bounds,
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::CareItemPicker);
+        app.update();
+        let before = app.world().get::<CurrentTilePosition>(animal).unwrap().0;
+        advance(&mut app, 5);
+
+        assert_eq!(
+            app.world().get::<CurrentTilePosition>(animal).unwrap().0,
+            before
+        );
+        assert_eq!(
+            app.world().get::<DesiredTilePosition>(animal).unwrap().0,
+            before
+        );
+        assert!(
+            app.world()
+                .get::<WanderInZone>(animal)
+                .unwrap()
+                .target
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn care_picker_freezes_background_animal_movement() {
+        let key = CollisionMapKey::Enclosure(EnclosureId::NutritionHousePlaypen);
+        let mut app = animal_app(Screen::Gameplay, key);
+        let placement = POLLY_PLACEMENT;
+        spawn_stats(
+            &mut app,
+            AnimalId::Polly,
+            placement.home_position,
+            placement.wander_bounds,
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::CareItemPicker);
+        app.update();
+        let before = saved_tile(&app, AnimalId::Polly);
+        advance(&mut app, 5);
+
+        assert_eq!(saved_tile(&app, AnimalId::Polly), before);
     }
 
     fn saved_tile(app: &App, animal_id: AnimalId) -> TilePosition {

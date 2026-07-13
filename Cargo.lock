@@ -325,7 +325,10 @@ dependencies = [
  "alveus-asset-tracking",
  "alveus-audio",
  "alveus-collision",
+ "alveus-components",
+ "alveus-configs",
  "alveus-theme",
+ "alveus-types",
  "bevy",
 ]
 
