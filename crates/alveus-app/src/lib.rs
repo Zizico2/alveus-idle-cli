@@ -1,5 +1,6 @@
 //! App-wide states and the ordered `Update` system-set schedule shared by every
-//! gameplay crate. This is the lowest layer that behaviour crates depend on.
+//! gameplay crate. This is the lowest layer that behaviour crates depend on and
+//! the single owner that initializes [`Screen`], [`Menu`], and [`Pause`].
 
 use bevy::prelude::*;
 
@@ -62,8 +63,16 @@ pub enum Menu {
     CareItemPicker,
 }
 
-/// Configures the shared `Update` system-set ordering and the [`Pause`] state.
+/// Initializes all app-wide states and configures the shared `Update` system-set
+/// ordering.
+///
+/// Add this plugin before feature plugins that consume [`Screen`], [`Menu`], or
+/// [`Pause`].
 pub fn plugin(app: &mut App) {
+    app.init_state::<Screen>();
+    app.init_state::<Menu>();
+    app.init_state::<Pause>();
+
     app.configure_sets(
         Update,
         (
@@ -78,6 +87,35 @@ pub fn plugin(app: &mut App) {
             .chain(),
     );
 
-    app.init_state::<Pause>();
     app.configure_sets(Update, PausableSystems.run_if(in_state(Pause(false))));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::state::app::StatesPlugin;
+
+    #[test]
+    fn plugin_owns_app_wide_state_defaults_and_transitions() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(plugin);
+
+        assert_eq!(
+            *app.world().resource::<State<Screen>>().get(),
+            Screen::Splash
+        );
+        assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+        assert_eq!(*app.world().resource::<State<Pause>>().get(), Pause(false));
+        assert!(app.world().contains_resource::<NextState<Screen>>());
+        assert!(app.world().contains_resource::<NextState<Menu>>());
+        assert!(app.world().contains_resource::<NextState<Pause>>());
+
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::Settings);
+        app.update();
+
+        assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::Settings);
+    }
 }

@@ -13,7 +13,7 @@ fn stdio_json_line_triggers_game_command() {
     let save_path = "stdio_test_skip.ron";
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.insert_resource(SavePath(save_path.to_string()));
     app.add_plugins((StatsPlugin, alveus_headless::CommandPlugin));
@@ -22,7 +22,7 @@ fn stdio_json_line_triggers_game_command() {
     app.insert_resource(State::new(Screen::Splash));
     app.update();
 
-    let sender = app.world().resource::<BrpSender>().clone();
+    let sender = app.world().resource::<BrpSender>();
     let request = json!({
         "jsonrpc": "2.0",
         "method": "world.trigger_event",

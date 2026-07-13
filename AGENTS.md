@@ -331,8 +331,14 @@ There are two complementary layers. **Both matter; add to both.**
 Fast, headless, no rendering, no networking. Trigger `GameCommand` directly on the
 `World` and assert on components/resources. Use the shared harness:
 
+`alveus_app::plugin` is the single production owner of the app-wide `Screen`,
+`Menu`, and `Pause` states. Test apps that exercise feature plugins should add it
+before those consumers; additional `init_state::<Screen|Menu|Pause>()` calls in
+workspace source are intentionally disallowed and covered by the state ownership
+regression tests.
+
 ```7:18:tests/common/mod.rs
-pub fn minimal_stats_app(save_path: &str) -> App { /* MinimalPlugins + StatsPlugin + CommandPlugin */ }
+pub fn minimal_stats_app(save_path: &str) -> App { /* alveus_app + MinimalPlugins + StatsPlugin + CommandPlugin */ }
 ```
 
 Pattern:

@@ -15,7 +15,7 @@ use bevy::state::app::StatesPlugin;
 fn headless_cleaning_brp_app(save_path: &str) -> App {
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<CollisionMasks>();
@@ -37,7 +37,7 @@ fn brp_poop_wheelbarrow_is_queryable() {
 
     assert_eq!(app.world().resource::<PoopWheelbarrow>().count(), 0);
 
-    let sender = app.world().resource::<BrpSender>().clone();
+    let sender = app.world().resource::<BrpSender>();
     let (result_sender, result_receiver) = async_channel::bounded(1);
     sender
         .send_blocking(BrpMessage {
@@ -87,7 +87,7 @@ fn brp_improve_stat_cleanliness_for_push_pop_enclosure() {
         Stat(433)
     );
 
-    let sender = app.world().resource::<BrpSender>().clone();
+    let sender = app.world().resource::<BrpSender>();
     let (result_sender, result_receiver) = async_channel::bounded(1);
     sender
         .send_blocking(BrpMessage {

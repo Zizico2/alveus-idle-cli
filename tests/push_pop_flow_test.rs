@@ -18,7 +18,7 @@ fn test_push_pop_feed_restores_hunger() {
 
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
-    app.init_state::<Screen>();
+    app.add_plugins(alveus_app::plugin);
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));

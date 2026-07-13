@@ -158,13 +158,13 @@ impl StepRequest {
     }
 }
 
+/// Routes semantic [`GameCommand`] events into gameplay actions.
+///
+/// Requires [`alveus_app::plugin`] to initialize the app-wide states first.
 pub struct CommandPlugin;
 
 impl Plugin for CommandPlugin {
     fn build(&self, app: &mut App) {
-        if !app.world().contains_resource::<State<Menu>>() {
-            app.init_state::<Menu>();
-        }
         app.init_resource::<StepRequest>()
             .init_resource::<PendingGameCommands>()
             .add_observer(enqueue_game_command)
