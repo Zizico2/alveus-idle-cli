@@ -1,8 +1,8 @@
 use alveus_app::{Menu, Screen};
 use alveus_cleaning::CleaningPlugin;
 use alveus_components::{
-    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage, Player,
-    TilePosition,
+    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
+    MovementController, MovementIntent, Player, TilePosition,
 };
 use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE};
 use alveus_content::ItemId;
@@ -321,6 +321,125 @@ fn keyboard_picker_navigation_moves_once_per_press() {
     app.update();
 
     assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn opening_picker_clears_world_interaction_state_but_preserves_picker_state() {
+    let save_path = "test_care_menu_lifecycle.ron";
+    let mut app = care_test_app(save_path);
+
+    let player = app
+        .world_mut()
+        .query_filtered::<Entity, With<Player>>()
+        .single(app.world())
+        .expect("player");
+    app.world_mut()
+        .entity_mut(player)
+        .insert(MovementController {
+            intent: Some(MovementIntent::Right),
+        });
+
+    let fridge = app
+        .world_mut()
+        .spawn((
+            OpenMenu {
+                menu_id: CareMenuId::Fridge,
+                prompt: "Open fridge".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(fridge);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.update();
+
+    assert_eq!(
+        *app.world().resource::<State<Menu>>().get(),
+        Menu::CareItemPicker
+    );
+    assert!(
+        app.world()
+            .resource::<ActiveInteractionTarget>()
+            .interactable
+            .is_none()
+    );
+    assert_eq!(
+        app.world()
+            .get::<MovementController>(player)
+            .unwrap()
+            .intent,
+        None
+    );
+    assert_eq!(
+        app.world().resource::<CareMenuState>().menu_id,
+        Some(CareMenuId::Fridge)
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn overlay_blocks_world_commands_and_closing_it_restores_target_discovery() {
+    let save_path = "test_overlay_blocks_world_interaction.ron";
+    let mut app = care_test_app(save_path);
+
+    let pickup = app
+        .world_mut()
+        .spawn((
+            GiveItem {
+                item_id: ItemId::MiniMirror,
+                prompt: "Pick up mirror".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    try_give_item(
+        &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+        ItemId::RawVeggieTub,
+    )
+    .unwrap();
+
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::Pause);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(pickup);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.world_mut().trigger(GameCommand::DropItem);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<PlayerSatchel>().slots[0],
+        Some(ItemId::RawVeggieTub)
+    );
+    assert!(
+        !app.world()
+            .resource::<PlayerSatchel>()
+            .slots
+            .contains(&Some(ItemId::MiniMirror))
+    );
+
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::None);
+    app.update();
+
+    assert_eq!(
+        app.world()
+            .resource::<ActiveInteractionTarget>()
+            .interactable,
+        Some(pickup)
+    );
 
     let _ = std::fs::remove_file(save_path);
 }

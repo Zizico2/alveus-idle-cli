@@ -1,14 +1,14 @@
 //! Player care interaction dispatch: give, feed, enrich, clean, mini-chore,
 //! open menu, and cleaning hand-off (poop pickup/dump).
 
-use alveus_app::{Menu, Screen};
+use alveus_app::{AppSystems, Menu, Screen, tile_interaction_allowed, tile_interaction_enabled};
 use alveus_cleaning::{
     PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow, try_dump_poop,
     try_pickup_poop,
 };
 use alveus_components::{
-    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage, Player,
-    TilePosition,
+    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
+    MovementController, Player, TilePosition,
 };
 use alveus_configs::{SATCHEL_MAX_SLOTS, care_menu_options, item_display_name, prep_recipe_for};
 use alveus_content::{ItemId, can_interact};
@@ -48,19 +48,38 @@ impl Plugin for InteractionPlugin {
             .init_resource::<CareHudPulse>()
             .add_systems(
                 Update,
+                clear_disabled_tile_interaction_state.before(AppSystems::RecordInput),
+            )
+            .add_systems(
+                Update,
                 (update_interaction_target, decay_pickup_message)
                     .chain()
-                    .run_if(allows_tile_interaction),
+                    .run_if(tile_interaction_enabled),
             )
-            .add_systems(Update, tick_care_hud_pulse.run_if(allows_tile_interaction))
+            .add_systems(Update, tick_care_hud_pulse.run_if(tile_interaction_enabled))
             .add_observer(apply_animal_fed)
             .add_observer(apply_animal_enriched)
             .add_observer(apply_animal_cleaned);
     }
 }
 
-fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
-    matches!(screen.get(), Screen::Gameplay | Screen::InRoom(_))
+fn clear_disabled_tile_interaction_state(
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut previously_enabled: Local<Option<bool>>,
+    mut active: ResMut<ActiveInteractionTarget>,
+    mut players: Query<&mut MovementController, With<Player>>,
+) {
+    let enabled = tile_interaction_allowed(*screen.get(), *menu.get());
+    let previous = previously_enabled.replace(enabled);
+    if enabled || previous == Some(false) {
+        return;
+    }
+
+    active.interactable = None;
+    for mut movement in &mut players {
+        movement.intent = None;
+    }
 }
 
 /// Gives the player an item when interacted with.

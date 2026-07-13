@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
-use alveus_app::{InRoom, Menu, Pause, Screen};
+use alveus_app::{InRoom, Menu, Pause, Screen, tile_interaction_allowed};
 use alveus_components::{
     BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition,
 };
@@ -49,7 +49,9 @@ pub enum GameCommand {
     /// is blocked by an obstacle. One in-flight tile step takes
     /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
-    /// to advance a single tile predictably.
+    /// to advance a single tile predictably. While [`Menu::CareItemPicker`] is
+    /// open, Up/Down moves its cursor instead; other overlay menus make this a
+    /// no-op.
     Move(MovementIntent),
     /// Clear the player's movement intent (stop walking).
     MoveStop,
@@ -58,11 +60,11 @@ pub enum GameCommand {
     /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
     /// menu (`OpenMenu`), pick up a `PoopPile`, or empty the wheelbarrow at
     /// `PoopDump`. While [`Menu::CareItemPicker`] is open, confirms the
-    /// highlighted item instead. No-op if there is no active interaction target
-    /// (and no care menu).
+    /// highlighted item instead. Other overlay menus make this a no-op. With no
+    /// overlay, it is also a no-op if there is no active interaction target.
     Interact,
     /// Drop the first occupied satchel slot (`K` in-game). No-op if empty.
-    /// Allowed on overview and inside rooms.
+    /// Allowed on overview and inside rooms only when no overlay menu is active.
     DropItem,
     /// Enter the building whose entrance the player is standing on (`Enter`
     /// in-game). Only valid while in [`Screen::Gameplay`] and while the player
@@ -203,6 +205,13 @@ fn care_menu_open(world: &World) -> bool {
         .is_some_and(|menu| *menu.get() == Menu::CareItemPicker)
 }
 
+fn tile_interaction_enabled_in_world(world: &World) -> bool {
+    tile_interaction_allowed(
+        *world.resource::<State<Screen>>().get(),
+        *world.resource::<State<Menu>>().get(),
+    )
+}
+
 fn apply_game_command(world: &mut World, command: GameCommand) {
     // FatalError is terminal for this process: ignore gameplay / navigation verbs.
     // Passive harness verbs (screenshots, frame advance) still apply.
@@ -231,6 +240,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
                 }
                 return;
             }
+            if !tile_interaction_enabled_in_world(world) {
+                return;
+            }
             let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
             if let Ok(mut movement) = query.single_mut(world) {
                 movement.intent = Some(intent);
@@ -242,8 +254,16 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
                 movement.intent = None;
             }
         }
-        GameCommand::Interact => perform_interact_in_world(world),
-        GameCommand::DropItem => perform_drop_in_world(world),
+        GameCommand::Interact => {
+            if care_menu_open(world) || tile_interaction_enabled_in_world(world) {
+                perform_interact_in_world(world);
+            }
+        }
+        GameCommand::DropItem => {
+            if tile_interaction_enabled_in_world(world) {
+                perform_drop_in_world(world);
+            }
+        }
         GameCommand::EnterBuilding => {
             if world.resource::<State<Screen>>().get() != &Screen::Gameplay {
                 return;

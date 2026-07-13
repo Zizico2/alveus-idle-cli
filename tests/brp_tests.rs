@@ -8,8 +8,9 @@ use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE}
 use alveus_content::ItemId;
 use alveus_headless::{GameCommand, register_headless_types};
 use alveus_interaction::{
-    CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, InteractionPlugin, MiniChore, OpenMenu,
-    PlayerSatchel, care_outcome_message, satchel_contains, try_give_item,
+    ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem,
+    InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel, care_outcome_message, satchel_contains,
+    try_give_item,
 };
 use alveus_stats::{
     AnimalId, AnimalStat, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin,
@@ -156,6 +157,45 @@ fn brp_care_menu_moves_cursor_and_confirms_selection() {
     trigger_game_command(&mut app, serde_json::json!("Continue"));
     let satchel = app.world().resource::<PlayerSatchel>();
     assert!(satchel_contains(satchel, ItemId::TortoiseLeafyGreens));
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn brp_world_interaction_commands_are_blocked_by_overlay_menu() {
+    let save_path = "brp_test_overlay_blocks_world_interaction.ron";
+    let mut app = care_brp_app(save_path);
+
+    let pickup = app
+        .world_mut()
+        .spawn((
+            GiveItem {
+                item_id: ItemId::MiniMirror,
+                prompt: "Pick up mirror".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    try_give_item(
+        &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+        ItemId::RawVeggieTub,
+    )
+    .unwrap();
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::Pause);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(pickup);
+
+    trigger_game_command(&mut app, serde_json::json!("Interact"));
+    trigger_game_command(&mut app, serde_json::json!("DropItem"));
+
+    let satchel = app.world().resource::<PlayerSatchel>();
+    assert_eq!(satchel.slots[0], Some(ItemId::RawVeggieTub));
+    assert!(!satchel_contains(satchel, ItemId::MiniMirror));
 
     let _ = std::fs::remove_file(save_path);
 }

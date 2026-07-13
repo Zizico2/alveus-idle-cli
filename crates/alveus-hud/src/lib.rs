@@ -1,4 +1,6 @@
-use alveus_app::{AppSystems, InRoom, Menu, Screen};
+use alveus_app::{
+    AppSystems, InRoom, Menu, Screen, screen_supports_tile_interaction, tile_interaction_allowed,
+};
 use alveus_cleaning::{PoopDump, PoopPile, PoopWheelbarrow, WHEELBARROW_CAPACITY};
 use alveus_components::{CareHudPulse, LastPickupMessage};
 use alveus_configs::{ANIMALS_DATA, NEGLECT_UPKEEP_THRESHOLD, STAT_SCALE};
@@ -90,7 +92,7 @@ impl Plugin for HudPlugin {
 }
 
 fn in_gameplay_or_room(screen_state: Res<State<Screen>>) -> bool {
-    matches!(screen_state.get(), Screen::Gameplay | Screen::InRoom(_))
+    screen_supports_tile_interaction(*screen_state.get())
 }
 
 // ---------------------------------------------------------
@@ -607,8 +609,7 @@ fn update_room_feedback_hud_system(world: &mut World) {
     let pickup_message = world.resource::<LastPickupMessage>().clone();
     let active_entity = world.resource::<ActiveInteractionTarget>().interactable;
 
-    let allows_tile_interaction =
-        matches!(screen, Screen::Gameplay | Screen::InRoom(_)) && menu != Menu::CareItemPicker;
+    let allows_tile_interaction = tile_interaction_allowed(screen, menu);
     let in_cleaning_room = matches!(screen, Screen::InRoom(InRoom::PushPopEnclosure));
 
     let prompt_message = if menu == Menu::CareItemPicker {

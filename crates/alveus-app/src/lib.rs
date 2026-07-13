@@ -63,6 +63,27 @@ pub enum Menu {
     CareItemPicker,
 }
 
+/// Returns whether `screen` represents a world where tile interaction exists.
+///
+/// Overlay menus are deliberately not considered here; use
+/// [`tile_interaction_allowed`] when both state axes are available.
+pub fn screen_supports_tile_interaction(screen: Screen) -> bool {
+    matches!(screen, Screen::Gameplay | Screen::InRoom(_))
+}
+
+/// Canonical policy for player movement and interaction with world tiles.
+///
+/// Tile interaction is available on the overview and in every room interior,
+/// but any active overlay menu owns input until it is closed.
+pub fn tile_interaction_allowed(screen: Screen, menu: Menu) -> bool {
+    screen_supports_tile_interaction(screen) && menu == Menu::None
+}
+
+/// Bevy run-condition adapter for [`tile_interaction_allowed`].
+pub fn tile_interaction_enabled(screen: Res<State<Screen>>, menu: Res<State<Menu>>) -> bool {
+    tile_interaction_allowed(*screen.get(), *menu.get())
+}
+
 /// Initializes all app-wide states and configures the shared `Update` system-set
 /// ordering.
 ///
@@ -94,6 +115,60 @@ pub fn plugin(app: &mut App) {
 mod tests {
     use super::*;
     use bevy::state::app::StatesPlugin;
+
+    const SCREENS: [Screen; 9] = [
+        Screen::Splash,
+        Screen::Title,
+        Screen::Loading,
+        Screen::FatalError,
+        Screen::Gameplay,
+        Screen::InRoom(InRoom::NutritionHouse),
+        Screen::InRoom(InRoom::PushPopEnclosure),
+        Screen::InRoom(InRoom::Pasture),
+        Screen::InRoom(InRoom::ReptileEnclosure),
+    ];
+    const MENUS: [Menu; 6] = [
+        Menu::None,
+        Menu::Main,
+        Menu::Credits,
+        Menu::Settings,
+        Menu::Pause,
+        Menu::CareItemPicker,
+    ];
+
+    fn expected_tile_interaction_policy(screen: Screen, menu: Menu) -> bool {
+        match screen {
+            Screen::Gameplay | Screen::InRoom(_) => match menu {
+                Menu::None => true,
+                Menu::Main
+                | Menu::Credits
+                | Menu::Settings
+                | Menu::Pause
+                | Menu::CareItemPicker => false,
+            },
+            Screen::Splash | Screen::Title | Screen::Loading | Screen::FatalError => match menu {
+                Menu::None
+                | Menu::Main
+                | Menu::Credits
+                | Menu::Settings
+                | Menu::Pause
+                | Menu::CareItemPicker => false,
+            },
+        }
+    }
+
+    #[test]
+    fn tile_interaction_policy_covers_every_screen_and_menu_variant() {
+        for screen in SCREENS {
+            for menu in MENUS {
+                assert_eq!(
+                    tile_interaction_allowed(screen, menu),
+                    expected_tile_interaction_policy(screen, menu),
+                    "unexpected tile-interaction policy for {screen:?} + {menu:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn plugin_owns_app_wide_state_defaults_and_transitions() {
