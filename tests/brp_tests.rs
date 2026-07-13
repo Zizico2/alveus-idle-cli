@@ -12,7 +12,7 @@ use alveus_interaction::{
     InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel, care_outcome_message, satchel_contains,
     try_give_item,
 };
-use alveus_reflect::register_agent_types;
+use alveus_reflect::register_types;
 use alveus_stats::{
     AnimalId, AnimalStat, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin,
 };
@@ -81,7 +81,7 @@ fn care_brp_app(save_path: &str) -> App {
         alveus_command::CommandPlugin,
     ));
     app.add_plugins(bevy::remote::RemotePlugin::default());
-    register_agent_types(&mut app);
+    register_types(&mut app);
     app.add_observer(capture_care_feedback);
     app.world_mut()
         .spawn((Player, CurrentTilePosition(TilePosition { x: 0, y: 0 })));
@@ -95,7 +95,7 @@ fn care_brp_app(save_path: &str) -> App {
 #[test]
 fn registered_types_include_game_command_and_screen() {
     let mut app = App::new();
-    register_agent_types(&mut app);
+    register_types(&mut app);
 
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();
@@ -144,7 +144,7 @@ fn brp_skip_splash_command_changes_screen() {
     app.insert_resource(SavePath(save_path.to_string()));
     app.add_plugins((StatsPlugin, alveus_command::CommandPlugin));
     app.add_plugins(bevy::remote::RemotePlugin::default());
-    register_agent_types(&mut app);
+    register_types(&mut app);
     app.insert_resource(State::new(Screen::Splash));
     app.update();
 

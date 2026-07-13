@@ -809,7 +809,7 @@ fn drop_item_via_game_command() {
 #[test]
 fn care_feedback_event_is_registered() {
     let mut app = App::new();
-    alveus_reflect::register_agent_types(&mut app);
+    alveus_reflect::register_types(&mut app);
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();
     assert!(

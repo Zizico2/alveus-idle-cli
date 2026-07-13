@@ -427,7 +427,7 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,
   `#[reflect(Component/Resource/Event)]`, and registration in
-  `register_agent_types` (`crates/alveus-reflect/src/lib.rs`). If it's not registered,
+  `register_types` (`crates/alveus-reflect/src/lib.rs`). If it's not registered,
   `world.query`/`registry.schema`/`world.trigger_event` can't see it.
 - **Observation stays client-side.** Derived facts (adjacency, joins like animal
   cleanliness via enclosure) are computed by the client/script/test from raw query

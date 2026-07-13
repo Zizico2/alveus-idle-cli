@@ -1,7 +1,7 @@
 use alveus_app::{Menu, Pause, Screen};
 use alveus_command::{GameCommand, HeadlessRenderTarget};
 use alveus_interaction::{CleanAnimal, PlayerSatchel};
-use alveus_reflect::register_agent_types;
+use alveus_reflect::register_types;
 use alveus_stats::SanctuaryUpkeep;
 use alveus_types::{CleanStat, EnrichStat, FeedStat, Stat};
 use bevy::prelude::*;
@@ -11,7 +11,7 @@ use bevy::reflect::TypePath;
 fn reflect_registry_exposes_headless_control_types() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
-    register_agent_types(&mut app);
+    register_types(&mut app);
 
     let registry = app.world().resource::<AppTypeRegistry>();
     let registry = registry.read();

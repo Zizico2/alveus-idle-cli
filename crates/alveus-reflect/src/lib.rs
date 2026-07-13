@@ -1,4 +1,4 @@
-//! Agent-facing Reflect registration (`registry.schema`, `world.query`, etc.).
+//! Shared Reflect registration for runtime and tooling consumers.
 //!
 //! This is the single canonical registration entry point, reused by the game
 //! binary, the headless server, and the `gen_tiled_types` exporter.
@@ -32,7 +32,7 @@ use alveus_world::toast::{DismissToastEvent, TriggerToastEvent};
 
 use alveus_command::{GameCommand, HeadlessRenderTarget, StepRequest};
 
-pub fn register_agent_types(app: &mut App) {
+pub fn register_types(app: &mut App) {
     app.register_type::<Screen>()
         .register_type::<State<Screen>>()
         .register_type::<InRoom>()
@@ -104,7 +104,3 @@ pub fn register_agent_types(app: &mut App) {
         .register_type::<TriggerToastEvent>()
         .register_type::<DismissToastEvent>();
 }
-
-/// Compatibility name retained for downstream callers during the crate split.
-#[deprecated(note = "use register_agent_types")]
-pub use register_agent_types as register_headless_types;

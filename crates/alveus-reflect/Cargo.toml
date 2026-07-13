@@ -3,7 +3,7 @@ name = "alveus-reflect"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Composition-root Reflect registration for agent-observable alveus-idle types"
+description = "Composition-root Reflect registration for alveus-idle"
 
 [dependencies]
 bevy.workspace = true

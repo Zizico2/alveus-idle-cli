@@ -31,7 +31,7 @@ impl Default for HeadlessPlugin {
 
 impl Plugin for HeadlessPlugin {
     fn build(&self, app: &mut App) {
-        alveus_reflect::register_agent_types(app);
+        alveus_reflect::register_types(app);
 
         app.add_plugins(HeadlessCameraPlugin {
             resolution: self.resolution,

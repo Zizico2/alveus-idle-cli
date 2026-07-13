@@ -158,7 +158,7 @@ pub fn build_app(mode: RunMode) -> App {
     // HeadlessPlugin installs the same registry before starting BRP. Windowed
     // mode registers it here for tooling and runtime reflection.
     if !headless {
-        alveus_reflect::register_agent_types(&mut app);
+        alveus_reflect::register_types(&mut app);
     }
 
     // `alveus_app::plugin` owns app-wide state and must precede all consumers.
