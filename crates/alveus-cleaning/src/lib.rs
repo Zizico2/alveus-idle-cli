@@ -393,6 +393,7 @@ pub fn apply_poop_dump(
 mod tests {
     use super::*;
     use alveus_types::TileBounds;
+    use bevy::state::app::StatesPlugin;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
@@ -410,6 +411,57 @@ mod tests {
 
     fn test_key() -> CollisionMapKey {
         CollisionMapKey::Enclosure(EnclosureId::PushPopEnclosure)
+    }
+
+    fn spawn_test_poop(
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<ColorMaterial>>,
+    ) {
+        spawn_poop_entity(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            TilePosition::default(),
+            EnclosureId::PushPopEnclosure,
+            InRoom::PushPopEnclosure,
+        );
+    }
+
+    #[test]
+    fn runtime_poop_is_scoped_to_its_room() {
+        let room = Screen::InRoom(InRoom::PushPopEnclosure);
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(alveus_app::plugin);
+        app.init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<ColorMaterial>>()
+            .add_systems(OnEnter(room), spawn_test_poop);
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(room);
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<PoopPile>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(Screen::Gameplay);
+        app.update();
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<PoopPile>>()
+                .iter(app.world())
+                .next()
+                .is_none()
+        );
     }
 
     fn all_test_tiles() -> HashSet<TilePosition> {

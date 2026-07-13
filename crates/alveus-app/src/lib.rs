@@ -3,7 +3,6 @@
 //! the single owner that initializes [`Screen`], [`Menu`], and [`Pause`].
 
 use bevy::prelude::*;
-use strum::EnumIter;
 
 /// High-level groupings of systems for the app in the `Update` schedule.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
@@ -26,9 +25,8 @@ pub struct Pause(pub bool);
 pub struct PausableSystems;
 
 /// A room interior the player can be inside.
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Reflect)]
 pub enum InRoom {
-    #[default]
     NutritionHouse,
     PushPopEnclosure,
     /// Reserved for a future pasture interior; not enterable in gameplay yet.
@@ -38,7 +36,7 @@ pub enum InRoom {
 }
 
 /// The game's main screen states.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
 pub enum Screen {
     #[default]
     Splash,
@@ -52,7 +50,7 @@ pub enum Screen {
 }
 
 /// The game's menu states.
-#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect, EnumIter)]
+#[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default, Reflect)]
 pub enum Menu {
     #[default]
     None,
@@ -63,27 +61,6 @@ pub enum Menu {
     /// In-world care item picker (fridge, etc.). Cursor via Move Up/Down;
     /// confirm with Interact/Continue; cancel with Back.
     CareItemPicker,
-}
-
-/// Returns whether `screen` represents a world where tile interaction exists.
-///
-/// Overlay menus are deliberately not considered here; use
-/// [`tile_interaction_allowed`] when both state axes are available.
-pub fn screen_supports_tile_interaction(screen: Screen) -> bool {
-    matches!(screen, Screen::Gameplay | Screen::InRoom(_))
-}
-
-/// Canonical policy for player movement and interaction with world tiles.
-///
-/// Tile interaction is available on the overview and in every room interior,
-/// but any active overlay menu owns input until it is closed.
-pub fn tile_interaction_allowed(screen: Screen, menu: Menu) -> bool {
-    screen_supports_tile_interaction(screen) && menu == Menu::None
-}
-
-/// Bevy run-condition adapter for [`tile_interaction_allowed`].
-pub fn tile_interaction_enabled(screen: Res<State<Screen>>, menu: Res<State<Menu>>) -> bool {
-    tile_interaction_allowed(*screen.get(), *menu.get())
 }
 
 /// Initializes all app-wide states and configures the shared `Update` system-set
@@ -117,49 +94,6 @@ pub fn plugin(app: &mut App) {
 mod tests {
     use super::*;
     use bevy::state::app::StatesPlugin;
-    use strum::IntoEnumIterator;
-
-    /// Every concrete [`Screen`] value, expanding [`Screen::InRoom`] across
-    /// all [`InRoom`] variants (`EnumIter` alone only yields one default room).
-    fn all_screens() -> impl Iterator<Item = Screen> {
-        Screen::iter()
-            .filter(|screen| !matches!(screen, Screen::InRoom(_)))
-            .chain(InRoom::iter().map(Screen::InRoom))
-    }
-
-    fn expected_tile_interaction_policy(screen: Screen, menu: Menu) -> bool {
-        match screen {
-            Screen::Gameplay | Screen::InRoom(_) => match menu {
-                Menu::None => true,
-                Menu::Main
-                | Menu::Credits
-                | Menu::Settings
-                | Menu::Pause
-                | Menu::CareItemPicker => false,
-            },
-            Screen::Splash | Screen::Title | Screen::Loading | Screen::FatalError => match menu {
-                Menu::None
-                | Menu::Main
-                | Menu::Credits
-                | Menu::Settings
-                | Menu::Pause
-                | Menu::CareItemPicker => false,
-            },
-        }
-    }
-
-    #[test]
-    fn tile_interaction_policy_covers_every_screen_and_menu_variant() {
-        for screen in all_screens() {
-            for menu in Menu::iter() {
-                assert_eq!(
-                    tile_interaction_allowed(screen, menu),
-                    expected_tile_interaction_policy(screen, menu),
-                    "unexpected tile-interaction policy for {screen:?} + {menu:?}"
-                );
-            }
-        }
-    }
 
     #[test]
     fn plugin_owns_app_wide_state_defaults_and_transitions() {
