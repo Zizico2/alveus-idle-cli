@@ -1,8 +1,8 @@
 use alveus_app::{Menu, Screen};
 use alveus_cleaning::CleaningPlugin;
 use alveus_components::{
-    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage, Player,
-    TilePosition,
+    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
+    MovementController, MovementIntent, Player, TilePosition,
 };
 use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE};
 use alveus_content::ItemId;
@@ -19,6 +19,7 @@ use alveus_stats::{
 use alveus_types::{CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat, Stat};
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
+use bevy::time::TimeUpdateStrategy;
 
 #[derive(Resource, Default)]
 struct CapturedCareFeedback(Option<String>);
@@ -321,6 +322,199 @@ fn keyboard_picker_navigation_moves_once_per_press() {
     app.update();
 
     assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn opening_picker_clears_world_interaction_state_but_preserves_picker_state() {
+    let save_path = "test_care_menu_lifecycle.ron";
+    let mut app = care_test_app(save_path);
+
+    let player = app
+        .world_mut()
+        .query_filtered::<Entity, With<Player>>()
+        .single(app.world())
+        .expect("player");
+    app.world_mut()
+        .entity_mut(player)
+        .insert(MovementController {
+            intent: Some(MovementIntent::Right),
+        });
+
+    let fridge = app
+        .world_mut()
+        .spawn((
+            OpenMenu {
+                menu_id: CareMenuId::Fridge,
+                prompt: "Open fridge".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(fridge);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.update();
+
+    assert_eq!(
+        *app.world().resource::<State<Menu>>().get(),
+        Menu::CareItemPicker
+    );
+    assert!(
+        app.world()
+            .resource::<ActiveInteractionTarget>()
+            .interactable
+            .is_none()
+    );
+    assert_eq!(
+        app.world()
+            .get::<MovementController>(player)
+            .unwrap()
+            .intent,
+        None
+    );
+    assert_eq!(
+        app.world().resource::<CareMenuState>().menu_id,
+        Some(CareMenuId::Fridge)
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn overlay_blocks_world_commands_and_closing_it_restores_target_discovery() {
+    let save_path = "test_overlay_blocks_world_interaction.ron";
+    let mut app = care_test_app(save_path);
+
+    let pickup = app
+        .world_mut()
+        .spawn((
+            GiveItem {
+                item_id: ItemId::MiniMirror,
+                prompt: "Pick up mirror".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    try_give_item(
+        &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+        ItemId::RawVeggieTub,
+    )
+    .unwrap();
+
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::Pause);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(pickup);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.world_mut().trigger(GameCommand::DropItem);
+    app.update();
+
+    assert_eq!(
+        app.world().resource::<PlayerSatchel>().slots[0],
+        Some(ItemId::RawVeggieTub)
+    );
+    assert!(
+        !app.world()
+            .resource::<PlayerSatchel>()
+            .slots
+            .contains(&Some(ItemId::MiniMirror))
+    );
+
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::None);
+    app.update();
+
+    assert_eq!(
+        app.world()
+            .resource::<ActiveInteractionTarget>()
+            .interactable,
+        Some(pickup)
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn world_commands_require_a_live_player_entity() {
+    let save_path = "test_world_commands_require_player.ron";
+    let mut app = care_test_app(save_path);
+
+    let player = app
+        .world_mut()
+        .query_filtered::<Entity, With<Player>>()
+        .single(app.world())
+        .expect("player");
+    app.world_mut().despawn(player);
+
+    let pickup = app
+        .world_mut()
+        .spawn((
+            GiveItem {
+                item_id: ItemId::MiniMirror,
+                prompt: "Pick up mirror".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ))
+        .id();
+    try_give_item(
+        &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+        ItemId::RawVeggieTub,
+    )
+    .unwrap();
+    app.world_mut()
+        .resource_mut::<ActiveInteractionTarget>()
+        .interactable = Some(pickup);
+
+    app.world_mut().trigger(GameCommand::Interact);
+    app.world_mut().trigger(GameCommand::DropItem);
+    app.update();
+
+    let satchel = app.world().resource::<PlayerSatchel>();
+    assert_eq!(satchel.slots[0], Some(ItemId::RawVeggieTub));
+    assert!(!satchel.slots.contains(&Some(ItemId::MiniMirror)));
+    assert!(
+        app.world()
+            .resource::<ActiveInteractionTarget>()
+            .interactable
+            .is_none()
+    );
+
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn overlay_does_not_freeze_transient_feedback_timers() {
+    let save_path = "test_overlay_feedback_timers.ron";
+    let mut app = care_test_app(save_path);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs(1),
+    ));
+    app.insert_resource(LastPickupMessage {
+        text: Some("Temporary message".to_string()),
+        timer: Timer::from_seconds(0.1, TimerMode::Once),
+    });
+    app.world_mut().resource_mut::<CareHudPulse>().trigger();
+    app.world_mut()
+        .resource_mut::<NextState<Menu>>()
+        .set(Menu::Pause);
+
+    app.update();
+    app.update();
+
+    assert!(app.world().resource::<LastPickupMessage>().text.is_none());
+    assert!(!app.world().resource::<CareHudPulse>().is_active());
 
     let _ = std::fs::remove_file(save_path);
 }

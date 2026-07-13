@@ -1,14 +1,14 @@
 //! Player care interaction dispatch: give, feed, enrich, clean, mini-chore,
 //! open menu, and cleaning hand-off (poop pickup/dump).
 
-use alveus_app::{Menu, Screen};
+use alveus_app::Menu;
 use alveus_cleaning::{
     PoopDump, PoopDumpedEvent, PoopPickedUpEvent, PoopPile, PoopWheelbarrow, try_dump_poop,
     try_pickup_poop,
 };
 use alveus_components::{
-    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage, Player,
-    TilePosition,
+    CareFeedbackEvent, CareHudPulse, CurrentTilePosition, Interactable, LastPickupMessage,
+    MovementController, Player, TilePosition,
 };
 use alveus_configs::{SATCHEL_MAX_SLOTS, care_menu_options, item_display_name, prep_recipe_for};
 use alveus_content::{ItemId, can_interact};
@@ -46,21 +46,26 @@ impl Plugin for InteractionPlugin {
             .init_resource::<CareMenuState>()
             .init_resource::<LastPickupMessage>()
             .init_resource::<CareHudPulse>()
+            .add_systems(OnExit(Menu::None), clear_world_input_state)
             .add_systems(
                 Update,
-                (update_interaction_target, decay_pickup_message)
-                    .chain()
-                    .run_if(allows_tile_interaction),
+                update_interaction_target.run_if(in_state(Menu::None)),
             )
-            .add_systems(Update, tick_care_hud_pulse.run_if(allows_tile_interaction))
+            .add_systems(Update, (decay_pickup_message, tick_care_hud_pulse))
             .add_observer(apply_animal_fed)
             .add_observer(apply_animal_enriched)
             .add_observer(apply_animal_cleaned);
     }
 }
 
-fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
-    matches!(screen.get(), Screen::Gameplay | Screen::InRoom(_))
+fn clear_world_input_state(
+    mut active: ResMut<ActiveInteractionTarget>,
+    mut players: Query<&mut MovementController, With<Player>>,
+) {
+    active.interactable = None;
+    for mut movement in &mut players {
+        movement.intent = None;
+    }
 }
 
 /// Gives the player an item when interacted with.
@@ -238,7 +243,12 @@ pub fn perform_drop(satchel: &mut PlayerSatchel, commands: &mut Commands) {
     }
 }
 
+/// Drops an item only while a live player owns world input.
 pub fn perform_drop_in_world(world: &mut World) {
+    if *world.resource::<State<Menu>>().get() != Menu::None || !has_player(world) {
+        return;
+    }
+
     let drop_result = {
         let mut satchel = world.resource_mut::<PlayerSatchel>();
         try_drop_item(&mut satchel)
@@ -271,9 +281,20 @@ fn tick_care_hud_pulse(time: Res<Time>, mut pulse: ResMut<CareHudPulse>) {
     }
 }
 
+/// Dispatches the active ECS interaction target, or the care-picker action.
+///
+/// A live player is required, and overlay menus other than the care picker own
+/// input instead of forwarding it to the world.
 pub fn perform_interact_in_world(world: &mut World) {
-    if *world.resource::<State<Menu>>().get() == Menu::CareItemPicker {
+    let menu = *world.resource::<State<Menu>>().get();
+    if menu == Menu::CareItemPicker {
+        if !has_player(world) {
+            return;
+        }
         confirm_care_menu_in_world(world);
+        return;
+    }
+    if menu != Menu::None || !has_player(world) {
         return;
     }
 
@@ -422,6 +443,11 @@ pub fn perform_interact_in_world(world: &mut World) {
             }
         }
     }
+}
+
+fn has_player(world: &mut World) -> bool {
+    let mut players = world.query_filtered::<(), With<Player>>();
+    players.single(world).is_ok()
 }
 
 fn handle_mini_chore_in_world(world: &mut World, chore: &MiniChore) {

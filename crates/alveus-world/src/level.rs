@@ -85,3 +85,66 @@ pub fn spawn_level(
         ],
     ));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alveus_app::Screen;
+    use alveus_components::Player;
+    use bevy::state::app::StatesPlugin;
+
+    #[test]
+    fn overview_player_and_map_are_scoped_to_gameplay() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(alveus_app::plugin);
+        app.init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<ColorMaterial>>()
+            .init_resource::<PlayerSpawnPoint>()
+            .insert_resource(LevelAssets {
+                map: Handle::default(),
+            })
+            .add_systems(OnEnter(Screen::Gameplay), spawn_level);
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(Screen::Gameplay);
+        app.update();
+
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<Player>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TiledMap>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(Screen::Title);
+        app.update();
+
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<Player>>()
+                .iter(app.world())
+                .next()
+                .is_none()
+        );
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TiledMap>>()
+                .iter(app.world())
+                .next()
+                .is_none()
+        );
+    }
+}

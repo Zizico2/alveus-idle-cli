@@ -9,7 +9,7 @@
 use bevy::{input::common_conditions::input_just_pressed, prelude::*};
 
 use alveus_app::{AppSystems, Menu, PausableSystems, Screen};
-use alveus_components::MovementIntent;
+use alveus_components::{MovementIntent, Player};
 
 use crate::command::GameCommand;
 
@@ -23,7 +23,12 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            record_player_directional_input
+            (
+                record_player_directional_input
+                    .run_if(in_state(Menu::None).and_then(any_with_component::<Player>)),
+                record_care_picker_navigation
+                    .run_if(in_state(Menu::CareItemPicker).and_then(any_with_component::<Player>)),
+            )
                 .in_set(AppSystems::RecordInput)
                 .in_set(PausableSystems),
         );
@@ -58,12 +63,23 @@ impl Plugin for InputPlugin {
         app.add_systems(
             Update,
             (
-                interact_from_keyboard
-                    .run_if(allows_tile_interaction.and_then(input_just_pressed(KeyCode::Space))),
-                drop_item_from_keyboard
-                    .run_if(allows_tile_interaction.and_then(input_just_pressed(KeyCode::KeyK))),
+                interact_from_keyboard.run_if(
+                    in_state(Menu::None)
+                        .and_then(any_with_component::<Player>)
+                        .and_then(input_just_pressed(KeyCode::Space)),
+                ),
+                drop_item_from_keyboard.run_if(
+                    in_state(Menu::None)
+                        .and_then(any_with_component::<Player>)
+                        .and_then(input_just_pressed(KeyCode::KeyK)),
+                ),
                 confirm_care_menu_from_keyboard.run_if(
-                    in_state(Menu::CareItemPicker).and_then(input_just_pressed(KeyCode::Enter)),
+                    in_state(Menu::CareItemPicker)
+                        .and_then(any_with_component::<Player>)
+                        .and_then(
+                            input_just_pressed(KeyCode::Enter)
+                                .or_else(input_just_pressed(KeyCode::Space)),
+                        ),
                 ),
                 cancel_care_menu_from_keyboard.run_if(
                     in_state(Menu::CareItemPicker).and_then(input_just_pressed(KeyCode::Escape)),
@@ -73,36 +89,11 @@ impl Plugin for InputPlugin {
     }
 }
 
-fn allows_tile_interaction(screen: Res<State<Screen>>) -> bool {
-    matches!(*screen.get(), Screen::Gameplay | Screen::InRoom(_))
-}
-
-fn record_player_directional_input(
-    input: Res<ButtonInput<KeyCode>>,
-    menu: Res<State<Menu>>,
-    mut commands: Commands,
-) {
-    let picker_open = *menu.get() == Menu::CareItemPicker;
-    let is_up = if picker_open {
-        input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::ArrowUp)
-    } else {
-        input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp)
-    };
-    let is_down = if picker_open {
-        input.just_pressed(KeyCode::KeyS) || input.just_pressed(KeyCode::ArrowDown)
-    } else {
-        input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown)
-    };
-    let is_left = if picker_open {
-        input.just_pressed(KeyCode::KeyA) || input.just_pressed(KeyCode::ArrowLeft)
-    } else {
-        input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft)
-    };
-    let is_right = if picker_open {
-        input.just_pressed(KeyCode::KeyD) || input.just_pressed(KeyCode::ArrowRight)
-    } else {
-        input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight)
-    };
+fn record_player_directional_input(input: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    let is_up = input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp);
+    let is_down = input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown);
+    let is_left = input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft);
+    let is_right = input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight);
 
     let intent = if is_up {
         Some(MovementIntent::Up)
@@ -120,6 +111,14 @@ fn record_player_directional_input(
         commands.trigger(GameCommand::Move(intent));
     } else {
         commands.trigger(GameCommand::MoveStop);
+    }
+}
+
+fn record_care_picker_navigation(input: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    if input.just_pressed(KeyCode::KeyW) || input.just_pressed(KeyCode::ArrowUp) {
+        commands.trigger(GameCommand::Move(MovementIntent::Up));
+    } else if input.just_pressed(KeyCode::KeyS) || input.just_pressed(KeyCode::ArrowDown) {
+        commands.trigger(GameCommand::Move(MovementIntent::Down));
     }
 }
 

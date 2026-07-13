@@ -78,19 +78,15 @@ impl Plugin for HudPlugin {
             Update,
             (update_hud_system, animate_neglect_banner_system)
                 .in_set(AppSystems::UiUpdate)
-                .run_if(in_gameplay_or_room),
+                .run_if(any_with_component::<StatsHudUi>),
         );
         app.add_systems(
             Update,
             update_room_feedback_hud_system
                 .in_set(AppSystems::UiUpdate)
-                .run_if(in_gameplay_or_room),
+                .run_if(any_with_component::<StatsHudUi>),
         );
     }
-}
-
-fn in_gameplay_or_room(screen_state: Res<State<Screen>>) -> bool {
-    matches!(screen_state.get(), Screen::Gameplay | Screen::InRoom(_))
 }
 
 // ---------------------------------------------------------
@@ -607,13 +603,11 @@ fn update_room_feedback_hud_system(world: &mut World) {
     let pickup_message = world.resource::<LastPickupMessage>().clone();
     let active_entity = world.resource::<ActiveInteractionTarget>().interactable;
 
-    let allows_tile_interaction =
-        matches!(screen, Screen::Gameplay | Screen::InRoom(_)) && menu != Menu::CareItemPicker;
     let in_cleaning_room = matches!(screen, Screen::InRoom(InRoom::PushPopEnclosure));
 
     let prompt_message = if menu == Menu::CareItemPicker {
         Some(care_menu_prompt(&care_menu))
-    } else if allows_tile_interaction {
+    } else if menu == Menu::None {
         active_entity.and_then(|entity| {
             if let Some(give) = world.get::<GiveItem>(entity) {
                 return Some(format!("Press [Space] to {}", give.prompt));

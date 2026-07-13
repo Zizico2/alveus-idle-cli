@@ -321,3 +321,94 @@ impl Plugin for PushPopEnclosurePlugin {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::state::app::StatesPlugin;
+
+    fn test_map(assets: &InteriorAssets) -> Handle<TiledMapAsset> {
+        assets.nutrition_house.clone()
+    }
+
+    fn no_room_extras(
+        _parent: &mut ChildSpawnerCommands,
+        _meshes: &mut Assets<Mesh>,
+        _materials: &mut Assets<ColorMaterial>,
+        _tile: TilePosition,
+    ) {
+    }
+
+    #[test]
+    fn interior_player_and_map_are_scoped_to_room() {
+        let room = Screen::InRoom(InRoom::NutritionHouse);
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(alveus_app::plugin);
+        app.init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<ColorMaterial>>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<CollisionMasks>()
+            .insert_resource(InteriorAssets {
+                nutrition_house: Handle::default(),
+                push_pop_enclosure: Handle::default(),
+            });
+        build_room(
+            &mut app,
+            RoomConfig {
+                room_state: room,
+                gameplay_state: Screen::Gameplay,
+                entrance: BuildingEntrance::NutritionHouse,
+                enclosure_id: EnclosureId::NutritionHousePlaypen,
+                room_spawn: TilePosition::default(),
+                exit_spawn: TilePosition::default(),
+                exit_door: TilePosition::default(),
+                get_interior_map: test_map,
+                resident_animal: None,
+                spawn_extras_fn: no_room_extras,
+                room_title: "Test Room".to_string(),
+            },
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(room);
+        app.update();
+
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<Player>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TiledMap>>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+
+        app.world_mut()
+            .resource_mut::<NextState<Screen>>()
+            .set(Screen::Title);
+        app.update();
+
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<Player>>()
+                .iter(app.world())
+                .next()
+                .is_none()
+        );
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TiledMap>>()
+                .iter(app.world())
+                .next()
+                .is_none()
+        );
+    }
+}

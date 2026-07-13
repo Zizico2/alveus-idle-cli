@@ -49,7 +49,9 @@ pub enum GameCommand {
     /// is blocked by an obstacle. One in-flight tile step takes
     /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
-    /// to advance a single tile predictably.
+    /// to advance a single tile predictably. While [`Menu::CareItemPicker`] is
+    /// open, Up/Down moves its cursor instead; other overlay menus make this a
+    /// no-op. Requires an active [`Player`] entity.
     Move(MovementIntent),
     /// Clear the player's movement intent (stop walking).
     MoveStop,
@@ -58,11 +60,12 @@ pub enum GameCommand {
     /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
     /// menu (`OpenMenu`), pick up a `PoopPile`, or empty the wheelbarrow at
     /// `PoopDump`. While [`Menu::CareItemPicker`] is open, confirms the
-    /// highlighted item instead. No-op if there is no active interaction target
-    /// (and no care menu).
+    /// highlighted item instead. Other overlay menus make this a no-op. With no
+    /// overlay, it is also a no-op without an active [`Player`] and interaction
+    /// target.
     Interact,
     /// Drop the first occupied satchel slot (`K` in-game). No-op if empty.
-    /// Allowed on overview and inside rooms.
+    /// Requires an active [`Player`] and no overlay menu.
     DropItem,
     /// Enter the building whose entrance the player is standing on (`Enter`
     /// in-game). Only valid while in [`Screen::Gameplay`] and while the player
@@ -203,6 +206,14 @@ fn care_menu_open(world: &World) -> bool {
         .is_some_and(|menu| *menu.get() == Menu::CareItemPicker)
 }
 
+fn has_player(world: &World) -> bool {
+    world
+        .iter_entities()
+        .filter(|entity| entity.contains::<Player>())
+        .count()
+        == 1
+}
+
 fn apply_game_command(world: &mut World, command: GameCommand) {
     // FatalError is terminal for this process: ignore gameplay / navigation verbs.
     // Passive harness verbs (screenshots, frame advance) still apply.
@@ -216,9 +227,14 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
     match command {
         GameCommand::Move(intent) => {
             if care_menu_open(world) {
-                let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-                if let Ok(mut movement) = query.single_mut(world) {
-                    movement.intent = None;
+                if !has_player(world) {
+                    return;
+                }
+                {
+                    let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
+                    if let Ok(mut movement) = query.single_mut(world) {
+                        movement.intent = None;
+                    }
                 }
                 let delta = match intent {
                     MovementIntent::Up => -1,
@@ -229,6 +245,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
                     let mut care_menu = world.resource_mut::<CareMenuState>();
                     care_menu_move_cursor(&mut care_menu, delta);
                 }
+                return;
+            }
+            if *world.resource::<State<Menu>>().get() != Menu::None {
                 return;
             }
             let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
