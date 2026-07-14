@@ -589,7 +589,7 @@ fn keyboard_escape_cancels_care_menu_via_game_command() {
 }
 
 #[test]
-fn picker_left_and_right_are_noops_and_interact_confirms() {
+fn world_move_does_not_change_care_cursor_and_interact_confirms() {
     let save_path = "test_care_menu_direction_parity.ron";
     let mut app = care_test_app(save_path);
 
@@ -608,6 +608,8 @@ fn picker_left_and_right_are_noops_and_interact_confirms() {
         .trigger(GameCommand::Move(MovementIntent::Left));
     app.world_mut()
         .trigger(GameCommand::Move(MovementIntent::Right));
+    app.world_mut()
+        .trigger(GameCommand::Move(MovementIntent::Down));
     app.update();
     assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 

@@ -1,6 +1,7 @@
 //! Reusable list-menu presentation backed by [`ListMenuState`].
 
-use alveus_menus_models::ListMenuState;
+pub(crate) use alveus_menus_models::{ListMenu, ListMenuEntry};
+use alveus_menus_models::{ListMenuCursor, ListMenuState};
 use alveus_theme::widget;
 use bevy::{
     input_focus::InputFocus,
@@ -52,15 +53,6 @@ impl ListMenuSpec {
 }
 
 #[derive(Component)]
-pub(crate) struct ListMenu;
-
-#[derive(Component)]
-pub(crate) struct ListMenuEntry {
-    pub(crate) list: Entity,
-    pub(crate) index: usize,
-}
-
-#[derive(Component)]
 struct SelectionListMenuEntry;
 
 #[derive(Component)]
@@ -104,6 +96,9 @@ pub(crate) fn spawn_list_menu<T>(
             ..default()
         },
     ));
+    if spec.kind == ListMenuKind::Actions {
+        list_commands.insert(ListMenuCursor::from_state(state));
+    }
     if spec.kind == ListMenuKind::Selection {
         list_commands.insert(ListBox);
     }
@@ -181,11 +176,11 @@ pub(crate) fn project_selection(
     commands.entity(list).insert(ActiveDescendant(active));
 }
 
-/// Keep an action menu's generic model cursor aligned with Bevy's focused row.
+/// Keep an action menu's model + [`ListMenuCursor`] aligned with Bevy's focused row.
 pub(crate) fn sync_action_cursor<T: Send + Sync + 'static>(
     focus: Option<Res<InputFocus>>,
     entries: Query<&ListMenuEntry>,
-    mut lists: Query<&mut ListMenuState<T>>,
+    mut lists: Query<(&mut ListMenuState<T>, &mut ListMenuCursor)>,
 ) {
     let Some(focus) = focus else {
         return;
@@ -199,8 +194,18 @@ pub(crate) fn sync_action_cursor<T: Send + Sync + 'static>(
     let Ok(entry) = entries.get(focused) else {
         return;
     };
-    if let Ok(mut state) = lists.get_mut(entry.list) {
+    if let Ok((mut state, mut cursor)) = lists.get_mut(entry.list) {
         state.set_cursor(entry.index);
+        cursor.set_index(entry.index);
+    }
+}
+
+/// Keep [`ListMenuState`] aligned when [`ListMenuCursor`] is driven by commands.
+pub(crate) fn sync_state_from_list_cursor<T: Send + Sync + 'static>(
+    mut lists: Query<(&ListMenuCursor, &mut ListMenuState<T>), Changed<ListMenuCursor>>,
+) {
+    for (cursor, mut state) in &mut lists {
+        let _ = state.set_cursor(cursor.index);
     }
 }
 

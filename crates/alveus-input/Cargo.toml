@@ -12,6 +12,7 @@ alveus-app.workspace = true
 alveus-components.workspace = true
 alveus-command.workspace = true
 alveus-configs.workspace = true
+alveus-menus-models.workspace = true
 alveus-stats.workspace = true
 alveus-types.workspace = true
 

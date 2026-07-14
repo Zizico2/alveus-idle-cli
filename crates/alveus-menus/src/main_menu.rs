@@ -15,7 +15,11 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Menu::Main), spawn_main_menu)
         .add_systems(
             Update,
-            crate::list_menu::sync_action_cursor::<MainMenuAction>.run_if(in_state(Menu::Main)),
+            (
+                crate::list_menu::sync_action_cursor::<MainMenuAction>,
+                crate::list_menu::sync_state_from_list_cursor::<MainMenuAction>,
+            )
+                .run_if(in_state(Menu::Main)),
         )
         .add_observer(activate_main_menu_action);
 }
@@ -151,5 +155,58 @@ mod tests {
                 .cursor,
             1
         );
+    }
+
+    #[test]
+    fn navigate_list_menu_moves_cursor_and_focus() {
+        use alveus_command::CommandPlugin;
+        use alveus_menus_models::{ListMenuCursor, ListMenuDirection};
+
+        let mut app = App::new();
+        app.add_plugins((
+            StatesPlugin,
+            MinimalPlugins,
+            alveus_app::plugin,
+            CommandPlugin,
+        ));
+        app.init_resource::<InputFocus>();
+        app.add_plugins(super::plugin);
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::Main);
+        app.update();
+
+        let list = app
+            .world_mut()
+            .query_filtered::<Entity, (With<ListMenu>, With<ListMenuCursor>)>()
+            .single(app.world())
+            .expect("one main action list");
+        assert_eq!(
+            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            0
+        );
+
+        app.world_mut()
+            .trigger(GameCommand::NavigateListMenu(ListMenuDirection::Down));
+        app.update();
+
+        assert_eq!(
+            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            1
+        );
+        assert_eq!(
+            app.world()
+                .get::<ListMenuState<MainMenuAction>>(list)
+                .expect("main list state")
+                .cursor,
+            1
+        );
+        let focused = app.world().resource::<InputFocus>().get().expect("focus");
+        let entry = app
+            .world()
+            .get::<ListMenuEntry>(focused)
+            .expect("focused entry");
+        assert_eq!(entry.list, list);
+        assert_eq!(entry.index, 1);
     }
 }

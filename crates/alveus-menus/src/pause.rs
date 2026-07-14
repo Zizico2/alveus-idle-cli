@@ -15,7 +15,11 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Menu::Pause), spawn_pause_menu)
         .add_systems(
             Update,
-            crate::list_menu::sync_action_cursor::<PauseMenuAction>.run_if(in_state(Menu::Pause)),
+            (
+                crate::list_menu::sync_action_cursor::<PauseMenuAction>,
+                crate::list_menu::sync_state_from_list_cursor::<PauseMenuAction>,
+            )
+                .run_if(in_state(Menu::Pause)),
         )
         .add_observer(activate_pause_menu_action);
 }

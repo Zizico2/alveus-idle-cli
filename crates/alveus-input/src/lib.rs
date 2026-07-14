@@ -8,6 +8,7 @@ use alveus_app::{Menu, Screen};
 use alveus_command::GameCommand;
 use alveus_components::MovementIntent;
 use alveus_configs::{DEBUG_ADVANCE_HOURS, DEBUG_STAT_IMPROVE_AMOUNT, DEBUG_STAT_WORSEN_AMOUNT};
+use alveus_menus_models::ListMenuDirection;
 use alveus_stats::{
     AnimalId, AnimalStat, AnimalStats, EnclosureId, EnclosureStat, EnclosureStats, StatTarget,
 };
@@ -456,6 +457,15 @@ fn stop_player(_: On<Complete<WorldMove>>, mut commands: Commands) {
     commands.trigger(GameCommand::MoveStop);
 }
 
+// Given an observer name, action type, and game command, defines a function that
+// triggers the given command when the specified input action starts.
+//
+// Example usage:
+//     command_observer!(interact, Interact, GameCommand::Interact);
+// Expands to:
+//     fn interact(_: On<Start<Interact>>, mut commands: Commands) {
+//         commands.trigger(GameCommand::Interact);
+//     }
 macro_rules! command_observer {
     ($name:ident, $action:ty, $command:expr) => {
         fn $name(_: On<Start<$action>>, mut commands: Commands) {
@@ -475,30 +485,48 @@ command_observer!(close_menu, MenuBack, GameCommand::Back);
 command_observer!(skip_splash, SkipSplash, GameCommand::SkipSplash);
 
 fn navigate_care_picker(event: On<Start<CareNavigate>>, mut commands: Commands) {
-    let intent = if event.value > 0.0 {
-        MovementIntent::Up
+    let direction = if event.value > 0.0 {
+        ListMenuDirection::Up
     } else {
-        MovementIntent::Down
+        ListMenuDirection::Down
     };
-    commands.trigger(GameCommand::Move(intent));
+    commands.trigger(GameCommand::NavigateListMenu(direction));
 }
 
 fn navigate_menu(
     event: On<Start<MenuNavigate>>,
+    menu: Res<State<Menu>>,
+    mut commands: Commands,
     mut navigator: AutoDirectionalNavigator,
     mut focus_visible: ResMut<InputFocusVisible>,
 ) {
-    let Some(intent) = movement_intent(event.value) else {
-        return;
-    };
-    let direction = match intent {
-        MovementIntent::Up => CompassOctant::North,
-        MovementIntent::Down => CompassOctant::South,
-        MovementIntent::Left => CompassOctant::West,
-        MovementIntent::Right => CompassOctant::East,
-    };
-    focus_visible.0 = true;
-    let _ = navigator.navigate(direction);
+    match *menu.get() {
+        Menu::Main | Menu::Pause => {
+            let Some(intent) = movement_intent(event.value) else {
+                return;
+            };
+            let direction = match intent {
+                MovementIntent::Up => ListMenuDirection::Up,
+                MovementIntent::Down => ListMenuDirection::Down,
+                MovementIntent::Left | MovementIntent::Right => return,
+            };
+            commands.trigger(GameCommand::NavigateListMenu(direction));
+        }
+        Menu::Settings | Menu::Credits => {
+            let Some(intent) = movement_intent(event.value) else {
+                return;
+            };
+            let direction = match intent {
+                MovementIntent::Up => CompassOctant::North,
+                MovementIntent::Down => CompassOctant::South,
+                MovementIntent::Left => CompassOctant::West,
+                MovementIntent::Right => CompassOctant::East,
+            };
+            focus_visible.0 = true;
+            let _ = navigator.navigate(direction);
+        }
+        Menu::None | Menu::CareItemPicker => {}
+    }
 }
 
 fn confirm_menu(_: On<Start<MenuConfirm>>, focus: Res<InputFocus>, mut commands: Commands) {
@@ -699,7 +727,7 @@ mod tests {
         app.update();
         assert!(matches!(
             app.world().resource::<Captured>().0.as_slice(),
-            [GameCommand::Move(MovementIntent::Up)]
+            [GameCommand::NavigateListMenu(ListMenuDirection::Up)]
         ));
     }
 
@@ -713,7 +741,7 @@ mod tests {
         app.update();
         assert!(matches!(
             app.world().resource::<Captured>().0.as_slice(),
-            [GameCommand::Move(MovementIntent::Down)]
+            [GameCommand::NavigateListMenu(ListMenuDirection::Down)]
         ));
     }
 

@@ -111,6 +111,7 @@ alveus-animals.workspace = true
 alveus-world.workspace = true
 alveus-screens.workspace = true
 alveus-menus.workspace = true
+alveus-menus-models.workspace = true
 alveus-hud.workspace = true
 alveus-command.workspace = true
 alveus-input.workspace = true

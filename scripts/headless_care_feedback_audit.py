@@ -86,10 +86,8 @@ def run_player_feed_flow() -> dict:
     # Fridge is CareItemPicker: first option RawVeggieTub, second TortoiseLeafyGreens.
     trigger_game("Interact")
     time.sleep(0.3)
-    trigger_game({"Move": "Down"})
+    trigger_game({"NavigateListMenu": "Down"})
     time.sleep(0.15)
-    trigger_game("MoveStop")
-    time.sleep(0.1)
     trigger_game("Continue")
     time.sleep(0.4)
     if not satchel_has("TortoiseLeafyGreens"):

@@ -16,6 +16,7 @@ alveus-interaction.workspace = true
 alveus-stats.workspace = true
 alveus-world.workspace = true
 alveus-menus.workspace = true
+alveus-menus-models.workspace = true
 alveus-command.workspace = true
 
 [lints]

@@ -2,7 +2,7 @@
 """Playtest: Nutrition House fridge menu → greens → Push Pop Enclosure → feed.
 
 Note: Diet Fridge is an OpenMenu (CareItemPicker). First option is RawVeggieTub;
-Move Down then Continue selects TortoiseLeafyGreens for Push Pop.
+Move NavigateListMenu Down then Continue selects TortoiseLeafyGreens for Push Pop.
 
 Navigation uses explicit tile-count routes with a CurrentTilePosition read after
 every Move (AGENTS.md §4). No pathfinding helpers.
@@ -262,10 +262,8 @@ def main() -> int:
     report("adjacent to diet fridge")
     trigger("Interact")
     time.sleep(0.4)
-    trigger({"Move": "Down"})
+    trigger({"NavigateListMenu": "Down"})
     time.sleep(0.15)
-    trigger("MoveStop")
-    time.sleep(0.1)
     trigger("Continue")
     time.sleep(0.5)
     item = satchel_item()

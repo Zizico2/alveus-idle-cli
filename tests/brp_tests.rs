@@ -179,7 +179,7 @@ fn brp_care_menu_moves_cursor_and_confirms_selection() {
         Menu::CareItemPicker
     );
 
-    trigger_game_command(&mut app, serde_json::json!({ "Move": "Down" }));
+    trigger_game_command(&mut app, serde_json::json!({ "NavigateListMenu": "Down" }));
     assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     trigger_game_command(&mut app, serde_json::json!("Continue"));

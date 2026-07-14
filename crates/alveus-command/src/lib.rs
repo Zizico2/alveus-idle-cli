@@ -1,6 +1,7 @@
 //! Central semantic verb enum and dispatcher.
 
 use bevy::audio::Volume;
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
@@ -11,6 +12,7 @@ use alveus_interaction::{
     CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
     perform_drop_in_world, perform_interact_in_world,
 };
+use alveus_menus_models::{ListMenu, ListMenuCursor, ListMenuDirection, ListMenuEntry};
 use alveus_screens::begin_play_in_world;
 use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
 use alveus_types::Stat;
@@ -45,13 +47,18 @@ pub enum GameCommand {
     /// is blocked by an obstacle. One in-flight tile step takes
     /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
-    /// to advance a single tile predictably. While [`Menu::CareItemPicker`] is
-    /// open, a single Up/Down press (keyboard, D-pad, or left stick) moves its
-    /// cursor instead; other overlay menus make this a no-op. Requires an
+    /// to advance a single tile predictably. Overlay menus make this a no-op
+    /// (list menus use [`GameCommand::NavigateListMenu`] instead). Requires an
     /// active [`Player`] entity.
     Move(MovementIntent),
     /// Clear the player's movement intent (stop walking).
     MoveStop,
+    /// Move the cursor on the active list menu one step (`Up` / `Down`).
+    /// Applies while [`Menu::Main`], [`Menu::Pause`], or [`Menu::CareItemPicker`]
+    /// is open; other menus are a no-op. Care uses the model cursor on
+    /// [`CareMenuState`]; Main/Pause update [`ListMenuCursor`] and project
+    /// [`InputFocus`] onto the matching row.
+    NavigateListMenu(ListMenuDirection),
     /// Interact with whatever is currently in front of / under the player
     /// (`Space` / gamepad South in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
     /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
@@ -224,6 +231,50 @@ fn has_player(world: &World) -> bool {
         == 1
 }
 
+fn navigate_list_menu_in_world(world: &mut World, direction: ListMenuDirection) {
+    let menu = *world.resource::<State<Menu>>().get();
+    let delta = direction.delta();
+    match menu {
+        Menu::CareItemPicker => {
+            if !has_player(world) {
+                return;
+            }
+            {
+                let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
+                if let Ok(mut movement) = query.single_mut(world) {
+                    movement.intent = None;
+                }
+            }
+            let mut care_menu = world.resource_mut::<CareMenuState>();
+            care_menu_move_cursor(&mut care_menu, delta);
+        }
+        Menu::Main | Menu::Pause => {
+            let target = {
+                let mut cursors =
+                    world.query_filtered::<(Entity, &mut ListMenuCursor), With<ListMenu>>();
+                let Ok((list, mut cursor)) = cursors.single_mut(world) else {
+                    return;
+                };
+                cursor.move_by(delta);
+                let index = cursor.index;
+                (list, index)
+            };
+            let focused = {
+                let mut entries = world.query::<(Entity, &ListMenuEntry)>();
+                entries.iter(world).find_map(|(entity, entry)| {
+                    (entry.list == target.0 && entry.index == target.1).then_some(entity)
+                })
+            };
+            if let Some(entity) = focused {
+                if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
+                    focus.set(entity, FocusCause::Navigated);
+                }
+            }
+        }
+        Menu::None | Menu::Settings | Menu::Credits => {}
+    }
+}
+
 fn apply_game_command(world: &mut World, command: GameCommand) {
     // FatalError is terminal for this process: ignore gameplay / navigation verbs.
     // Passive harness verbs (screenshots, frame advance) still apply.
@@ -236,27 +287,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
 
     match command {
         GameCommand::Move(intent) => {
-            if care_menu_open(world) {
-                if !has_player(world) {
-                    return;
-                }
-                {
-                    let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-                    if let Ok(mut movement) = query.single_mut(world) {
-                        movement.intent = None;
-                    }
-                }
-                let delta = match intent {
-                    MovementIntent::Up => -1,
-                    MovementIntent::Down => 1,
-                    MovementIntent::Left | MovementIntent::Right => 0,
-                };
-                if delta != 0 {
-                    let mut care_menu = world.resource_mut::<CareMenuState>();
-                    care_menu_move_cursor(&mut care_menu, delta);
-                }
-                return;
-            }
             let screen = *world.resource::<State<Screen>>().get();
             let menu = *world.resource::<State<Menu>>().get();
             if !tile_interaction_enabled_for(screen, menu) {
@@ -272,6 +302,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             if let Ok(mut movement) = query.single_mut(world) {
                 movement.intent = None;
             }
+        }
+        GameCommand::NavigateListMenu(direction) => {
+            navigate_list_menu_in_world(world, direction);
         }
         GameCommand::Interact => perform_interact_in_world(world),
         GameCommand::DropItem => perform_drop_in_world(world),

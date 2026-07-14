@@ -31,6 +31,7 @@ pub struct CareItemPickerOverlay;
 #[derive(Component)]
 struct CareItemPickerList;
 
+// TODO: should these be methods on the CareMenuState struct?
 fn menu_title(menu_id: Option<CareMenuId>) -> &'static str {
     match menu_id {
         Some(CareMenuId::Fridge) => "Fridge supplies",
@@ -38,6 +39,7 @@ fn menu_title(menu_id: Option<CareMenuId>) -> &'static str {
     }
 }
 
+// TODO: should this be a method on the CareMenuState struct?
 fn selected_index(care_menu: &CareMenuState) -> Option<usize> {
     care_menu
         .menu_id
@@ -46,6 +48,7 @@ fn selected_index(care_menu: &CareMenuState) -> Option<usize> {
         .flatten()
 }
 
+// TODO: should this be a method on the CareMenuState struct?
 fn empty_copy(care_menu: &CareMenuState) -> &'static str {
     if care_menu.menu_id.is_none() {
         "This item menu is unavailable. Press Esc to close."

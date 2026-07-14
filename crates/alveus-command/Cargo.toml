@@ -10,6 +10,7 @@ bevy.workspace = true
 alveus-app.workspace = true
 alveus-types.workspace = true
 alveus-components.workspace = true
+alveus-menus-models.workspace = true
 alveus-interaction.workspace = true
 alveus-stats.workspace = true
 alveus-world.workspace = true
