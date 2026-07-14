@@ -1,5 +1,5 @@
 use alveus_animals::{spawn_polly_npc, spawn_push_pop_npc};
-use alveus_app::{InRoom, Screen};
+use alveus_app::{InRoom, Menu, Screen, tile_interaction_enabled_for};
 use alveus_collision::{
     CollisionMapKey, CollisionMasks, DynamicObstacleTiles, InteriorAssets, LiveObstacleItem,
     resolve_spawn_tile,
@@ -70,18 +70,78 @@ pub fn try_exit_room<S: States + FreelyMutableState>(
     }
 }
 
-/// Force the current interior back to its configured overview spawn.
-pub fn force_exit_room_in_world(world: &mut World, room: InRoom) {
-    let exit_spawn = match room {
-        InRoom::NutritionHouse => NUTRITION_HOUSE_ROOM.exit_spawn,
-        InRoom::PushPopEnclosure => PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
-        InRoom::Pasture | InRoom::ReptileEnclosure => return,
-    };
-    info!(?room, ?exit_spawn, "Exiting room interior");
-    world.resource_mut::<PlayerSpawnPoint>().position = exit_spawn;
-    world
-        .resource_mut::<NextState<Screen>>()
-        .set(Screen::Gameplay);
+/// Internal command-routing events (not Reflect-registered).
+#[doc(hidden)]
+#[derive(Event, Debug, Clone, Copy)]
+pub enum RoomRequest {
+    EnterBuilding,
+    ExitRoom,
+}
+
+/// Handles [`RoomRequest`] from the command router.
+pub struct RoomCommandHandlersPlugin;
+
+impl Plugin for RoomCommandHandlersPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_room_request);
+    }
+}
+
+fn on_room_request(
+    trigger: On<RoomRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut next_screen: ResMut<NextState<Screen>>,
+    mut spawn_point: ResMut<PlayerSpawnPoint>,
+    player_entrance: Query<&BuildingEntrance, With<Player>>,
+) {
+    match trigger.event() {
+        RoomRequest::EnterBuilding => {
+            if *screen.get() != Screen::Gameplay
+                || !tile_interaction_enabled_for(*screen.get(), *menu.get())
+            {
+                return;
+            }
+            let Ok(entrance) = player_entrance.single() else {
+                return;
+            };
+            match entrance {
+                BuildingEntrance::NutritionHouse => {
+                    try_enter_room(
+                        entrance,
+                        BuildingEntrance::NutritionHouse,
+                        Screen::InRoom(InRoom::NutritionHouse),
+                        &mut next_screen,
+                    );
+                }
+                BuildingEntrance::PushPopEnclosure => {
+                    try_enter_room(
+                        entrance,
+                        BuildingEntrance::PushPopEnclosure,
+                        Screen::InRoom(InRoom::PushPopEnclosure),
+                        &mut next_screen,
+                    );
+                }
+                BuildingEntrance::NoEntrance => {}
+            }
+        }
+        RoomRequest::ExitRoom => {
+            if !tile_interaction_enabled_for(*screen.get(), *menu.get()) {
+                return;
+            }
+            let Screen::InRoom(room) = *screen.get() else {
+                return;
+            };
+            let exit_spawn = match room {
+                InRoom::NutritionHouse => NUTRITION_HOUSE_ROOM.exit_spawn,
+                InRoom::PushPopEnclosure => PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
+                InRoom::Pasture | InRoom::ReptileEnclosure => return,
+            };
+            info!(?room, ?exit_spawn, "Exiting room interior");
+            spawn_point.position = exit_spawn;
+            next_screen.set(Screen::Gameplay);
+        }
+    }
 }
 
 pub struct RoomConfig<S: States + FreelyMutableState> {
@@ -271,6 +331,7 @@ pub struct NutritionHousePlugin;
 
 impl Plugin for NutritionHousePlugin {
     fn build(&self, app: &mut App) {
+        alveus_app::ensure_plugin(app, RoomCommandHandlersPlugin);
         build_room(
             app,
             RoomConfig {
@@ -293,6 +354,7 @@ pub struct PushPopEnclosurePlugin;
 
 impl Plugin for PushPopEnclosurePlugin {
     fn build(&self, app: &mut App) {
+        alveus_app::ensure_plugin(app, RoomCommandHandlersPlugin);
         build_room(
             app,
             RoomConfig {

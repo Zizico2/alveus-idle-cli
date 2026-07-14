@@ -1,5 +1,6 @@
 use alveus_app::Screen;
-use alveus_screens::begin_play_in_world;
+use alveus_command::CommandPlugin;
+use alveus_command::GameCommand;
 use alveus_stats::{SavePath, StatsPlugin};
 use alveus_types::Stat;
 use bevy::prelude::*;
@@ -56,11 +57,12 @@ fn test_play_crash_on_invalid_save() {
     app.insert_resource(SavePath(test_save_path.to_string()));
 
     app.add_plugins(StatsPlugin);
+    app.add_plugins(CommandPlugin);
 
     // Initialize state transitions
     app.update();
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
 
     // Update app: should transition to Gameplay, load invalid save, and crash
     app.update();
@@ -84,11 +86,12 @@ fn test_save_exclude_and_hydration() {
     app.insert_resource(SavePath(test_save_path.to_string()));
 
     app.add_plugins(StatsPlugin);
+    app.add_plugins(CommandPlugin);
 
     // Initialize state transitions (this spawns default stats because no save exists)
     app.update();
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
     app.update();
 
     // Verify screen is gameplay
@@ -249,11 +252,12 @@ fn test_play_without_save() {
     app.insert_resource(SavePath("nonexistent_play_without_save.ron".to_string()));
 
     app.add_plugins(StatsPlugin);
+    app.add_plugins(CommandPlugin);
 
     // Initialize state transitions
     app.update();
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
 
     // Update app: should transition to Gameplay screen and initialize stats without crashing
     app.update();
