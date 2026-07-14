@@ -83,8 +83,8 @@ pub fn tile_interaction_enabled(screen: Res<State<Screen>>, menu: Res<State<Menu
     tile_interaction_enabled_for(*screen.get(), *menu.get())
 }
 
-/// Value-based form of [`tile_interaction_enabled`] for exclusive-world command
-/// dispatch, which cannot use ordinary system parameters.
+/// Value-based form of [`tile_interaction_enabled`] for observers and helpers
+/// that take plain `Screen` / `Menu` values instead of system parameters.
 pub fn tile_interaction_enabled_for(screen: Screen, menu: Menu) -> bool {
     matches!(screen, Screen::Gameplay | Screen::InRoom(_)) && menu == Menu::None
 }

@@ -1,4 +1,4 @@
-//! Central semantic verb enum and dispatcher.
+//! Central semantic verb enum and observer-based dispatch.
 
 use bevy::audio::Volume;
 use bevy::input_focus::{FocusCause, InputFocus};
@@ -6,17 +6,16 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
-use alveus_app::{InRoom, Menu, Pause, Screen, tile_interaction_enabled_for};
-use alveus_components::{BuildingEntrance, MovementController, MovementIntent, Player};
-use alveus_interaction::{
-    CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
-    perform_drop_in_world, perform_interact_in_world,
-};
+use alveus_app::{Menu, Pause, Screen, tile_interaction_enabled_for};
+use alveus_components::{MovementController, MovementIntent, Player};
+use alveus_interaction::InteractionRequest;
 use alveus_menus_models::{ListMenu, ListMenuCursor, ListMenuDirection, ListMenuEntry};
-use alveus_screens::begin_play_in_world;
-use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
+use alveus_screens::PlayRequest;
+use alveus_screens::ScreenCommandHandlersPlugin;
+use alveus_screens::gameplay::{close_menu_state, open_pause_from_gameplay};
+use alveus_stats::{AdvanceTimeRequest, ImproveStatEvent, StatTarget, WorsenStatEvent};
 use alveus_types::Stat;
-use alveus_world::room::{force_exit_room_in_world, try_enter_room};
+use alveus_world::room::{RoomCommandHandlersPlugin, RoomRequest};
 
 /// The complete, semantic verb set for the game.
 ///
@@ -29,10 +28,14 @@ use alveus_world::room::{force_exit_room_in_world, try_enter_room};
 /// `MoveTo(tile)`): an agent must accomplish goals using the same primitives a
 /// human player has, one tile step at a time.
 ///
-/// Triggering is fire-and-forget. Commands are buffered and applied once per
-/// frame (see [`apply_pending_game_commands`]); observe the resulting state with
-/// the built-in BRP read methods (`world.query`, `world.get_resources`) rather
-/// than assuming a synchronous response.
+/// Triggering is fire-and-forget. Commands are deferred into
+/// [`DeferredGameCommands`] and routed in `First`, `PostUpdate`, and (with
+/// `remote`) after BRP request processing in `RemoteLast` — the same phases as
+/// the former exclusive buffer — so PreUpdate input does not mutate state before
+/// `Update`. After each nonempty route batch, [`PendingCommandStateFlush`] queues
+/// [`StateTransition`] once. Observe the resulting state with the built-in BRP
+/// read methods (`world.query`, `world.get_resources`) rather than assuming a
+/// synchronous response.
 ///
 /// Variants are grouped into **player verbs** (things a human player can do) and
 /// **debug / harness verbs** (mirror in-game debug keys or exist for external
@@ -83,7 +86,7 @@ pub enum GameCommand {
     /// Toggle the pause menu during gameplay (`P` / `Esc` / gamepad Start).
     PauseToggle,
     /// Press "Play" on the title screen — equivalent to the main-menu button.
-    /// Transitions Title -> Gameplay.
+    /// Transitions Title → Loading when assets are still pending, otherwise Title → Gameplay.
     Play,
     /// Go back one level in the current menu (`Esc` / `P` / gamepad East or Start): Settings/Credits
     /// -> previous menu, Pause -> resume, CareItemPicker -> close picker.
@@ -153,9 +156,51 @@ pub struct HeadlessRenderTarget {
     pub height: u32,
 }
 
-/// Commands collected by the observer and applied before state transitions.
+/// Commands collected by the enqueue observer and routed in schedule phases.
+///
+/// This restores the former PreUpdate → PostUpdate phase contract: input-triggered
+/// verbs must not mutate gameplay/`NextState` before `Update` runs. Routing still
+/// uses ordinary `Commands::trigger` request observers — not exclusive `&mut World`
+/// gameplay helpers.
 #[derive(Resource, Default, Debug)]
-pub struct PendingGameCommands(pub Vec<GameCommand>);
+struct DeferredGameCommands(Vec<GameCommand>);
+
+/// Set when a routed [`GameCommand`] may have queued state transitions.
+#[derive(Resource, Default, Debug)]
+struct PendingCommandStateFlush(bool);
+
+#[derive(Event, Debug, Clone, Copy)]
+enum MovementRequest {
+    Move(MovementIntent),
+    Stop,
+}
+
+#[derive(Event, Debug, Clone, Copy)]
+struct ListMenuNavigateRequest(ListMenuDirection);
+
+#[derive(Event, Debug, Clone, Copy)]
+enum MenuFlowRequest {
+    PauseToggle,
+    Back,
+    SkipSplash,
+    OpenSettings,
+    OpenCredits,
+    Continue,
+    QuitToTitle,
+}
+
+#[derive(Event, Debug, Clone)]
+struct AdjustVolumeRequest {
+    delta: f32,
+}
+
+#[derive(Event, Debug, Clone)]
+struct ScreenshotRequest {
+    path: String,
+}
+
+#[derive(Event, Debug, Clone, Copy)]
+struct AdvanceFramesRequest(u32);
 
 impl StepRequest {
     pub fn add(&mut self, frames: u32) {
@@ -185,101 +230,81 @@ pub struct CommandPlugin;
 
 impl Plugin for CommandPlugin {
     fn build(&self, app: &mut App) {
+        alveus_app::ensure_plugin(app, ScreenCommandHandlersPlugin);
+        alveus_app::ensure_plugin(app, RoomCommandHandlersPlugin);
         app.init_resource::<StepRequest>()
-            .init_resource::<PendingGameCommands>()
+            .init_resource::<DeferredGameCommands>()
+            .init_resource::<PendingCommandStateFlush>()
             .add_observer(enqueue_game_command)
-            .add_systems(First, apply_pending_game_commands)
-            .add_systems(PostUpdate, apply_pending_game_commands);
+            .add_observer(on_movement_request)
+            .add_observer(on_list_menu_navigate_request)
+            .add_observer(on_menu_flow_request)
+            .add_observer(on_adjust_volume_request)
+            .add_observer(on_screenshot_request)
+            .add_observer(on_advance_frames_request)
+            .add_systems(
+                First,
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                PostUpdate,
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain(),
+            );
 
         #[cfg(feature = "remote")]
         {
             use bevy::remote::{RemoteLast, RemoteSystems};
             app.add_systems(
                 RemoteLast,
-                apply_pending_game_commands.after(RemoteSystems::ProcessRequests),
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain()
+                    .after(RemoteSystems::ProcessRequests),
             );
         }
     }
 }
 
-fn enqueue_game_command(trigger: On<GameCommand>, mut pending: ResMut<PendingGameCommands>) {
+fn enqueue_game_command(trigger: On<GameCommand>, mut pending: ResMut<DeferredGameCommands>) {
     pending.0.push(trigger.event().clone());
 }
 
-fn apply_pending_game_commands(world: &mut World) {
-    let commands = std::mem::take(&mut world.resource_mut::<PendingGameCommands>().0);
-    if commands.is_empty() {
+fn route_deferred_game_commands(
+    mut pending: ResMut<DeferredGameCommands>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut commands: Commands,
+    mut flush: ResMut<PendingCommandStateFlush>,
+) {
+    let commands_batch = std::mem::take(&mut pending.0);
+    if commands_batch.is_empty() {
         return;
     }
-    for command in commands {
-        apply_game_command(world, command);
+
+    for command in commands_batch {
+        route_game_command(&command, screen.get(), menu.get(), &mut commands);
     }
-    let _ = world.try_run_schedule(StateTransition);
+    flush.0 = true;
 }
 
-fn care_menu_open(world: &World) -> bool {
-    world
-        .get_resource::<State<Menu>>()
-        .is_some_and(|menu| *menu.get() == Menu::CareItemPicker)
-}
-
-fn has_player(world: &World) -> bool {
-    world
-        .iter_entities()
-        .filter(|entity| entity.contains::<Player>())
-        .count()
-        == 1
-}
-
-fn navigate_list_menu_in_world(world: &mut World, direction: ListMenuDirection) {
-    let menu = *world.resource::<State<Menu>>().get();
-    let delta = direction.delta();
-    match menu {
-        Menu::CareItemPicker => {
-            if !has_player(world) {
-                return;
-            }
-            {
-                let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-                if let Ok(mut movement) = query.single_mut(world) {
-                    movement.intent = None;
-                }
-            }
-            let mut care_menu = world.resource_mut::<CareMenuState>();
-            care_menu_move_cursor(&mut care_menu, delta);
-        }
-        Menu::Main | Menu::Pause => {
-            let target = {
-                let mut cursors =
-                    world.query_filtered::<(Entity, &mut ListMenuCursor), With<ListMenu>>();
-                let Ok((list, mut cursor)) = cursors.single_mut(world) else {
-                    return;
-                };
-                cursor.move_by(delta);
-                let index = cursor.index;
-                (list, index)
-            };
-            let focused = {
-                let mut entries = world.query::<(Entity, &ListMenuEntry)>();
-                entries.iter(world).find_map(|(entity, entry)| {
-                    (entry.list == target.0 && entry.index == target.1).then_some(entity)
-                })
-            };
-            if let Some(entity) = focused {
-                if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
-                    focus.set(entity, FocusCause::Navigated);
-                }
-            }
-        }
-        Menu::None | Menu::Settings | Menu::Credits => {}
-    }
-}
-
-fn apply_game_command(world: &mut World, command: GameCommand) {
-    // FatalError is terminal for this process: ignore gameplay / navigation verbs.
-    // Passive harness verbs (screenshots, frame advance) still apply.
-    if *world.resource::<State<Screen>>().get() == Screen::FatalError {
-        match &command {
+fn route_game_command(
+    command: &GameCommand,
+    screen: &Screen,
+    menu: &Menu,
+    commands: &mut Commands,
+) {
+    if *screen == Screen::FatalError {
+        match command {
             GameCommand::Screenshot { .. } | GameCommand::AdvanceFrames(_) => {}
             _ => return,
         }
@@ -287,150 +312,184 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
 
     match command {
         GameCommand::Move(intent) => {
-            let screen = *world.resource::<State<Screen>>().get();
-            let menu = *world.resource::<State<Menu>>().get();
-            if !tile_interaction_enabled_for(screen, menu) {
-                return;
-            }
-            let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-            if let Ok(mut movement) = query.single_mut(world) {
-                movement.intent = Some(intent);
-            }
+            commands.trigger(MovementRequest::Move(*intent));
         }
         GameCommand::MoveStop => {
-            let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-            if let Ok(mut movement) = query.single_mut(world) {
+            commands.trigger(MovementRequest::Stop);
+        }
+        GameCommand::NavigateListMenu(direction) => {
+            if *menu == Menu::CareItemPicker {
+                commands.trigger(InteractionRequest::NavigateCareMenu(*direction));
+            } else {
+                commands.trigger(ListMenuNavigateRequest(*direction));
+            }
+        }
+        GameCommand::Interact => {
+            commands.trigger(InteractionRequest::Interact);
+        }
+        GameCommand::DropItem => {
+            commands.trigger(InteractionRequest::DropItem);
+        }
+        GameCommand::EnterBuilding => {
+            commands.trigger(RoomRequest::EnterBuilding);
+        }
+        GameCommand::ExitRoom => {
+            commands.trigger(RoomRequest::ExitRoom);
+        }
+        GameCommand::PauseToggle => {
+            commands.trigger(MenuFlowRequest::PauseToggle);
+        }
+        GameCommand::Play => {
+            commands.trigger(PlayRequest);
+        }
+        GameCommand::Back => {
+            if *menu == Menu::CareItemPicker {
+                commands.trigger(InteractionRequest::CancelCareMenu);
+            } else {
+                commands.trigger(MenuFlowRequest::Back);
+            }
+        }
+        GameCommand::SkipSplash => {
+            commands.trigger(MenuFlowRequest::SkipSplash);
+        }
+        GameCommand::OpenSettings => {
+            commands.trigger(MenuFlowRequest::OpenSettings);
+        }
+        GameCommand::OpenCredits => {
+            commands.trigger(MenuFlowRequest::OpenCredits);
+        }
+        GameCommand::Continue => {
+            if *menu == Menu::CareItemPicker {
+                commands.trigger(InteractionRequest::ConfirmCareMenu);
+            } else {
+                commands.trigger(MenuFlowRequest::Continue);
+            }
+        }
+        GameCommand::QuitToTitle => {
+            commands.trigger(MenuFlowRequest::QuitToTitle);
+        }
+        GameCommand::ImproveStat { target, amount } => {
+            commands.trigger(ImproveStatEvent {
+                target: *target,
+                amount: *amount,
+            });
+        }
+        GameCommand::WorsenStat { target, amount } => {
+            commands.trigger(WorsenStatEvent {
+                target: *target,
+                amount: *amount,
+            });
+        }
+        GameCommand::AdvanceTime { hours } => {
+            commands.trigger(AdvanceTimeRequest { hours: *hours });
+        }
+        GameCommand::AdjustVolume { delta } => {
+            commands.trigger(AdjustVolumeRequest { delta: *delta });
+        }
+        GameCommand::Screenshot { path } => {
+            commands.trigger(ScreenshotRequest { path: path.clone() });
+        }
+        GameCommand::AdvanceFrames(frames) => {
+            commands.trigger(AdvanceFramesRequest(*frames));
+        }
+    }
+}
+
+fn flush_command_state_transitions(
+    mut commands: Commands,
+    mut flush: ResMut<PendingCommandStateFlush>,
+) {
+    if flush.0 {
+        flush.0 = false;
+        commands.run_schedule(StateTransition);
+    }
+}
+
+fn on_movement_request(
+    trigger: On<MovementRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut players: Query<&mut MovementController, With<Player>>,
+) {
+    match trigger.event() {
+        MovementRequest::Move(intent) => {
+            if !tile_interaction_enabled_for(*screen.get(), *menu.get()) {
+                return;
+            }
+            if let Ok(mut movement) = players.single_mut() {
+                movement.intent = Some(*intent);
+            }
+        }
+        MovementRequest::Stop => {
+            if let Ok(mut movement) = players.single_mut() {
                 movement.intent = None;
             }
         }
-        GameCommand::NavigateListMenu(direction) => {
-            navigate_list_menu_in_world(world, direction);
-        }
-        GameCommand::Interact => perform_interact_in_world(world),
-        GameCommand::DropItem => perform_drop_in_world(world),
-        GameCommand::EnterBuilding => {
-            let screen = *world.resource::<State<Screen>>().get();
-            let menu = *world.resource::<State<Menu>>().get();
-            if screen != Screen::Gameplay || !tile_interaction_enabled_for(screen, menu) {
+    }
+}
+
+fn on_list_menu_navigate_request(
+    trigger: On<ListMenuNavigateRequest>,
+    menu: Res<State<Menu>>,
+    mut list_cursors: Query<(Entity, &mut ListMenuCursor), With<ListMenu>>,
+    entries: Query<(Entity, &ListMenuEntry)>,
+    mut focus: Option<ResMut<InputFocus>>,
+) {
+    let direction = trigger.event().0;
+    let delta = direction.delta();
+    match *menu.get() {
+        Menu::Main | Menu::Pause => {
+            let Ok((list, mut cursor)) = list_cursors.single_mut() else {
                 return;
-            }
-            let entrance = {
-                let mut entrance_query = world.query_filtered::<&BuildingEntrance, With<Player>>();
-                entrance_query.single(world).ok().copied()
             };
-            let Some(entrance) = entrance else {
-                return;
-            };
-            let mut next_screen = world.resource_mut::<NextState<Screen>>();
-            match entrance {
-                BuildingEntrance::NutritionHouse => {
-                    try_enter_room(
-                        &entrance,
-                        BuildingEntrance::NutritionHouse,
-                        Screen::InRoom(InRoom::NutritionHouse),
-                        &mut next_screen,
-                    );
-                }
-                BuildingEntrance::PushPopEnclosure => {
-                    try_enter_room(
-                        &entrance,
-                        BuildingEntrance::PushPopEnclosure,
-                        Screen::InRoom(InRoom::PushPopEnclosure),
-                        &mut next_screen,
-                    );
-                }
-                BuildingEntrance::NoEntrance => {}
+            cursor.move_by(delta);
+            let index = cursor.index;
+            if let Some(entity) = entries.iter().find_map(|(entity, entry)| {
+                (entry.list == list && entry.index == index).then_some(entity)
+            }) && let Some(focus) = focus.as_mut()
+            {
+                focus.set(entity, FocusCause::Navigated);
             }
         }
-        GameCommand::ExitRoom => {
-            let screen = *world.resource::<State<Screen>>().get();
-            let menu = *world.resource::<State<Menu>>().get();
-            if !tile_interaction_enabled_for(screen, menu) {
-                return;
+        Menu::None | Menu::Settings | Menu::Credits | Menu::CareItemPicker => {}
+    }
+}
+
+fn on_menu_flow_request(
+    trigger: On<MenuFlowRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut next_screen: ResMut<NextState<Screen>>,
+    mut next_menu: ResMut<NextState<Menu>>,
+    mut next_pause: ResMut<NextState<Pause>>,
+) {
+    match trigger.event() {
+        MenuFlowRequest::PauseToggle => match (*screen.get(), *menu.get()) {
+            (Screen::Gameplay, Menu::None) => {
+                open_pause_from_gameplay(&mut next_pause, &mut next_menu);
             }
-            if let Screen::InRoom(room) = screen {
-                force_exit_room_in_world(world, room);
+            (Screen::Gameplay, _) => {
+                close_menu_state(&mut next_menu);
             }
+            _ => {}
+        },
+        MenuFlowRequest::Back => {
+            go_back_menu(screen.get(), menu.get(), &mut next_menu);
         }
-        GameCommand::PauseToggle => {
-            let screen = *world.resource::<State<Screen>>().get();
-            let menu = *world.resource::<State<Menu>>().get();
-            match (screen, menu) {
-                (Screen::Gameplay, Menu::None) => {
-                    world.resource_mut::<NextState<Pause>>().set(Pause(true));
-                    world.resource_mut::<NextState<Menu>>().set(Menu::Pause);
-                }
-                (Screen::Gameplay, _) => {
-                    world.resource_mut::<NextState<Menu>>().set(Menu::None);
-                }
-                _ => {}
-            }
+        MenuFlowRequest::SkipSplash => {
+            next_screen.set(Screen::Title);
         }
-        GameCommand::Play => {
-            begin_play_in_world(world);
+        MenuFlowRequest::OpenSettings => {
+            next_menu.set(Menu::Settings);
         }
-        GameCommand::Back => {
-            let screen = *world.resource::<State<Screen>>().get();
-            let menu = *world.resource::<State<Menu>>().get();
-            if menu == Menu::CareItemPicker {
-                cancel_care_menu_in_world(world);
-                return;
-            }
-            let mut next_menu = world.resource_mut::<NextState<Menu>>();
-            go_back_menu(&screen, &menu, &mut next_menu);
+        MenuFlowRequest::OpenCredits => {
+            next_menu.set(Menu::Credits);
         }
-        GameCommand::SkipSplash => {
-            world.resource_mut::<NextState<Screen>>().set(Screen::Title);
+        MenuFlowRequest::Continue => {
+            close_menu_state(&mut next_menu);
         }
-        GameCommand::OpenSettings => {
-            world.resource_mut::<NextState<Menu>>().set(Menu::Settings);
-        }
-        GameCommand::OpenCredits => {
-            world.resource_mut::<NextState<Menu>>().set(Menu::Credits);
-        }
-        GameCommand::Continue => {
-            if care_menu_open(world) {
-                confirm_care_menu_in_world(world);
-                return;
-            }
-            world.resource_mut::<NextState<Menu>>().set(Menu::None);
-        }
-        GameCommand::QuitToTitle => {
-            world.resource_mut::<NextState<Screen>>().set(Screen::Title);
-        }
-        GameCommand::ImproveStat { target, amount } => {
-            world.trigger(ImproveStatEvent { target, amount });
-        }
-        GameCommand::WorsenStat { target, amount } => {
-            world.trigger(WorsenStatEvent { target, amount });
-        }
-        GameCommand::AdvanceTime { hours } => {
-            advance_simulated_hours_world(world, hours);
-        }
-        GameCommand::AdjustVolume { delta } => {
-            const MIN_VOLUME: f32 = 0.0;
-            const MAX_VOLUME: f32 = 3.0;
-            let mut global_volume = world.resource_mut::<GlobalVolume>();
-            let linear = (global_volume.volume.to_linear() + delta).clamp(MIN_VOLUME, MAX_VOLUME);
-            global_volume.volume = Volume::Linear(linear);
-        }
-        GameCommand::Screenshot { path } => {
-            let screenshot_target = world
-                .get_resource::<HeadlessRenderTarget>()
-                .map(|target| target.image.clone());
-            let mut commands = world.commands();
-            if let Some(image) = screenshot_target {
-                commands
-                    .spawn(Screenshot::image(image))
-                    .observe(save_to_disk(path));
-            } else {
-                commands
-                    .spawn(Screenshot::primary_window())
-                    .observe(save_to_disk(path));
-            }
-        }
-        GameCommand::AdvanceFrames(frames) => {
-            world.resource_mut::<StepRequest>().add(frames);
+        MenuFlowRequest::QuitToTitle => {
+            next_screen.set(Screen::Title);
         }
     }
 }
@@ -448,6 +507,44 @@ fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {
         Menu::Pause | Menu::CareItemPicker => next_menu.set(Menu::None),
         Menu::Main | Menu::None => {}
     }
+}
+
+fn on_adjust_volume_request(
+    trigger: On<AdjustVolumeRequest>,
+    mut global_volume: Option<ResMut<GlobalVolume>>,
+) {
+    const MIN_VOLUME: f32 = 0.0;
+    const MAX_VOLUME: f32 = 3.0;
+    let Some(global_volume) = global_volume.as_mut() else {
+        return;
+    };
+    let linear =
+        (global_volume.volume.to_linear() + trigger.event().delta).clamp(MIN_VOLUME, MAX_VOLUME);
+    global_volume.volume = Volume::Linear(linear);
+}
+
+fn on_screenshot_request(
+    trigger: On<ScreenshotRequest>,
+    render_target: Option<Res<HeadlessRenderTarget>>,
+    mut commands: Commands,
+) {
+    let path = trigger.event().path.clone();
+    if let Some(target) = render_target {
+        commands
+            .spawn(Screenshot::image(target.image.clone()))
+            .observe(save_to_disk(path));
+    } else {
+        commands
+            .spawn(Screenshot::primary_window())
+            .observe(save_to_disk(path));
+    }
+}
+
+fn on_advance_frames_request(
+    trigger: On<AdvanceFramesRequest>,
+    mut step_request: ResMut<StepRequest>,
+) {
+    step_request.add(trigger.event().0);
 }
 
 #[cfg(test)]

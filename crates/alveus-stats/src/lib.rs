@@ -223,6 +223,7 @@ impl Plugin for StatsPlugin {
             // Register decoupled observers
             .add_observer(improve_stat_observer)
             .add_observer(worsen_stat_observer)
+            .add_observer(on_advance_time_request)
             // Startup / Initialization when entering gameplay
             .add_systems(OnEnter(Screen::Gameplay), init_stats_system);
 
@@ -1078,42 +1079,27 @@ pub fn advance_simulated_hours(
     advance_simulated_hours_queries(commands, hours, animal_query, enclosure_query, tiles_query);
 }
 
-/// Fast-forward simulated decay using a mutable world (command queue / headless dispatch).
-pub fn advance_simulated_hours_world(world: &mut World, hours: f32) {
-    let mut animal_query = world.query::<(&AnimalId, &AnimalDecayRates)>();
-    let mut enclosure_query =
-        world.query::<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>();
-    let mut tiles_query = world.query::<(&EnclosureId, &DynamicObstacleTiles)>();
-    let animal_decays: Vec<(AnimalId, AnimalDecayRates)> = animal_query
-        .iter(world)
-        .map(|(id, rates)| (*id, rates.clone()))
-        .collect();
-    let enclosure_decays: Vec<(EnclosureId, EnclosureDecayRates, Stat, usize)> = enclosure_query
-        .iter(world)
-        .map(|(id, rates, stats)| {
-            let poop_count = tiles_query
-                .iter(world)
-                .find(|(enc_id, _)| *enc_id == id)
-                .map(|(_, tiles)| tiles.0.len())
-                .unwrap_or(0);
-            (*id, rates.clone(), stats.cleanliness, poop_count)
-        })
-        .collect();
+/// Internal command-routing event (not Reflect-registered).
+#[doc(hidden)]
+#[derive(Event, Debug, Clone, Copy)]
+pub struct AdvanceTimeRequest {
+    pub hours: f32,
+}
 
-    let mut commands = world.commands();
-    for (id, decay_rates) in animal_decays {
-        trigger_animal_decay(&mut commands, id, &decay_rates, hours);
-    }
-    for (id, decay_rates, start_cleanliness, poop_count) in enclosure_decays {
-        let amount = enclosure_cleanliness_decay_amount(
-            start_cleanliness,
-            hours,
-            decay_rates.cleanliness_rate,
-            id,
-            poop_count,
-        );
-        trigger_enclosure_decay(&mut commands, id, amount);
-    }
+fn on_advance_time_request(
+    trigger: On<AdvanceTimeRequest>,
+    mut commands: Commands,
+    animal_query: Query<(&AnimalId, &AnimalDecayRates)>,
+    enclosure_query: Query<(&EnclosureId, &EnclosureDecayRates, &EnclosureStats)>,
+    tiles_query: Query<(&EnclosureId, &DynamicObstacleTiles)>,
+) {
+    advance_simulated_hours(
+        &mut commands,
+        trigger.event().hours,
+        &animal_query,
+        &enclosure_query,
+        &tiles_query,
+    );
 }
 
 fn advance_simulated_hours_queries(

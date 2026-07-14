@@ -7,10 +7,10 @@ use alveus_cleaning::{
     target_poop_count, try_dump_poop, try_pickup_poop,
 };
 use alveus_collision::{CollisionMasks, DynamicObstacleTiles};
+use alveus_command::GameCommand;
 use alveus_components::TilePosition;
 use alveus_stats::{
     EnclosureId, EnclosureStat, EnclosureStats, SaveTimestamp, StatTarget, WorsenStatEvent,
-    advance_simulated_hours_world,
 };
 use alveus_types::{CleanStat, Stat};
 use bevy::prelude::{Assets, ColorMaterial, Entity, Mesh, With};
@@ -326,7 +326,8 @@ fn test_poop_count_accelerates_offline_decay() {
         tiles.insert(TilePosition { x: 8, y: 4 });
     }
 
-    advance_simulated_hours_world(app.world_mut(), 10.0);
+    app.world_mut()
+        .trigger(GameCommand::AdvanceTime { hours: 10.0 });
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();
@@ -434,7 +435,8 @@ fn test_decay_spawns_poops_when_crossing_thresholds() {
         .find(|&e| *app.world().get::<EnclosureId>(e).unwrap() == EnclosureId::PushPopEnclosure)
         .expect("Push Pop enclosure stats entity");
 
-    advance_simulated_hours_world(app.world_mut(), 7.0);
+    app.world_mut()
+        .trigger(GameCommand::AdvanceTime { hours: 7.0 });
     app.update();
 
     let stats = app.world().get::<EnclosureStats>(enc_entity).unwrap();

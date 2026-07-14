@@ -32,6 +32,8 @@ fn capture_care_feedback(
 }
 
 fn brp_request(app: &mut App, method: &str, params: Option<serde_json::Value>) -> BrpResult {
+    // Single app.update() applies BRP-triggered GameCommands and runs
+    // StateTransition in the same frame (First / PostUpdate / RemoteLast).
     let (result_sender, result_receiver) = async_channel::bounded(1);
     {
         let sender = app.world().resource::<BrpSender>();
@@ -150,6 +152,7 @@ fn brp_skip_splash_command_changes_screen() {
     app.update();
 
     trigger_game_command(&mut app, serde_json::json!("SkipSplash"));
+    // State change is visible after one update (same-frame dispatch contract).
     assert_eq!(
         *app.world().resource::<State<Screen>>().get(),
         Screen::Title
@@ -183,8 +186,18 @@ fn brp_care_menu_moves_cursor_and_confirms_selection() {
     assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     trigger_game_command(&mut app, serde_json::json!("Continue"));
+    // Same BRP update must close the picker, reset care state, grant the item,
+    // and emit care feedback — the #34 nested transition contract.
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+    assert!(app.world().resource::<CareMenuState>().menu_id.is_none());
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 0);
+    assert_eq!(app.world().resource::<CareMenuState>().list.options, []);
     let satchel = app.world().resource::<PlayerSatchel>();
     assert!(satchel_contains(satchel, ItemId::TortoiseLeafyGreens));
+    assert_eq!(
+        app.world().resource::<CapturedCareFeedback>().0.as_deref(),
+        Some("Took Tortoise Leafy Greens")
+    );
 
     let _ = std::fs::remove_file(save_path);
 }
