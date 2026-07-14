@@ -415,11 +415,12 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 
 ## 7. Architecture conventions to uphold
 
-- **Extract-and-route, no duplication.** Keyboard readers and BRP clients must
-  `trigger(GameCommand::…)`; `CommandPlugin` routes each variant to private or
-  feature-owned request observers (e.g. `InteractionRequest`, `RoomRequest`) that
-  call the same helpers UI code uses (`perform_drop`, `open_care_menu`,
-  `try_enter_room`, `advance_simulated_hours`). Keyboard handlers stay thin.
+- **Extract-and-route, no duplication.** Keyboard, UI, and BRP clients must all
+  `trigger(GameCommand::…)`; they stay on that canonical verb boundary and must
+  not call gameplay helpers directly. `CommandPlugin` routes each variant to
+  private or feature-owned request observers (e.g. `InteractionRequest`,
+  `RoomRequest`). Owning observers may reuse ordinary helpers internally
+  (`perform_drop`, `open_care_menu`, `try_enter_room`, `advance_simulated_hours`).
   Never fake key input to reach a verb.
 - **Observer routing + deferred phase flush.** `enqueue_game_command` only buffers
   into `DeferredGameCommands`. `route_deferred_game_commands` runs in `First`,

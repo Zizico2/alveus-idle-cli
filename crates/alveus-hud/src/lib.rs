@@ -807,8 +807,84 @@ fn animate_neglect_banner_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alveus_components::{Interactable, TilePosition};
     use alveus_content::ItemId;
-    use alveus_interaction::try_give_item;
+    use alveus_interaction::{InteractionPlugin, try_give_item};
+    use alveus_stats::SavePath;
+    use bevy::state::app::StatesPlugin;
+
+    fn feedback_hud_app(save_path: &str) -> App {
+        let _ = std::fs::remove_file(save_path);
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin);
+        app.add_plugins(alveus_app::plugin);
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(SavePath(save_path.to_string()));
+        app.init_resource::<PoopWheelbarrow>();
+        app.add_plugins((alveus_stats::StatsPlugin, InteractionPlugin, HudPlugin));
+        app.insert_resource(NextState::Pending(Screen::Gameplay));
+        app.update();
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<StatsHudUi>>()
+                .iter(app.world())
+                .next()
+                .is_some(),
+            "HudPlugin must spawn StatsHudUi on Gameplay enter"
+        );
+        app
+    }
+
+    fn prompt_display(app: &mut App) -> Display {
+        app.world_mut()
+            .query_filtered::<&Node, With<InteractionPromptRoot>>()
+            .single(app.world())
+            .expect("interaction prompt root")
+            .display
+    }
+
+    fn prompt_text(app: &mut App) -> String {
+        app.world_mut()
+            .query_filtered::<&Text, With<InteractionPromptText>>()
+            .single(app.world())
+            .expect("interaction prompt text")
+            .0
+            .clone()
+    }
+
+    fn satchel_text(app: &mut App) -> String {
+        app.world_mut()
+            .query_filtered::<&Text, With<SatchelBodyText>>()
+            .single(app.world())
+            .expect("satchel body text")
+            .0
+            .clone()
+    }
+
+    fn satchel_bg(app: &mut App) -> Color {
+        app.world_mut()
+            .query_filtered::<&BackgroundColor, With<SatchelHudRoot>>()
+            .single(app.world())
+            .expect("satchel root")
+            .0
+    }
+
+    fn wheelbarrow_display(app: &mut App) -> Display {
+        app.world_mut()
+            .query_filtered::<&Node, With<WheelbarrowHudRoot>>()
+            .single(app.world())
+            .expect("wheelbarrow root")
+            .display
+    }
+
+    fn wheelbarrow_text(app: &mut App) -> String {
+        app.world_mut()
+            .query_filtered::<&Text, With<WheelbarrowBodyText>>()
+            .single(app.world())
+            .expect("wheelbarrow body text")
+            .0
+            .clone()
+    }
 
     #[test]
     fn satchel_slots_label_always_shows_both_slots() {
@@ -843,5 +919,96 @@ mod tests {
         assert!(label.contains("Slot 1: -"), "{label}");
         assert!(label.contains("Slot 2: -"), "{label}");
         assert!(label.contains("Prepared Veggie Diet"), "{label}");
+    }
+
+    #[test]
+    fn scheduled_interaction_prompt_shows_give_item_and_hides_under_menu() {
+        let save_path = "hud_test_prompt.ron";
+        let mut app = feedback_hud_app(save_path);
+
+        app.world_mut().spawn((
+            alveus_components::Player,
+            alveus_components::CurrentTilePosition(TilePosition { x: 0, y: 0 }),
+        ));
+        app.world_mut().spawn((
+            GiveItem {
+                item_id: ItemId::MiniMirror,
+                prompt: "Pick up mirror".to_string(),
+            },
+            TilePosition { x: 0, y: 0 },
+            Interactable,
+        ));
+
+        app.update();
+        assert_eq!(prompt_display(&mut app), Display::Flex);
+        assert_eq!(prompt_text(&mut app), "Press [Space] to Pick up mirror");
+
+        app.world_mut()
+            .resource_mut::<NextState<Menu>>()
+            .set(Menu::Pause);
+        app.update();
+        assert_eq!(prompt_display(&mut app), Display::None);
+
+        let _ = std::fs::remove_file(save_path);
+    }
+
+    #[test]
+    fn scheduled_satchel_hud_updates_pulse_and_pickup_feedback() {
+        let save_path = "hud_test_satchel.ron";
+        let mut app = feedback_hud_app(save_path);
+
+        try_give_item(
+            &mut app.world_mut().resource_mut::<PlayerSatchel>(),
+            ItemId::ChickenGrains,
+        )
+        .unwrap();
+        app.world_mut().insert_resource(LastPickupMessage {
+            text: Some("Dropped Chicken Grains".to_string()),
+            timer: Timer::from_seconds(2.5, TimerMode::Once),
+        });
+        app.world_mut().resource_mut::<CareHudPulse>().trigger();
+
+        app.update();
+
+        let body = satchel_text(&mut app);
+        assert!(body.contains("Chicken Grains"), "{body}");
+        assert!(body.contains("Dropped Chicken Grains"), "{body}");
+        assert_eq!(satchel_bg(&mut app), Color::srgba(0.25, 0.55, 0.35, 0.85));
+
+        let _ = std::fs::remove_file(save_path);
+    }
+
+    #[test]
+    fn scheduled_wheelbarrow_hud_shows_when_carrying_poop() {
+        let save_path = "hud_test_wheelbarrow.ron";
+        let mut app = feedback_hud_app(save_path);
+
+        assert_eq!(wheelbarrow_display(&mut app), Display::None);
+
+        app.world_mut()
+            .resource_mut::<PoopWheelbarrow>()
+            .poops
+            .push(EnclosureId::PushPopEnclosure);
+        app.update();
+
+        assert_eq!(wheelbarrow_display(&mut app), Display::Flex);
+        assert_eq!(
+            wheelbarrow_text(&mut app),
+            format!("Wheelbarrow: 1/{WHEELBARROW_CAPACITY}")
+        );
+
+        app.insert_resource(State::new(Screen::InRoom(InRoom::PushPopEnclosure)));
+        app.world_mut()
+            .resource_mut::<PoopWheelbarrow>()
+            .poops
+            .clear();
+        app.update();
+        assert_eq!(wheelbarrow_display(&mut app), Display::Flex);
+        assert_eq!(
+            wheelbarrow_text(&mut app),
+            format!("Wheelbarrow: 0/{WHEELBARROW_CAPACITY}")
+        );
+
+        let _ = std::fs::remove_file(save_path);
     }
 }

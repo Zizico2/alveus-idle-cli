@@ -186,8 +186,18 @@ fn brp_care_menu_moves_cursor_and_confirms_selection() {
     assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     trigger_game_command(&mut app, serde_json::json!("Continue"));
+    // Same BRP update must close the picker, reset care state, grant the item,
+    // and emit care feedback — the #34 nested transition contract.
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::None);
+    assert!(app.world().resource::<CareMenuState>().menu_id.is_none());
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 0);
+    assert_eq!(app.world().resource::<CareMenuState>().list.options, []);
     let satchel = app.world().resource::<PlayerSatchel>();
     assert!(satchel_contains(satchel, ItemId::TortoiseLeafyGreens));
+    assert_eq!(
+        app.world().resource::<CapturedCareFeedback>().0.as_deref(),
+        Some("Took Tortoise Leafy Greens")
+    );
 
     let _ = std::fs::remove_file(save_path);
 }
