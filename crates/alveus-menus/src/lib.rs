@@ -2,11 +2,12 @@
 
 pub mod care_item_picker;
 mod credits;
+mod list_menu;
 pub mod main_menu;
-pub use main_menu::PlayClickEvent;
 mod overlay_menu;
 mod pause;
 mod settings;
+mod standalone_menu;
 
 use bevy::prelude::*;
 
@@ -14,6 +15,7 @@ use bevy::prelude::*;
 ///
 /// Requires [`alveus_app::plugin`] to initialize the app-wide states first.
 pub fn plugin(app: &mut App) {
+    app.add_plugins(list_menu::ListMenuPlugin);
     app.add_plugins((
         credits::plugin,
         care_item_picker::plugin,

@@ -5,6 +5,7 @@ members = [
     "crates/alveus-types",
     "crates/alveus-configs",
     "crates/alveus-app",
+    "crates/alveus-menus-models",
     "crates/alveus-components",
     "crates/alveus-content",
     "crates/alveus-asset-tracking",
@@ -35,6 +36,7 @@ authors = ["Bernardo António Borda d'Água <berna.agua@protonmail.com>"]
 alveus-types = { path = "crates/alveus-types" }
 alveus-configs = { path = "crates/alveus-configs" }
 alveus-app = { path = "crates/alveus-app" }
+alveus-menus-models = { path = "crates/alveus-menus-models" }
 alveus-components = { path = "crates/alveus-components" }
 alveus-content = { path = "crates/alveus-content" }
 alveus-asset-tracking = { path = "crates/alveus-asset-tracking" }
@@ -56,6 +58,7 @@ alveus-headless = { path = "crates/alveus-headless" }
 
 # External crates
 bevy = { version = "0.19", default-features = true }
+bevy_enhanced_input = "0.26"
 bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
 bevy_reflect = "0.19"
 bevy_ecs_tiled = { version = "0.13", default-features = false, features = ["user_properties", "png"] }
@@ -108,6 +111,7 @@ alveus-animals.workspace = true
 alveus-world.workspace = true
 alveus-screens.workspace = true
 alveus-menus.workspace = true
+alveus-menus-models.workspace = true
 alveus-hud.workspace = true
 alveus-command.workspace = true
 alveus-input.workspace = true

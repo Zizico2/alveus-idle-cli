@@ -136,7 +136,7 @@ The authoritative list lives in `crates/alveus-command/src/lib.rs` (`GameCommand
 documented per-variant in that enum's doc comments. Do not treat line-number
 citations elsewhere in this file as stable anchors — search for the type/name.
 
-- **Player verbs**: `Move`, `MoveStop`, `Interact`, `DropItem`, `EnterBuilding`,
+- **Player verbs**: `Move`, `MoveStop`, `NavigateListMenu`, `Interact`, `DropItem`, `EnterBuilding`,
   `ExitRoom`, `PauseToggle`, `Play`, `Back`, `SkipSplash`, `OpenSettings`,
   `OpenCredits`, `Continue`, `QuitToTitle`.
 - **Debug / harness verbs** (mirror in-game debug keys or exist for control —

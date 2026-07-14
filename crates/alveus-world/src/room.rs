@@ -70,10 +70,23 @@ pub fn try_exit_room<S: States + FreelyMutableState>(
     }
 }
 
+/// Force the current interior back to its configured overview spawn.
+pub fn force_exit_room_in_world(world: &mut World, room: InRoom) {
+    let exit_spawn = match room {
+        InRoom::NutritionHouse => NUTRITION_HOUSE_ROOM.exit_spawn,
+        InRoom::PushPopEnclosure => PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
+        InRoom::Pasture | InRoom::ReptileEnclosure => return,
+    };
+    info!(?room, ?exit_spawn, "Exiting room interior");
+    world.resource_mut::<PlayerSpawnPoint>().position = exit_spawn;
+    world
+        .resource_mut::<NextState<Screen>>()
+        .set(Screen::Gameplay);
+}
+
 pub struct RoomConfig<S: States + FreelyMutableState> {
     pub room_state: S,
     pub gameplay_state: S,
-    pub entrance: BuildingEntrance,
     pub enclosure_id: EnclosureId,
     pub room_spawn: TilePosition,
     pub exit_spawn: TilePosition,
@@ -91,7 +104,6 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
 
     let room_state = config.room_state.clone();
     let gameplay_state = config.gameplay_state.clone();
-    let entrance = config.entrance;
     let enclosure_id = config.enclosure_id;
     let room_spawn = config.room_spawn;
     let exit_spawn = config.exit_spawn;
@@ -203,30 +215,9 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
     let gp_state = gameplay_state.clone();
     app.add_systems(
         Update,
-        (move |input: Res<ButtonInput<KeyCode>>,
-               player_query: Single<&BuildingEntrance, With<Player>>,
-               mut next_screen: ResMut<NextState<S>>| {
-            if input.just_pressed(KeyCode::Enter) {
-                try_enter_room(
-                    &player_query,
-                    entrance,
-                    enter_state.clone(),
-                    &mut next_screen,
-                );
-            }
-        })
-        .run_if(in_state(gp_state)),
-    );
-
-    let enter_state = room_state.clone();
-    let gp_state = gameplay_state.clone();
-    app.add_systems(
-        Update,
-        (move |input: Res<ButtonInput<KeyCode>>,
-               player_query: Single<&CurrentTilePosition, With<Player>>,
+        (move |player_query: Single<&CurrentTilePosition, With<Player>>,
                mut next_screen: ResMut<NextState<S>>,
                mut spawn_point: ResMut<PlayerSpawnPoint>| {
-            let force = input.just_pressed(KeyCode::Backspace);
             try_exit_room(
                 player_query.0,
                 exit_door,
@@ -234,7 +225,7 @@ pub fn build_room<S: States + FreelyMutableState>(app: &mut App, config: RoomCon
                 gp_state.clone(),
                 &mut spawn_point,
                 &mut next_screen,
-                force,
+                false,
             );
         })
         .run_if(in_state(enter_state)),
@@ -285,7 +276,6 @@ impl Plugin for NutritionHousePlugin {
             RoomConfig {
                 room_state: Screen::InRoom(InRoom::NutritionHouse),
                 gameplay_state: Screen::Gameplay,
-                entrance: BuildingEntrance::NutritionHouse,
                 enclosure_id: EnclosureId::NutritionHousePlaypen,
                 room_spawn: NUTRITION_HOUSE_ROOM.room_spawn,
                 exit_spawn: NUTRITION_HOUSE_ROOM.exit_spawn,
@@ -308,7 +298,6 @@ impl Plugin for PushPopEnclosurePlugin {
             RoomConfig {
                 room_state: Screen::InRoom(InRoom::PushPopEnclosure),
                 gameplay_state: Screen::Gameplay,
-                entrance: BuildingEntrance::PushPopEnclosure,
                 enclosure_id: EnclosureId::PushPopEnclosure,
                 room_spawn: PUSH_POP_ENCLOSURE_ROOM.room_spawn,
                 exit_spawn: PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
@@ -348,7 +337,6 @@ mod tests {
         app.add_plugins(alveus_app::plugin);
         app.init_resource::<Assets<Mesh>>()
             .init_resource::<Assets<ColorMaterial>>()
-            .init_resource::<ButtonInput<KeyCode>>()
             .init_resource::<CollisionMasks>()
             .insert_resource(InteriorAssets {
                 nutrition_house: Handle::default(),
@@ -359,7 +347,6 @@ mod tests {
             RoomConfig {
                 room_state: room,
                 gameplay_state: Screen::Gameplay,
-                entrance: BuildingEntrance::NutritionHouse,
                 enclosure_id: EnclosureId::NutritionHousePlaypen,
                 room_spawn: TilePosition::default(),
                 exit_spawn: TilePosition::default(),

@@ -3,13 +3,18 @@ name = "alveus-input"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Keyboard-to-GameCommand mapping for alveus-idle"
+description = "Enhanced local input contexts mapped to canonical GameCommands"
 
 [dependencies]
 bevy.workspace = true
+bevy_enhanced_input.workspace = true
 alveus-app.workspace = true
 alveus-components.workspace = true
 alveus-command.workspace = true
+alveus-configs.workspace = true
+alveus-menus-models.workspace = true
+alveus-stats.workspace = true
+alveus-types.workspace = true
 
 [lints]
 workspace = true

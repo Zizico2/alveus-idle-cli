@@ -1,0 +1,166 @@
+//! Presentation-neutral state shared by menu domains and their UI adapters.
+
+use bevy_ecs::component::Component;
+use bevy_ecs::entity::Entity;
+use bevy_reflect::Reflect;
+
+/// Vertical navigation for list menus (Main, Pause, Care item picker, …).
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ListMenuDirection {
+    Up,
+    Down,
+}
+
+impl ListMenuDirection {
+    /// Delta passed to [`ListMenuState::move_cursor`] / [`ListMenuCursor::move_by`].
+    pub fn delta(self) -> i32 {
+        match self {
+            Self::Up => -1,
+            Self::Down => 1,
+        }
+    }
+}
+
+/// Marker on the list root entity for any spawned list menu.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+pub struct ListMenu;
+
+/// One row in a spawned list menu.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+pub struct ListMenuEntry {
+    pub list: Entity,
+    pub index: usize,
+}
+
+/// Non-generic cursor for action lists so command dispatch can navigate without
+/// knowing the row payload type (`MainMenuAction`, `PauseMenuAction`, …).
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub struct ListMenuCursor {
+    pub index: usize,
+    pub len: usize,
+}
+
+impl ListMenuCursor {
+    pub fn new(index: usize, len: usize) -> Self {
+        Self { index, len }
+    }
+
+    pub fn from_state<T>(state: &ListMenuState<T>) -> Self {
+        Self {
+            index: state.cursor,
+            len: state.options.len(),
+        }
+    }
+
+    pub fn move_by(&mut self, delta: i32) -> bool {
+        if self.len == 0 {
+            return false;
+        }
+        let next = (self.index as i32 + delta).rem_euclid(self.len as i32) as usize;
+        if self.index == next {
+            return false;
+        }
+        self.index = next;
+        true
+    }
+
+    pub fn set_index(&mut self, index: usize) -> bool {
+        if index >= self.len || self.index == index {
+            return false;
+        }
+        self.index = index;
+        true
+    }
+}
+
+/// An ordered set of menu options with one authoritative cursor.
+///
+/// Transient menus can attach a specialization directly to their list entity;
+/// long-lived gameplay menus can embed it in a reflected domain resource.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
+pub struct ListMenuState<T> {
+    pub options: Vec<T>,
+    pub cursor: usize,
+}
+
+impl<T> Default for ListMenuState<T> {
+    fn default() -> Self {
+        Self {
+            options: Vec::new(),
+            cursor: 0,
+        }
+    }
+}
+
+impl<T> ListMenuState<T> {
+    pub fn new(options: impl IntoIterator<Item = T>) -> Self {
+        Self {
+            options: options.into_iter().collect(),
+            cursor: 0,
+        }
+    }
+
+    pub fn selected(&self) -> Option<&T> {
+        self.options.get(self.cursor)
+    }
+
+    pub fn move_cursor(&mut self, delta: i32) -> bool {
+        if self.options.is_empty() {
+            return false;
+        }
+        let len = self.options.len() as i32;
+        let next = (self.cursor as i32 + delta).rem_euclid(len) as usize;
+        self.set_cursor(next)
+    }
+
+    pub fn set_cursor(&mut self, index: usize) -> bool {
+        if index >= self.options.len() || self.cursor == index {
+            return false;
+        }
+        self.cursor = index;
+        true
+    }
+
+    pub fn selected_index(&self) -> Option<usize> {
+        (!self.options.is_empty() && self.cursor < self.options.len()).then_some(self.cursor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ListMenuCursor, ListMenuState};
+
+    #[test]
+    fn cursor_wraps_and_empty_lists_are_stable() {
+        let mut menu = ListMenuState::new(["one", "two", "three"]);
+        assert!(menu.move_cursor(-1));
+        assert_eq!(menu.cursor, 2);
+        assert_eq!(menu.selected(), Some(&"three"));
+        assert!(menu.move_cursor(1));
+        assert_eq!(menu.cursor, 0);
+
+        let mut empty = ListMenuState::<()>::default();
+        assert!(!empty.move_cursor(1));
+        assert!(!empty.set_cursor(0));
+        assert_eq!(empty.selected_index(), None);
+    }
+
+    #[test]
+    fn set_cursor_rejects_unchanged_and_out_of_bounds_indices() {
+        let mut menu = ListMenuState::new([10, 20]);
+        assert!(!menu.set_cursor(0));
+        assert!(!menu.set_cursor(2));
+        assert!(menu.set_cursor(1));
+        assert_eq!(menu.selected(), Some(&20));
+    }
+
+    #[test]
+    fn list_menu_cursor_wraps_like_state() {
+        let mut cursor = ListMenuCursor::new(0, 3);
+        assert!(cursor.move_by(-1));
+        assert_eq!(cursor.index, 2);
+        assert!(cursor.move_by(1));
+        assert_eq!(cursor.index, 0);
+        assert!(!ListMenuCursor::new(0, 0).move_by(1));
+    }
+}

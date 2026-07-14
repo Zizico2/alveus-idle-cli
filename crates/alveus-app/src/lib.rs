@@ -68,8 +68,9 @@ pub enum Menu {
     Credits,
     Settings,
     Pause,
-    /// Care item picker overlay (fridge, etc.). Cursor via Move Up/Down;
-    /// confirm with Interact/Continue; cancel with Back.
+    /// Care item picker overlay (fridge, etc.). `CareMenuState::list.cursor` is
+    /// authoritative; `NavigateListMenu` Up/Down changes it once per press,
+    /// Interact/Continue confirms it, and Back closes the picker.
     CareItemPicker,
 }
 

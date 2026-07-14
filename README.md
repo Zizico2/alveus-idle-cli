@@ -205,7 +205,7 @@ Headless integration tests cover `GameCommand` dispatch, BRP in-process round-tr
 ### Module layout
 
 * `crates/alveus-command/src/lib.rs` — `GameCommand` enum + dispatcher
-* `crates/alveus-input/src/lib.rs` — keyboard-to-command mapping
+* `crates/alveus-input/src/lib.rs` — enhanced keyboard/gamepad contexts mapped to commands
 * `crates/alveus-reflect/src/lib.rs` — shared `register_types()` composition entry point
 * `crates/alveus-headless/src/camera.rs` — offscreen `Camera2d` → `RenderTarget::Image`
 * `crates/alveus-headless/src/stdio.rs` — stdin/stdout BRP carrier

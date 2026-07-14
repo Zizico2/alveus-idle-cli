@@ -20,27 +20,11 @@ fn unpause(mut next_pause: ResMut<NextState<Pause>>) {
 }
 
 pub fn open_pause_from_gameplay(
-    commands: &mut Commands,
     next_pause: &mut NextState<Pause>,
     next_menu: &mut NextState<Menu>,
 ) {
     next_pause.set(Pause(true));
-    spawn_pause_overlay(commands);
     next_menu.set(Menu::Pause);
-}
-
-pub fn spawn_pause_overlay(commands: &mut Commands) {
-    commands.spawn((
-        Name::new("Pause Overlay"),
-        Node {
-            width: percent(100),
-            height: percent(100),
-            ..default()
-        },
-        GlobalZIndex(1),
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        DespawnOnExit(Pause(true)),
-    ));
 }
 
 pub fn close_menu_state(next_menu: &mut NextState<Menu>) {

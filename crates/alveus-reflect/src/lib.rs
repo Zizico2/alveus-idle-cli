@@ -19,7 +19,6 @@ use alveus_interaction::{
     CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal, GiveItem, MiniChore, OpenMenu,
     PlayerSatchel,
 };
-use alveus_menus::PlayClickEvent;
 use alveus_stats::{
     AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, AnimalTilePosition,
     EnclosureId, EnclosureName, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath,
@@ -31,6 +30,7 @@ use alveus_world::room::PlayerSpawnPoint;
 use alveus_world::toast::{DismissToastEvent, TriggerToastEvent};
 
 use alveus_command::{GameCommand, HeadlessRenderTarget, StepRequest};
+use alveus_menus_models::{ListMenu, ListMenuCursor, ListMenuDirection, ListMenuEntry};
 
 pub fn register_types(app: &mut App) {
     app.register_type::<Screen>()
@@ -90,8 +90,11 @@ pub fn register_types(app: &mut App) {
         .register_type::<SavePath>()
         .register_type::<HeadlessRenderTarget>()
         .register_type::<StepRequest>()
+        .register_type::<ListMenuDirection>()
+        .register_type::<ListMenu>()
+        .register_type::<ListMenuEntry>()
+        .register_type::<ListMenuCursor>()
         .register_type::<GameCommand>()
-        .register_type::<PlayClickEvent>()
         .register_type::<AnimalFedEvent>()
         .register_type::<AnimalEnrichedEvent>()
         .register_type::<AnimalCleanedEvent>()

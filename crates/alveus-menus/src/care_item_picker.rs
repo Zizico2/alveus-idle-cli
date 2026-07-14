@@ -1,30 +1,37 @@
 //! Care-specific adapter for the reusable overlay menu presentation.
 
 use alveus_app::Menu;
-use alveus_components::{CareMenuState, PlayerSatchel};
+use alveus_command::GameCommand;
+use alveus_components::PlayerSatchel;
 use alveus_configs::{SATCHEL_MAX_SLOTS, item_display_name};
+use alveus_interaction::{CareMenuState, care_menu_set_cursor};
 use alveus_types::CareMenuId;
 use bevy::prelude::*;
 
-use crate::overlay_menu::{
-    OverlayMenuSelection, OverlayMenuSpec, OverlayMenuSystems, spawn_overlay_menu,
+use crate::{
+    list_menu::{ListMenuEntry, ListMenuPlugin, ListMenuSpec, project_selection},
+    overlay_menu::{OverlayMenuSpec, spawn_overlay_menu},
 };
 
 pub(super) fn plugin(app: &mut App) {
-    alveus_app::ensure_plugin(app, crate::overlay_menu::OverlayMenuPlugin);
+    alveus_app::ensure_plugin(app, ListMenuPlugin);
     app.add_systems(OnEnter(Menu::CareItemPicker), spawn_care_item_picker)
         .add_systems(
             Update,
-            sync_care_selection
-                .run_if(in_state(Menu::CareItemPicker))
-                .in_set(OverlayMenuSystems::SyncSelection),
-        );
+            sync_care_selection.run_if(in_state(Menu::CareItemPicker)),
+        )
+        .add_observer(hover_care_row)
+        .add_observer(click_care_row);
 }
 
 /// Stable marker for lifecycle tests and UI inspection.
 #[derive(Component)]
 pub struct CareItemPickerOverlay;
 
+#[derive(Component)]
+struct CareItemPickerList;
+
+// TODO: should these be methods on the CareMenuState struct?
 fn menu_title(menu_id: Option<CareMenuId>) -> &'static str {
     match menu_id {
         Some(CareMenuId::Fridge) => "Fridge supplies",
@@ -32,14 +39,16 @@ fn menu_title(menu_id: Option<CareMenuId>) -> &'static str {
     }
 }
 
+// TODO: should this be a method on the CareMenuState struct?
 fn selected_index(care_menu: &CareMenuState) -> Option<usize> {
     care_menu
         .menu_id
         .is_some()
-        .then_some(care_menu.cursor)
-        .filter(|index| *index < care_menu.options.len())
+        .then(|| care_menu.list.selected_index())
+        .flatten()
 }
 
+// TODO: should this be a method on the CareMenuState struct?
 fn empty_copy(care_menu: &CareMenuState) -> &'static str {
     if care_menu.menu_id.is_none() {
         "This item menu is unavailable. Press Esc to close."
@@ -56,46 +65,90 @@ fn spawn_care_item_picker(
     let entries = care_menu
         .menu_id
         .is_some()
-        .then(|| care_menu.options.iter().copied().map(item_display_name))
+        .then(|| {
+            care_menu
+                .list
+                .options
+                .iter()
+                .copied()
+                .map(item_display_name)
+        })
         .into_iter()
         .flatten();
-    let spec = OverlayMenuSpec::new(menu_title(care_menu.menu_id), entries)
+    let list_state = alveus_menus_models::ListMenuState {
+        options: entries.collect(),
+        cursor: care_menu.list.cursor,
+    };
+    let overlay_spec = OverlayMenuSpec::new(menu_title(care_menu.menu_id))
         .with_summary(format!(
             "Satchel: {}/{} slots occupied",
             satchel.occupied_count(),
             SATCHEL_MAX_SLOTS
         ))
-        .with_selected(selected_index(&care_menu))
-        .with_empty_copy(empty_copy(&care_menu))
-        .with_controls("↑/↓ Select   Space/Enter Take   Esc Back");
+        .with_controls("Up/Down Select   Space/Enter/A Take   Esc/P/B Back");
+    let list_spec = ListMenuSpec::selection().with_empty_copy(empty_copy(&care_menu));
 
-    let root = spawn_overlay_menu(&mut commands, "Care Item Picker Overlay", spec);
+    let spawned = spawn_overlay_menu(
+        &mut commands,
+        "Care Item Picker Overlay",
+        &list_state,
+        overlay_spec,
+        list_spec,
+        |label| (*label).to_string(),
+    );
     commands
-        .entity(root)
+        .entity(spawned.root)
         .insert((CareItemPickerOverlay, DespawnOnExit(Menu::CareItemPicker)));
+    if let Some(list) = spawned.list.list {
+        commands.entity(list).insert(CareItemPickerList);
+    }
 }
 
 fn sync_care_selection(
+    mut commands: Commands,
     care_menu: Res<CareMenuState>,
-    mut overlay: Single<&mut OverlayMenuSelection, With<CareItemPickerOverlay>>,
+    list: Single<Entity, With<CareItemPickerList>>,
+    entries: Query<
+        (Entity, &ListMenuEntry, Has<bevy::ui::Selected>),
+        With<bevy::ui_widgets::ListItem>,
+    >,
 ) {
-    if !care_menu.is_changed() {
-        return;
+    project_selection(&mut commands, *list, selected_index(&care_menu), &entries);
+}
+
+fn hover_care_row(
+    over: On<Pointer<Over>>,
+    entries: Query<&ListMenuEntry>,
+    mut care_menu: ResMut<CareMenuState>,
+) {
+    if let Ok(entry) = entries.get(over.entity) {
+        care_menu_set_cursor(&mut care_menu, entry.index);
     }
-    let selected = selected_index(&care_menu);
-    if overlay.selected() != selected {
-        overlay.set(selected);
+}
+
+fn click_care_row(
+    mut click: On<Pointer<Click>>,
+    entries: Query<&ListMenuEntry>,
+    mut care_menu: ResMut<CareMenuState>,
+    mut commands: Commands,
+) {
+    if let Ok(entry) = entries.get(click.entity) {
+        click.propagate(false);
+        care_menu_set_cursor(&mut care_menu, entry.index);
+        commands.trigger(GameCommand::Continue);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::overlay_menu::{
-        OverlayMenuEmptyState, OverlayMenuEntry, OverlayMenuEntryState, OverlayMenuRoot,
+    use crate::{
+        list_menu::{ListMenuEmptyState, ListMenuEntry},
+        overlay_menu::OverlayMenuRoot,
     };
     use alveus_types::ItemId;
     use bevy::state::app::StatesPlugin;
+    use bevy::{input_focus::tab_navigation::TabIndex, ui::Selected, ui_widgets::ListItem};
 
     fn picker_app(care_menu: CareMenuState) -> App {
         let mut app = App::new();
@@ -112,6 +165,16 @@ mod tests {
         app
     }
 
+    fn care_state(
+        menu_id: Option<CareMenuId>,
+        options: impl IntoIterator<Item = ItemId>,
+        cursor: usize,
+    ) -> CareMenuState {
+        let mut state = CareMenuState::new(menu_id, options);
+        state.list.cursor = cursor;
+        state
+    }
+
     fn care_root(app: &mut App) -> Entity {
         app.world_mut()
             .query_filtered::<Entity, (With<CareItemPickerOverlay>, With<OverlayMenuRoot>)>()
@@ -119,22 +182,21 @@ mod tests {
             .expect("one care overlay root")
     }
 
-    fn care_entries(app: &mut App, root: Entity) -> Vec<(usize, String, bool)> {
+    fn care_entries(app: &mut App) -> Vec<(usize, String, bool)> {
         let mut entry_query = app
             .world_mut()
-            .query::<(&OverlayMenuEntry, &OverlayMenuEntryState, &Children)>();
+            .query::<(&ListMenuEntry, Has<Selected>, &Children)>();
         let mut text_query = app.world_mut().query::<&Text>();
         let mut entries = entry_query
             .iter(app.world())
-            .filter(|(entry, _, _)| entry.owner == root)
-            .map(|(entry, state, children)| {
+            .map(|(entry, selected, children)| {
                 let label = children
                     .iter()
                     .filter_map(|child| text_query.get(app.world(), child).ok())
-                    .find(|text| text.as_str() != "▶")
+                    .next()
                     .map(|text| text.as_str().to_string())
                     .expect("entry label");
-                (entry.index, label, state.selected)
+                (entry.index, label, selected)
             })
             .collect::<Vec<_>>();
         entries.sort_by_key(|entry| entry.0);
@@ -143,11 +205,11 @@ mod tests {
 
     #[test]
     fn entering_and_leaving_picker_owns_exactly_one_reusable_overlay() {
-        let mut app = picker_app(CareMenuState {
-            menu_id: Some(CareMenuId::Fridge),
-            options: vec![ItemId::RawVeggieTub],
-            cursor: 0,
-        });
+        let mut app = picker_app(care_state(
+            Some(CareMenuId::Fridge),
+            [ItemId::RawVeggieTub],
+            0,
+        ));
 
         care_root(&mut app);
         app.world_mut()
@@ -166,14 +228,14 @@ mod tests {
 
     #[test]
     fn care_items_map_to_generic_entries_and_cursor_selection() {
-        let mut app = picker_app(CareMenuState {
-            menu_id: Some(CareMenuId::Fridge),
-            options: vec![ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
-            cursor: 0,
-        });
-        let root = care_root(&mut app);
+        let mut app = picker_app(care_state(
+            Some(CareMenuId::Fridge),
+            [ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
+            0,
+        ));
+        care_root(&mut app);
 
-        let entries = care_entries(&mut app, root);
+        let entries = care_entries(&mut app);
         assert_eq!(
             entries,
             [
@@ -182,10 +244,10 @@ mod tests {
             ]
         );
 
-        app.world_mut().resource_mut::<CareMenuState>().cursor = 1;
+        app.world_mut().resource_mut::<CareMenuState>().list.cursor = 1;
         app.update();
         assert_eq!(
-            care_entries(&mut app, root)
+            care_entries(&mut app)
                 .into_iter()
                 .map(|entry| entry.2)
                 .collect::<Vec<_>>(),
@@ -194,22 +256,37 @@ mod tests {
     }
 
     #[test]
+    fn care_rows_are_list_items_without_individual_tab_stops() {
+        let mut app = picker_app(care_state(
+            Some(CareMenuId::Fridge),
+            [ItemId::RawVeggieTub, ItemId::TortoiseLeafyGreens],
+            0,
+        ));
+        care_root(&mut app);
+        let mut rows = app
+            .world_mut()
+            .query_filtered::<(Entity, &ListMenuEntry), With<ListItem>>();
+        let entries = rows
+            .iter(app.world())
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries
+                .iter()
+                .all(|entity| app.world().get::<TabIndex>(*entity).is_none())
+        );
+    }
+
+    #[test]
     fn invalid_care_states_supply_domain_specific_empty_copy() {
         for (care_menu, expected) in [
             (
-                CareMenuState {
-                    menu_id: Some(CareMenuId::Fridge),
-                    options: Vec::new(),
-                    cursor: 0,
-                },
+                care_state(Some(CareMenuId::Fridge), [], 0),
                 "No items are available. Press Esc to close.",
             ),
             (
-                CareMenuState {
-                    menu_id: None,
-                    options: vec![ItemId::RawVeggieTub],
-                    cursor: 0,
-                },
+                care_state(None, [ItemId::RawVeggieTub], 0),
                 "This item menu is unavailable. Press Esc to close.",
             ),
         ] {
@@ -217,7 +294,7 @@ mod tests {
             care_root(&mut app);
             let copy = app
                 .world_mut()
-                .query_filtered::<&Text, With<OverlayMenuEmptyState>>()
+                .query_filtered::<&Text, With<ListMenuEmptyState>>()
                 .iter(app.world())
                 .next()
                 .map(|text| text.as_str().to_string())

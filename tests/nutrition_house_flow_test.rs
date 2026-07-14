@@ -5,13 +5,14 @@
 use alveus_app::{Menu, Screen};
 use alveus_cleaning::CleaningPlugin;
 use alveus_command::{CommandPlugin, GameCommand};
-use alveus_components::{CurrentTilePosition, Interactable, MovementIntent, Player, TilePosition};
+use alveus_components::{CurrentTilePosition, Interactable, Player, TilePosition};
 use alveus_configs::{CARE_CLEAN_RESTORE, CARE_ENRICH_RESTORE, CARE_FEED_RESTORE, STAT_FULL};
 use alveus_content::ItemId;
 use alveus_interaction::{
     ActiveInteractionTarget, CareMenuState, CleanAnimal, EnrichAnimal, FeedAnimal,
     InteractionPlugin, MiniChore, OpenMenu, PlayerSatchel, try_give_item,
 };
+use alveus_menus_models::ListMenuDirection;
 use alveus_stats::{AnimalId, AnimalStats, EnclosureId, EnclosureStats, SavePath, StatsPlugin};
 use alveus_types::{CareMenuId, ChoreId, Stat};
 use bevy::prelude::*;
@@ -81,12 +82,12 @@ fn fridge_menu_move_down_selects_greens() {
         *app.world().resource::<State<Menu>>().get(),
         Menu::CareItemPicker
     );
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 0);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 0);
 
     app.world_mut()
-        .trigger(GameCommand::Move(MovementIntent::Down));
+        .trigger(GameCommand::NavigateListMenu(ListMenuDirection::Down));
     app.update();
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     app.world_mut().trigger(GameCommand::Continue);
     app.update();

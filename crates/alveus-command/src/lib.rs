@@ -1,23 +1,22 @@
 //! Central semantic verb enum and dispatcher.
 
 use bevy::audio::Volume;
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::state::state::StateTransition;
 
 use alveus_app::{InRoom, Menu, Pause, Screen, tile_interaction_enabled_for};
-use alveus_components::{
-    BuildingEntrance, CurrentTilePosition, MovementController, MovementIntent, Player, TilePosition,
-};
+use alveus_components::{BuildingEntrance, MovementController, MovementIntent, Player};
 use alveus_interaction::{
     CareMenuState, cancel_care_menu_in_world, care_menu_move_cursor, confirm_care_menu_in_world,
     perform_drop_in_world, perform_interact_in_world,
 };
-use alveus_menus::PlayClickEvent;
-use alveus_screens::gameplay::spawn_pause_overlay;
+use alveus_menus_models::{ListMenu, ListMenuCursor, ListMenuDirection, ListMenuEntry};
+use alveus_screens::begin_play_in_world;
 use alveus_stats::{ImproveStatEvent, StatTarget, WorsenStatEvent, advance_simulated_hours_world};
 use alveus_types::Stat;
-use alveus_world::room::{PlayerSpawnPoint, try_enter_room};
+use alveus_world::room::{force_exit_room_in_world, try_enter_room};
 
 /// The complete, semantic verb set for the game.
 ///
@@ -48,14 +47,20 @@ pub enum GameCommand {
     /// is blocked by an obstacle. One in-flight tile step takes
     /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
-    /// to advance a single tile predictably. While [`Menu::CareItemPicker`] is
-    /// open, Up/Down moves its cursor instead; other overlay menus make this a
-    /// no-op. Requires an active [`Player`] entity.
+    /// to advance a single tile predictably. Overlay menus make this a no-op
+    /// (list menus use [`GameCommand::NavigateListMenu`] instead). Requires an
+    /// active [`Player`] entity.
     Move(MovementIntent),
     /// Clear the player's movement intent (stop walking).
     MoveStop,
+    /// Move the cursor on the active list menu one step (`Up` / `Down`).
+    /// Applies while [`Menu::Main`], [`Menu::Pause`], or [`Menu::CareItemPicker`]
+    /// is open; other menus are a no-op. Care uses the model cursor on
+    /// [`CareMenuState`]; Main/Pause update [`ListMenuCursor`] and project
+    /// [`InputFocus`] onto the matching row.
+    NavigateListMenu(ListMenuDirection),
     /// Interact with whatever is currently in front of / under the player
-    /// (`Space` in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
+    /// (`Space` / gamepad South in-game): pick up a `GiveItem`, feed via `FeedAnimal`, enrich via
     /// `EnrichAnimal`, clean via `CleanAnimal`, run a `MiniChore`, open a care
     /// menu (`OpenMenu`), pick up a `PoopPile`, or empty the wheelbarrow at
     /// `PoopDump`. While [`Menu::CareItemPicker`] is open, confirms the
@@ -63,24 +68,24 @@ pub enum GameCommand {
     /// overlay, it is also a no-op without an active [`Player`] and interaction
     /// target.
     Interact,
-    /// Drop the first occupied satchel slot (`K` in-game). No-op if empty.
+    /// Drop the first occupied satchel slot (`K` / gamepad West in-game). No-op if empty.
     /// Requires an active [`Player`] and no overlay menu.
     DropItem,
-    /// Enter the building whose entrance the player is standing on (`Enter`
-    /// in-game). Only valid while in [`Screen::Gameplay`] and while the player
+    /// Enter the building whose entrance the player is standing on (`Enter` /
+    /// gamepad North in-game). Only valid while in [`Screen::Gameplay`] and while the player
     /// has a `BuildingEntrance` component (i.e. actually on an entrance tile);
     /// otherwise it is a no-op.
     EnterBuilding,
     /// Leave the current room interior back to the overview (`Backspace` /
-    /// walking onto the door in-game). No-op unless currently in an `InRoom`
+    /// gamepad East / walking onto the door in-game). No-op unless currently in an `InRoom`
     /// state. Force-exits regardless of the player's tile within the room.
     ExitRoom,
-    /// Toggle the pause menu during gameplay (`P` / `Esc`).
+    /// Toggle the pause menu during gameplay (`P` / `Esc` / gamepad Start).
     PauseToggle,
     /// Press "Play" on the title screen — equivalent to the main-menu button.
     /// Transitions Title -> Gameplay.
     Play,
-    /// Go back one level in the current menu (`Esc` in menus): Settings/Credits
+    /// Go back one level in the current menu (`Esc` / `P` / gamepad East or Start): Settings/Credits
     /// -> previous menu, Pause -> resume, CareItemPicker -> close picker.
     Back,
     /// Skip the splash screen (`Esc` during splash). Transitions to Title.
@@ -226,6 +231,50 @@ fn has_player(world: &World) -> bool {
         == 1
 }
 
+fn navigate_list_menu_in_world(world: &mut World, direction: ListMenuDirection) {
+    let menu = *world.resource::<State<Menu>>().get();
+    let delta = direction.delta();
+    match menu {
+        Menu::CareItemPicker => {
+            if !has_player(world) {
+                return;
+            }
+            {
+                let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
+                if let Ok(mut movement) = query.single_mut(world) {
+                    movement.intent = None;
+                }
+            }
+            let mut care_menu = world.resource_mut::<CareMenuState>();
+            care_menu_move_cursor(&mut care_menu, delta);
+        }
+        Menu::Main | Menu::Pause => {
+            let target = {
+                let mut cursors =
+                    world.query_filtered::<(Entity, &mut ListMenuCursor), With<ListMenu>>();
+                let Ok((list, mut cursor)) = cursors.single_mut(world) else {
+                    return;
+                };
+                cursor.move_by(delta);
+                let index = cursor.index;
+                (list, index)
+            };
+            let focused = {
+                let mut entries = world.query::<(Entity, &ListMenuEntry)>();
+                entries.iter(world).find_map(|(entity, entry)| {
+                    (entry.list == target.0 && entry.index == target.1).then_some(entity)
+                })
+            };
+            if let Some(entity) = focused {
+                if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
+                    focus.set(entity, FocusCause::Navigated);
+                }
+            }
+        }
+        Menu::None | Menu::Settings | Menu::Credits => {}
+    }
+}
+
 fn apply_game_command(world: &mut World, command: GameCommand) {
     // FatalError is terminal for this process: ignore gameplay / navigation verbs.
     // Passive harness verbs (screenshots, frame advance) still apply.
@@ -238,27 +287,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
 
     match command {
         GameCommand::Move(intent) => {
-            if care_menu_open(world) {
-                if !has_player(world) {
-                    return;
-                }
-                {
-                    let mut query = world.query_filtered::<&mut MovementController, With<Player>>();
-                    if let Ok(mut movement) = query.single_mut(world) {
-                        movement.intent = None;
-                    }
-                }
-                let delta = match intent {
-                    MovementIntent::Up => -1,
-                    MovementIntent::Down => 1,
-                    MovementIntent::Left | MovementIntent::Right => 0,
-                };
-                if delta != 0 {
-                    let mut care_menu = world.resource_mut::<CareMenuState>();
-                    care_menu_move_cursor(&mut care_menu, delta);
-                }
-                return;
-            }
             let screen = *world.resource::<State<Screen>>().get();
             let menu = *world.resource::<State<Menu>>().get();
             if !tile_interaction_enabled_for(screen, menu) {
@@ -274,6 +302,9 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             if let Ok(mut movement) = query.single_mut(world) {
                 movement.intent = None;
             }
+        }
+        GameCommand::NavigateListMenu(direction) => {
+            navigate_list_menu_in_world(world, direction);
         }
         GameCommand::Interact => perform_interact_in_world(world),
         GameCommand::DropItem => perform_drop_in_world(world),
@@ -317,21 +348,8 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             if !tile_interaction_enabled_for(screen, menu) {
                 return;
             }
-            let player_pos = {
-                let mut pos_query = world.query_filtered::<&CurrentTilePosition, With<Player>>();
-                pos_query.single(world).ok().map(|pos| pos.0)
-            };
-            let Some(player_pos) = player_pos else {
-                return;
-            };
-            match screen {
-                Screen::InRoom(InRoom::NutritionHouse) => {
-                    exit_room_world(world, player_pos, TilePosition { x: 33, y: 12 });
-                }
-                Screen::InRoom(InRoom::PushPopEnclosure) => {
-                    exit_room_world(world, player_pos, TilePosition { x: 40, y: 33 });
-                }
-                _ => {}
+            if let Screen::InRoom(room) = screen {
+                force_exit_room_in_world(world, room);
             }
         }
         GameCommand::PauseToggle => {
@@ -340,7 +358,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             match (screen, menu) {
                 (Screen::Gameplay, Menu::None) => {
                     world.resource_mut::<NextState<Pause>>().set(Pause(true));
-                    spawn_pause_overlay(&mut world.commands());
                     world.resource_mut::<NextState<Menu>>().set(Menu::Pause);
                 }
                 (Screen::Gameplay, _) => {
@@ -350,7 +367,7 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             }
         }
         GameCommand::Play => {
-            world.trigger(PlayClickEvent);
+            begin_play_in_world(world);
         }
         GameCommand::Back => {
             let screen = *world.resource::<State<Screen>>().get();
@@ -416,14 +433,6 @@ fn apply_game_command(world: &mut World, command: GameCommand) {
             world.resource_mut::<StepRequest>().add(frames);
         }
     }
-}
-
-fn exit_room_world(world: &mut World, _player_pos: TilePosition, exit_spawn: TilePosition) {
-    info!("Exiting room interior!");
-    world.resource_mut::<PlayerSpawnPoint>().position = exit_spawn;
-    world
-        .resource_mut::<NextState<Screen>>()
-        .set(Screen::Gameplay);
 }
 
 fn go_back_menu(screen: &Screen, menu: &Menu, next_menu: &mut NextState<Menu>) {

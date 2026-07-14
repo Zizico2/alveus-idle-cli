@@ -128,7 +128,8 @@ fn care_menu_state_keeps_its_existing_brp_resource_path() {
     )
     .expect("existing CareMenuState BRP resource path remains queryable");
     let value = response.get("value").unwrap_or(&response);
-    assert_eq!(value["cursor"], serde_json::json!(0));
+    assert_eq!(value["list"]["cursor"], serde_json::json!(0));
+    assert_eq!(value["list"]["options"], serde_json::json!([]));
     assert_eq!(value["menu_id"], serde_json::Value::Null);
 
     let _ = std::fs::remove_file(save_path);
@@ -178,8 +179,8 @@ fn brp_care_menu_moves_cursor_and_confirms_selection() {
         Menu::CareItemPicker
     );
 
-    trigger_game_command(&mut app, serde_json::json!({ "Move": "Down" }));
-    assert_eq!(app.world().resource::<CareMenuState>().cursor, 1);
+    trigger_game_command(&mut app, serde_json::json!({ "NavigateListMenu": "Down" }));
+    assert_eq!(app.world().resource::<CareMenuState>().list.cursor, 1);
 
     trigger_game_command(&mut app, serde_json::json!("Continue"));
     let satchel = app.world().resource::<PlayerSatchel>();
