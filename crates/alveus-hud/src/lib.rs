@@ -518,6 +518,7 @@ fn update_hud_system(
             Without<AnimalStatText>,
             Without<SatchelBodyText>,
             Without<InteractionPromptText>,
+            Without<WheelbarrowBodyText>,
         ),
     >,
     mut upkeep_bar_query: Query<&mut Node, (With<UpkeepBarFill>, Without<AnimalStatBarFill>)>,
@@ -527,6 +528,7 @@ fn update_hud_system(
             Without<UpkeepText>,
             Without<SatchelBodyText>,
             Without<InteractionPromptText>,
+            Without<WheelbarrowBodyText>,
         ),
     >,
     mut stat_bar_query: Query<(&mut Node, &AnimalStatBarFill), Without<UpkeepBarFill>>,
@@ -610,8 +612,15 @@ fn update_interaction_prompt_hud_system(
         Option<&PoopPile>,
         Option<&PoopDump>,
     )>,
-    mut prompt_roots: Query<&mut Node, With<InteractionPromptRoot>>,
-    mut prompt_texts: Query<&mut Text, With<InteractionPromptText>>,
+    mut prompt_roots: Query<&mut Node, (With<InteractionPromptRoot>, Without<WheelbarrowHudRoot>)>,
+    mut prompt_texts: Query<
+        &mut Text,
+        (
+            With<InteractionPromptText>,
+            Without<SatchelBodyText>,
+            Without<WheelbarrowBodyText>,
+        ),
+    >,
 ) {
     let prompt_message = if *menu.get() == Menu::None {
         active.interactable.and_then(|entity| {
@@ -679,7 +688,14 @@ fn update_satchel_feedback_hud_system(
     pulse: Res<CareHudPulse>,
     pickup_message: Res<LastPickupMessage>,
     mut satchel_roots: Query<&mut BackgroundColor, With<SatchelHudRoot>>,
-    mut satchel_bodies: Query<&mut Text, With<SatchelBodyText>>,
+    mut satchel_bodies: Query<
+        &mut Text,
+        (
+            With<SatchelBodyText>,
+            Without<InteractionPromptText>,
+            Without<WheelbarrowBodyText>,
+        ),
+    >,
 ) {
     let pulse_color = if pulse.is_active() {
         Color::srgba(0.25, 0.55, 0.35, 0.85)
@@ -704,8 +720,18 @@ fn update_satchel_feedback_hud_system(
 fn update_wheelbarrow_hud_system(
     screen: Res<State<Screen>>,
     wheelbarrow: Res<PoopWheelbarrow>,
-    mut wheelbarrow_roots: Query<&mut Node, With<WheelbarrowHudRoot>>,
-    mut wheelbarrow_bodies: Query<&mut Text, With<WheelbarrowBodyText>>,
+    mut wheelbarrow_roots: Query<
+        &mut Node,
+        (With<WheelbarrowHudRoot>, Without<InteractionPromptRoot>),
+    >,
+    mut wheelbarrow_bodies: Query<
+        &mut Text,
+        (
+            With<WheelbarrowBodyText>,
+            Without<InteractionPromptText>,
+            Without<SatchelBodyText>,
+        ),
+    >,
 ) {
     let in_cleaning_room = matches!(screen.get(), Screen::InRoom(InRoom::PushPopEnclosure));
     let wheelbarrow_count = wheelbarrow.count();

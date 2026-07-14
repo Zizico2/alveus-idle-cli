@@ -421,12 +421,15 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
   call the same helpers UI code uses (`perform_drop`, `open_care_menu`,
   `try_enter_room`, `advance_simulated_hours`). Keyboard handlers stay thin.
   Never fake key input to reach a verb.
-- **Observer routing + state flush.** `route_game_command` validates FatalError,
-  triggers internal request events, and sets `PendingCommandStateFlush`. A flush
-  system in `First`, `PostUpdate`, and (with `remote`) after
-  `RemoteSystems::ProcessRequests` in `RemoteLast` runs `StateTransition` once
-  per nonempty phase via `Commands::run_schedule`. Internal request events are
-  **not** Reflect-registered. Preserve this ordering when touching
+- **Observer routing + deferred phase flush.** `enqueue_game_command` only buffers
+  into `DeferredGameCommands`. `route_deferred_game_commands` runs in `First`,
+  `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests` in
+  `RemoteLast`, validating FatalError and triggering internal request events.
+  That preserves the PreUpdate-input contract: local verbs do not mutate
+  gameplay/`NextState` before `Update`. After each nonempty route batch,
+  `PendingCommandStateFlush` queues `StateTransition` once via
+  `Commands::run_schedule`. Internal request events are **not**
+  Reflect-registered. Preserve this ordering when touching
   `crates/alveus-command/src/lib.rs`.
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,

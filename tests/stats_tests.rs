@@ -9,6 +9,7 @@ use alveus_stats::{
 use alveus_types::Stat;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
+use bevy::time::{TimeUpdateStrategy, Virtual};
 
 #[test]
 fn test_stats_initialization() {
@@ -247,8 +248,59 @@ fn test_upkeep_calculation() {
 }
 
 #[test]
-fn test_decay_rate() {
-    let save_path = "nonexistent_save_decay.ron";
+fn test_scheduled_decay_rate_via_manual_time() {
+    let save_path = "nonexistent_save_scheduled_decay.ron";
+    let _ = std::fs::remove_file(save_path);
+    let mut app = App::new();
+    app.add_plugins(StatesPlugin);
+    app.add_plugins(alveus_app::plugin);
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    app.insert_resource(SavePath(save_path.to_string()));
+    app.add_plugins((StatsPlugin, CommandPlugin));
+    // Enter gameplay with no elapsed time so init does not apply decay.
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::ZERO,
+    ));
+    app.insert_resource(NextState::Pending(Screen::Gameplay));
+    app.update();
+
+    let polly_entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<AnimalId>>()
+        .iter(app.world())
+        .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
+        .expect("Polly should exist");
+
+    let initial_stats = app
+        .world()
+        .get::<AnimalStats>(polly_entity)
+        .unwrap()
+        .clone();
+    assert_eq!(initial_stats.hunger, Stat(1000));
+    assert_eq!(initial_stats.happiness, Stat(1000));
+
+    // Virtual time clamps large deltas (default max 250ms). Raise the cap so one
+    // ManualDuration step can represent two simulated hours through the real
+    // Update-scheduled tick_decay_system.
+    let two_hours = std::time::Duration::from_secs(7200);
+    app.world_mut()
+        .resource_mut::<Time<Virtual>>()
+        .set_max_delta(two_hours);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(two_hours));
+    app.update();
+
+    let updated_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
+    // Polly's hunger decay rate is 40 units per hour; 2 hours => 80.
+    // Polly's happiness decay rate is 50 units per hour; 2 hours => 100.
+    assert_eq!(updated_stats.hunger, Stat(920));
+    assert_eq!(updated_stats.happiness, Stat(900));
+    let _ = std::fs::remove_file(save_path);
+}
+
+#[test]
+fn test_advance_time_command_decays_polly() {
+    let save_path = "nonexistent_save_advance_time.ron";
     let _ = std::fs::remove_file(save_path);
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
@@ -268,23 +320,11 @@ fn test_decay_rate() {
         .find(|&e| *app.world().get::<AnimalId>(e).unwrap() == AnimalId::Polly)
         .expect("Polly should exist");
 
-    let initial_stats = app
-        .world()
-        .get::<AnimalStats>(polly_entity)
-        .unwrap()
-        .clone();
-    assert_eq!(initial_stats.hunger, Stat(1000));
-    assert_eq!(initial_stats.happiness, Stat(1000));
-
     app.world_mut()
         .trigger(GameCommand::AdvanceTime { hours: 2.0 });
     app.update();
 
     let updated_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
-    // Polly's hunger decay rate is 0.04 per hour (40 units per hour out of 1000).
-    // In 2 hours, hunger should decay by 80 units.
-    // Polly's happiness decay rate is 0.05 per hour (50 units per hour out of 1000).
-    // In 2 hours, happiness should decay by 100 units.
     assert_eq!(updated_stats.hunger, Stat(920));
     assert_eq!(updated_stats.happiness, Stat(900));
     let _ = std::fs::remove_file(save_path);

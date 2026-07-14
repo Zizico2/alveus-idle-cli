@@ -281,12 +281,8 @@ fn on_interaction_confirm_care_menu(
     mut satchel: ResMut<PlayerSatchel>,
     mut next_menu: ResMut<NextState<Menu>>,
     mut commands: Commands,
-    players: Query<(), With<Player>>,
 ) {
     if !matches!(trigger.event(), InteractionRequest::ConfirmCareMenu) {
-        return;
-    }
-    if players.single().is_err() {
         return;
     }
     confirm_care_menu(&mut care_menu, &mut satchel, &mut next_menu, &mut commands);

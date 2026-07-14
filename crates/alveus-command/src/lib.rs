@@ -28,11 +28,13 @@ use alveus_world::room::{RoomCommandHandlersPlugin, RoomRequest};
 /// `MoveTo(tile)`): an agent must accomplish goals using the same primitives a
 /// human player has, one tile step at a time.
 ///
-/// Triggering is fire-and-forget. Commands route through observers in the same
-/// frame they are triggered; [`PendingCommandStateFlush`] queues
-/// [`StateTransition`] once per frame phase (First, PostUpdate, and after BRP
-/// request processing). Observe the resulting state with the built-in BRP read
-/// methods (`world.query`, `world.get_resources`) rather than assuming a
+/// Triggering is fire-and-forget. Commands are deferred into
+/// [`DeferredGameCommands`] and routed in `First`, `PostUpdate`, and (with
+/// `remote`) after BRP request processing in `RemoteLast` — the same phases as
+/// the former exclusive buffer — so PreUpdate input does not mutate state before
+/// `Update`. After each nonempty route batch, [`PendingCommandStateFlush`] queues
+/// [`StateTransition`] once. Observe the resulting state with the built-in BRP
+/// read methods (`world.query`, `world.get_resources`) rather than assuming a
 /// synchronous response.
 ///
 /// Variants are grouped into **player verbs** (things a human player can do) and
@@ -154,6 +156,15 @@ pub struct HeadlessRenderTarget {
     pub height: u32,
 }
 
+/// Commands collected by the enqueue observer and routed in schedule phases.
+///
+/// This restores the former PreUpdate → PostUpdate phase contract: input-triggered
+/// verbs must not mutate gameplay/`NextState` before `Update` runs. Routing still
+/// uses ordinary `Commands::trigger` request observers — not exclusive `&mut World`
+/// gameplay helpers.
+#[derive(Resource, Default, Debug)]
+struct DeferredGameCommands(Vec<GameCommand>);
+
 /// Set when a routed [`GameCommand`] may have queued state transitions.
 #[derive(Resource, Default, Debug)]
 struct PendingCommandStateFlush(bool);
@@ -222,39 +233,78 @@ impl Plugin for CommandPlugin {
         alveus_app::ensure_plugin(app, ScreenCommandHandlersPlugin);
         alveus_app::ensure_plugin(app, RoomCommandHandlersPlugin);
         app.init_resource::<StepRequest>()
+            .init_resource::<DeferredGameCommands>()
             .init_resource::<PendingCommandStateFlush>()
-            .add_observer(route_game_command)
+            .add_observer(enqueue_game_command)
             .add_observer(on_movement_request)
             .add_observer(on_list_menu_navigate_request)
             .add_observer(on_menu_flow_request)
             .add_observer(on_adjust_volume_request)
             .add_observer(on_screenshot_request)
             .add_observer(on_advance_frames_request)
-            .add_systems(First, flush_command_state_transitions)
-            .add_systems(PostUpdate, flush_command_state_transitions);
+            .add_systems(
+                First,
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                PostUpdate,
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain(),
+            );
 
         #[cfg(feature = "remote")]
         {
             use bevy::remote::{RemoteLast, RemoteSystems};
             app.add_systems(
                 RemoteLast,
-                flush_command_state_transitions.after(RemoteSystems::ProcessRequests),
+                (
+                    route_deferred_game_commands,
+                    flush_command_state_transitions,
+                )
+                    .chain()
+                    .after(RemoteSystems::ProcessRequests),
             );
         }
     }
 }
 
-fn route_game_command(
-    trigger: On<GameCommand>,
+fn enqueue_game_command(trigger: On<GameCommand>, mut pending: ResMut<DeferredGameCommands>) {
+    pending.0.push(trigger.event().clone());
+}
+
+fn route_deferred_game_commands(
+    mut pending: ResMut<DeferredGameCommands>,
     screen: Res<State<Screen>>,
     menu: Res<State<Menu>>,
     mut commands: Commands,
     mut flush: ResMut<PendingCommandStateFlush>,
 ) {
-    let command = trigger.event().clone();
+    let commands_batch = std::mem::take(&mut pending.0);
+    if commands_batch.is_empty() {
+        return;
+    }
 
-    if *screen.get() == Screen::FatalError {
-        match &command {
+    for command in commands_batch {
+        route_game_command(&command, screen.get(), menu.get(), &mut commands);
+    }
+    flush.0 = true;
+}
+
+fn route_game_command(
+    command: &GameCommand,
+    screen: &Screen,
+    menu: &Menu,
+    commands: &mut Commands,
+) {
+    if *screen == Screen::FatalError {
+        match command {
             GameCommand::Screenshot { .. } | GameCommand::AdvanceFrames(_) => {}
             _ => return,
         }
@@ -262,16 +312,16 @@ fn route_game_command(
 
     match command {
         GameCommand::Move(intent) => {
-            commands.trigger(MovementRequest::Move(intent));
+            commands.trigger(MovementRequest::Move(*intent));
         }
         GameCommand::MoveStop => {
             commands.trigger(MovementRequest::Stop);
         }
         GameCommand::NavigateListMenu(direction) => {
-            if *menu.get() == Menu::CareItemPicker {
-                commands.trigger(InteractionRequest::NavigateCareMenu(direction));
+            if *menu == Menu::CareItemPicker {
+                commands.trigger(InteractionRequest::NavigateCareMenu(*direction));
             } else {
-                commands.trigger(ListMenuNavigateRequest(direction));
+                commands.trigger(ListMenuNavigateRequest(*direction));
             }
         }
         GameCommand::Interact => {
@@ -293,7 +343,7 @@ fn route_game_command(
             commands.trigger(PlayRequest);
         }
         GameCommand::Back => {
-            if *menu.get() == Menu::CareItemPicker {
+            if *menu == Menu::CareItemPicker {
                 commands.trigger(InteractionRequest::CancelCareMenu);
             } else {
                 commands.trigger(MenuFlowRequest::Back);
@@ -309,7 +359,7 @@ fn route_game_command(
             commands.trigger(MenuFlowRequest::OpenCredits);
         }
         GameCommand::Continue => {
-            if *menu.get() == Menu::CareItemPicker {
+            if *menu == Menu::CareItemPicker {
                 commands.trigger(InteractionRequest::ConfirmCareMenu);
             } else {
                 commands.trigger(MenuFlowRequest::Continue);
@@ -319,26 +369,30 @@ fn route_game_command(
             commands.trigger(MenuFlowRequest::QuitToTitle);
         }
         GameCommand::ImproveStat { target, amount } => {
-            commands.trigger(ImproveStatEvent { target, amount });
+            commands.trigger(ImproveStatEvent {
+                target: *target,
+                amount: *amount,
+            });
         }
         GameCommand::WorsenStat { target, amount } => {
-            commands.trigger(WorsenStatEvent { target, amount });
+            commands.trigger(WorsenStatEvent {
+                target: *target,
+                amount: *amount,
+            });
         }
         GameCommand::AdvanceTime { hours } => {
-            commands.trigger(AdvanceTimeRequest { hours });
+            commands.trigger(AdvanceTimeRequest { hours: *hours });
         }
         GameCommand::AdjustVolume { delta } => {
-            commands.trigger(AdjustVolumeRequest { delta });
+            commands.trigger(AdjustVolumeRequest { delta: *delta });
         }
         GameCommand::Screenshot { path } => {
-            commands.trigger(ScreenshotRequest { path });
+            commands.trigger(ScreenshotRequest { path: path.clone() });
         }
         GameCommand::AdvanceFrames(frames) => {
-            commands.trigger(AdvanceFramesRequest(frames));
+            commands.trigger(AdvanceFramesRequest(*frames));
         }
     }
-
-    flush.0 = true;
 }
 
 fn flush_command_state_transitions(

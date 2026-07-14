@@ -83,65 +83,77 @@ pub struct RoomCommandHandlersPlugin;
 
 impl Plugin for RoomCommandHandlersPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_room_request);
+        app.add_observer(on_enter_building_request)
+            .add_observer(on_exit_room_request);
     }
 }
 
-fn on_room_request(
+fn on_enter_building_request(
     trigger: On<RoomRequest>,
     screen: Res<State<Screen>>,
     menu: Res<State<Menu>>,
     mut next_screen: ResMut<NextState<Screen>>,
-    mut spawn_point: ResMut<PlayerSpawnPoint>,
     player_entrance: Query<&BuildingEntrance, With<Player>>,
 ) {
-    match trigger.event() {
-        RoomRequest::EnterBuilding => {
-            if *screen.get() != Screen::Gameplay
-                || !tile_interaction_enabled_for(*screen.get(), *menu.get())
-            {
-                return;
-            }
-            let Ok(entrance) = player_entrance.single() else {
-                return;
-            };
-            match entrance {
-                BuildingEntrance::NutritionHouse => {
-                    try_enter_room(
-                        entrance,
-                        BuildingEntrance::NutritionHouse,
-                        Screen::InRoom(InRoom::NutritionHouse),
-                        &mut next_screen,
-                    );
-                }
-                BuildingEntrance::PushPopEnclosure => {
-                    try_enter_room(
-                        entrance,
-                        BuildingEntrance::PushPopEnclosure,
-                        Screen::InRoom(InRoom::PushPopEnclosure),
-                        &mut next_screen,
-                    );
-                }
-                BuildingEntrance::NoEntrance => {}
-            }
-        }
-        RoomRequest::ExitRoom => {
-            if !tile_interaction_enabled_for(*screen.get(), *menu.get()) {
-                return;
-            }
-            let Screen::InRoom(room) = *screen.get() else {
-                return;
-            };
-            let exit_spawn = match room {
-                InRoom::NutritionHouse => NUTRITION_HOUSE_ROOM.exit_spawn,
-                InRoom::PushPopEnclosure => PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
-                InRoom::Pasture | InRoom::ReptileEnclosure => return,
-            };
-            info!(?room, ?exit_spawn, "Exiting room interior");
-            spawn_point.position = exit_spawn;
-            next_screen.set(Screen::Gameplay);
-        }
+    if !matches!(trigger.event(), RoomRequest::EnterBuilding) {
+        return;
     }
+    if *screen.get() != Screen::Gameplay
+        || !tile_interaction_enabled_for(*screen.get(), *menu.get())
+    {
+        return;
+    }
+    let Ok(entrance) = player_entrance.single() else {
+        return;
+    };
+    match entrance {
+        BuildingEntrance::NutritionHouse => {
+            try_enter_room(
+                entrance,
+                BuildingEntrance::NutritionHouse,
+                Screen::InRoom(InRoom::NutritionHouse),
+                &mut next_screen,
+            );
+        }
+        BuildingEntrance::PushPopEnclosure => {
+            try_enter_room(
+                entrance,
+                BuildingEntrance::PushPopEnclosure,
+                Screen::InRoom(InRoom::PushPopEnclosure),
+                &mut next_screen,
+            );
+        }
+        BuildingEntrance::NoEntrance => {}
+    }
+}
+
+fn on_exit_room_request(
+    trigger: On<RoomRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut next_screen: ResMut<NextState<Screen>>,
+    mut spawn_point: Option<ResMut<PlayerSpawnPoint>>,
+) {
+    if !matches!(trigger.event(), RoomRequest::ExitRoom) {
+        return;
+    }
+    if !tile_interaction_enabled_for(*screen.get(), *menu.get()) {
+        return;
+    }
+    let Screen::InRoom(room) = *screen.get() else {
+        return;
+    };
+    let Some(spawn_point) = spawn_point.as_mut() else {
+        return;
+    };
+    let exit_spawn = match room {
+        InRoom::NutritionHouse => NUTRITION_HOUSE_ROOM.exit_spawn,
+        InRoom::PushPopEnclosure => PUSH_POP_ENCLOSURE_ROOM.exit_spawn,
+        InRoom::Pasture | InRoom::ReptileEnclosure => return,
+    };
+    info!(?room, ?exit_spawn, "Exiting room interior");
+    spawn_point.position = exit_spawn;
+    next_screen.set(Screen::Gameplay);
 }
 
 pub struct RoomConfig<S: States + FreelyMutableState> {
