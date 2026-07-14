@@ -12,7 +12,7 @@ use alveus_components::{
 };
 use alveus_configs::{care_menu_options, item_display_name, prep_recipe_for};
 use alveus_content::{ItemId, can_interact};
-use alveus_menus_models::ListMenuState;
+use alveus_menus_models::{ListMenuDirection, ListMenuState};
 use alveus_stats::{AnimalStat, ImproveStatEvent, StatTarget};
 use alveus_types::{AnimalId, CareMenuId, ChoreId, CleanStat, EnrichStat, FeedStat};
 use bevy::prelude::*;
@@ -37,6 +37,17 @@ impl CareMenuState {
             list: ListMenuState::new(options),
         }
     }
+}
+
+/// Internal command-routing events (not Reflect-registered).
+#[doc(hidden)]
+#[derive(Event, Debug, Clone, Copy)]
+pub enum InteractionRequest {
+    Interact,
+    DropItem,
+    NavigateCareMenu(ListMenuDirection),
+    ConfirmCareMenu,
+    CancelCareMenu,
 }
 
 /// Adds player care interactions.
@@ -77,7 +88,12 @@ impl Plugin for InteractionPlugin {
             .add_systems(Update, (decay_pickup_message, tick_care_hud_pulse))
             .add_observer(apply_animal_fed)
             .add_observer(apply_animal_enriched)
-            .add_observer(apply_animal_cleaned);
+            .add_observer(apply_animal_cleaned)
+            .add_observer(on_interaction_interact)
+            .add_observer(on_interaction_drop_item)
+            .add_observer(on_interaction_navigate_care_menu)
+            .add_observer(on_interaction_confirm_care_menu)
+            .add_observer(on_interaction_cancel_care_menu);
     }
 }
 
@@ -224,28 +240,249 @@ pub fn perform_drop(satchel: &mut PlayerSatchel, commands: &mut Commands) {
     }
 }
 
-/// Drops an item only while a live player owns world input.
-pub fn perform_drop_in_world(world: &mut World) {
-    let screen = *world.resource::<State<Screen>>().get();
-    let menu = *world.resource::<State<Menu>>().get();
-    if !tile_interaction_enabled_for(screen, menu) || !has_player(world) {
+fn on_interaction_drop_item(
+    trigger: On<InteractionRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut commands: Commands,
+    players: Query<(), With<Player>>,
+) {
+    if !matches!(trigger.event(), InteractionRequest::DropItem) {
+        return;
+    }
+    if !tile_interaction_enabled_for(*screen.get(), *menu.get()) || players.single().is_err() {
+        return;
+    }
+    perform_drop(&mut satchel, &mut commands);
+}
+
+fn on_interaction_navigate_care_menu(
+    trigger: On<InteractionRequest>,
+    mut care_menu: ResMut<CareMenuState>,
+    players: Query<(), With<Player>>,
+    mut movement: Query<&mut MovementController, With<Player>>,
+) {
+    let InteractionRequest::NavigateCareMenu(direction) = *trigger.event() else {
+        return;
+    };
+    if players.single().is_err() {
+        return;
+    }
+    if let Ok(mut movement) = movement.single_mut() {
+        movement.intent = None;
+    }
+    care_menu_move_cursor(&mut care_menu, direction.delta());
+}
+
+fn on_interaction_confirm_care_menu(
+    trigger: On<InteractionRequest>,
+    mut care_menu: ResMut<CareMenuState>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut next_menu: ResMut<NextState<Menu>>,
+    mut commands: Commands,
+    players: Query<(), With<Player>>,
+) {
+    if !matches!(trigger.event(), InteractionRequest::ConfirmCareMenu) {
+        return;
+    }
+    if players.single().is_err() {
+        return;
+    }
+    confirm_care_menu(&mut care_menu, &mut satchel, &mut next_menu, &mut commands);
+}
+
+fn on_interaction_cancel_care_menu(
+    trigger: On<InteractionRequest>,
+    mut care_menu: ResMut<CareMenuState>,
+    mut next_menu: ResMut<NextState<Menu>>,
+) {
+    if !matches!(trigger.event(), InteractionRequest::CancelCareMenu) {
+        return;
+    }
+    cancel_care_menu(&mut care_menu, &mut next_menu);
+}
+
+fn on_interaction_interact(
+    trigger: On<InteractionRequest>,
+    screen: Res<State<Screen>>,
+    menu: Res<State<Menu>>,
+    active: Res<ActiveInteractionTarget>,
+    mut satchel: ResMut<PlayerSatchel>,
+    mut care_menu: ResMut<CareMenuState>,
+    mut next_menu: ResMut<NextState<Menu>>,
+    mut commands: Commands,
+    players: Query<(), With<Player>>,
+    wheelbarrow: Option<ResMut<PoopWheelbarrow>>,
+    targets: Query<(
+        &TilePosition,
+        Option<&GiveItem>,
+        Option<&FeedAnimal>,
+        Option<&EnrichAnimal>,
+        Option<&CleanAnimal>,
+        Option<&MiniChore>,
+        Option<&OpenMenu>,
+        Option<&PoopPile>,
+        Option<&PoopDump>,
+    )>,
+) {
+    if !matches!(trigger.event(), InteractionRequest::Interact) {
+        return;
+    }
+    if *menu.get() == Menu::CareItemPicker {
+        if players.single().is_err() {
+            return;
+        }
+        confirm_care_menu(&mut care_menu, &mut satchel, &mut next_menu, &mut commands);
+        return;
+    }
+    if !tile_interaction_enabled_for(*screen.get(), *menu.get()) || players.single().is_err() {
+        return;
+    }
+    let Some(entity) = active.interactable else {
+        return;
+    };
+    let Ok((tile_pos, give, feed, enrich, clean, chore, open, poop, dump)) = targets.get(entity)
+    else {
+        return;
+    };
+
+    if let Some(give) = give {
+        match try_give_item(&mut satchel, give.item_id) {
+            Ok(()) => {
+                commands.trigger(CareFeedbackEvent {
+                    message: format!("Picked up {}", item_display_name(give.item_id)),
+                });
+            }
+            Err(message) => set_pickup_message(&mut commands, message.to_string()),
+        }
         return;
     }
 
-    let drop_result = {
-        let mut satchel = world.resource_mut::<PlayerSatchel>();
-        try_drop_item(&mut satchel)
-    };
-
-    let Ok(item) = drop_result else {
-        // Empty satchel: no-op (matches GameCommand::DropItem docs).
+    if let Some(feed) = feed {
+        if let Err(message) = validate_has_item(&satchel, feed.required_item) {
+            set_pickup_message(&mut commands, message.to_string());
+            return;
+        }
+        commands.trigger(AnimalFedEvent {
+            animal_id: feed.animal_id,
+            required_item: feed.required_item,
+            delta: feed.delta,
+            dish_position: *tile_pos,
+        });
         return;
-    };
-    let mut commands = world.commands();
-    set_pickup_message(
-        &mut commands,
-        format!("Dropped {}", item_display_name(item)),
-    );
+    }
+
+    if let Some(enrich) = enrich {
+        if let Some(required) = enrich.required_item
+            && let Err(message) = validate_has_item(&satchel, required)
+        {
+            set_pickup_message(&mut commands, message.to_string());
+            return;
+        }
+        commands.trigger(AnimalEnrichedEvent {
+            animal_id: enrich.animal_id,
+            required_item: enrich.required_item,
+            delta: enrich.delta,
+            station_position: *tile_pos,
+        });
+        return;
+    }
+
+    if let Some(clean) = clean {
+        if let Some(required) = clean.required_item
+            && let Err(message) = validate_has_item(&satchel, required)
+        {
+            set_pickup_message(&mut commands, message.to_string());
+            return;
+        }
+        commands.trigger(AnimalCleanedEvent {
+            animal_id: clean.animal_id,
+            required_item: clean.required_item,
+            delta: clean.delta,
+            station_position: *tile_pos,
+        });
+        return;
+    }
+
+    if let Some(chore) = chore {
+        handle_mini_chore(chore, &mut satchel, &mut commands);
+        return;
+    }
+
+    if let Some(open) = open {
+        open_care_menu(open.menu_id, &mut care_menu, &mut next_menu);
+        return;
+    }
+
+    if let Some(poop) = poop {
+        let Some(mut wheelbarrow) = wheelbarrow else {
+            return;
+        };
+        if let Err(message) = try_pickup_poop(&mut wheelbarrow, poop.enclosure_id) {
+            set_pickup_message(&mut commands, message.to_string());
+            return;
+        }
+        commands.trigger(PoopPickedUpEvent {
+            entity,
+            enclosure_id: poop.enclosure_id,
+            tile: *tile_pos,
+        });
+        return;
+    }
+
+    if dump.is_some() {
+        let Some(wheelbarrow) = wheelbarrow.as_deref() else {
+            return;
+        };
+        match try_dump_poop(wheelbarrow) {
+            Ok(poops) => commands.trigger(PoopDumpedEvent { poops }),
+            Err(message) => set_pickup_message(&mut commands, message.to_string()),
+        }
+    }
+}
+
+fn handle_mini_chore(chore: &MiniChore, satchel: &mut PlayerSatchel, commands: &mut Commands) {
+    if let Some(required) = chore.required_item
+        && let Err(message) = validate_has_item(satchel, required)
+    {
+        set_pickup_message(commands, message.to_string());
+        return;
+    }
+
+    if let Some(required_item) = chore.required_item {
+        if let Err(message) = try_take_item(satchel, required_item) {
+            set_pickup_message(commands, message.to_string());
+            return;
+        }
+        if let Some(output) = chore
+            .output_item
+            .or_else(|| prep_recipe_for(chore.chore_id, required_item).map(|r| r.output))
+        {
+            if let Err(message) = try_give_item(satchel, output) {
+                let _ = try_give_item(satchel, required_item);
+                set_pickup_message(commands, message.to_string());
+                return;
+            }
+            commands.trigger(CareFeedbackEvent {
+                message: format!("Prepared {}", item_display_name(output)),
+            });
+            return;
+        }
+    } else if let Some(output) = chore.output_item {
+        if let Err(message) = try_give_item(satchel, output) {
+            set_pickup_message(commands, message.to_string());
+            return;
+        }
+        commands.trigger(CareFeedbackEvent {
+            message: format!("Got {}", item_display_name(output)),
+        });
+        return;
+    }
+
+    commands.trigger(CareFeedbackEvent {
+        message: format!("Finished {}", chore.prompt),
+    });
 }
 
 fn decay_pickup_message(time: Res<Time>, mut message: ResMut<LastPickupMessage>) {
@@ -264,232 +501,6 @@ fn tick_care_hud_pulse(time: Res<Time>, mut pulse: ResMut<CareHudPulse>) {
     }
 }
 
-/// Dispatches the active ECS interaction target, or the care-picker action.
-///
-/// A live player is required, and overlay menus other than the care picker own
-/// input instead of forwarding it to the world.
-pub fn perform_interact_in_world(world: &mut World) {
-    let menu = *world.resource::<State<Menu>>().get();
-    if menu == Menu::CareItemPicker {
-        if !has_player(world) {
-            return;
-        }
-        confirm_care_menu_in_world(world);
-        return;
-    }
-    let screen = *world.resource::<State<Screen>>().get();
-    if !tile_interaction_enabled_for(screen, menu) || !has_player(world) {
-        return;
-    }
-
-    let entity = match world.resource::<ActiveInteractionTarget>().interactable {
-        Some(entity) => entity,
-        None => return,
-    };
-
-    if let Some(give) = world.get::<GiveItem>(entity).cloned() {
-        let result = {
-            let mut satchel = world.resource_mut::<PlayerSatchel>();
-            try_give_item(&mut satchel, give.item_id)
-        };
-        match result {
-            Ok(()) => {
-                world.trigger(CareFeedbackEvent {
-                    message: format!("Picked up {}", item_display_name(give.item_id)),
-                });
-            }
-            Err(message) => {
-                world.commands().insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            }
-        }
-        return;
-    }
-
-    if let Some(feed) = world.get::<FeedAnimal>(entity).cloned() {
-        let satchel = world.resource::<PlayerSatchel>();
-        if let Err(message) = validate_has_item(satchel, feed.required_item) {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
-            return;
-        };
-        world.trigger(AnimalFedEvent {
-            animal_id: feed.animal_id,
-            required_item: feed.required_item,
-            delta: feed.delta,
-            dish_position: tile_pos,
-        });
-        return;
-    }
-
-    if let Some(enrich) = world.get::<EnrichAnimal>(entity).cloned() {
-        if let Some(required) = enrich.required_item {
-            let satchel = world.resource::<PlayerSatchel>();
-            if let Err(message) = validate_has_item(satchel, required) {
-                world.commands().insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-                return;
-            }
-        }
-        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
-            return;
-        };
-        world.trigger(AnimalEnrichedEvent {
-            animal_id: enrich.animal_id,
-            required_item: enrich.required_item,
-            delta: enrich.delta,
-            station_position: tile_pos,
-        });
-        return;
-    }
-
-    if let Some(clean) = world.get::<CleanAnimal>(entity).cloned() {
-        if let Some(required) = clean.required_item {
-            let satchel = world.resource::<PlayerSatchel>();
-            if let Err(message) = validate_has_item(satchel, required) {
-                world.commands().insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-                return;
-            }
-        }
-        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
-            return;
-        };
-        world.trigger(AnimalCleanedEvent {
-            animal_id: clean.animal_id,
-            required_item: clean.required_item,
-            delta: clean.delta,
-            station_position: tile_pos,
-        });
-        return;
-    }
-
-    if let Some(chore) = world.get::<MiniChore>(entity).cloned() {
-        handle_mini_chore_in_world(world, &chore);
-        return;
-    }
-
-    if let Some(open) = world.get::<OpenMenu>(entity).cloned() {
-        open_care_menu_in_world(world, open.menu_id);
-        return;
-    }
-
-    if let Some(poop) = world.get::<PoopPile>(entity).copied() {
-        let pickup_result = {
-            let mut wheelbarrow = world.resource_mut::<PoopWheelbarrow>();
-            try_pickup_poop(&mut wheelbarrow, poop.enclosure_id)
-        };
-        if let Err(message) = pickup_result {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-        let Some(tile_pos) = world.get::<TilePosition>(entity).cloned() else {
-            let mut wheelbarrow = world.resource_mut::<PoopWheelbarrow>();
-            let _ = wheelbarrow.poops.pop();
-            return;
-        };
-        world.trigger(PoopPickedUpEvent {
-            entity,
-            enclosure_id: poop.enclosure_id,
-            tile: tile_pos,
-        });
-        return;
-    }
-
-    if world.get::<PoopDump>(entity).is_some() {
-        let dump_result = {
-            let wheelbarrow = world.resource::<PoopWheelbarrow>();
-            try_dump_poop(wheelbarrow)
-        };
-        match dump_result {
-            Ok(poops) => {
-                world.trigger(PoopDumpedEvent { poops });
-            }
-            Err(message) => {
-                world.commands().insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-            }
-        }
-    }
-}
-
-fn has_player(world: &mut World) -> bool {
-    let mut players = world.query_filtered::<(), With<Player>>();
-    players.single(world).is_ok()
-}
-
-fn handle_mini_chore_in_world(world: &mut World, chore: &MiniChore) {
-    if let Some(required) = chore.required_item {
-        let satchel = world.resource::<PlayerSatchel>();
-        if let Err(message) = validate_has_item(satchel, required) {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-    }
-
-    let mut satchel = world.resource_mut::<PlayerSatchel>();
-    if let Some(required_item) = chore.required_item {
-        if let Err(message) = try_take_item(&mut satchel, required_item) {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-        if let Some(output) = chore
-            .output_item
-            .or_else(|| prep_recipe_for(chore.chore_id, required_item).map(|r| r.output))
-        {
-            if let Err(message) = try_give_item(&mut satchel, output) {
-                let _ = try_give_item(&mut satchel, required_item);
-                world.commands().insert_resource(LastPickupMessage {
-                    text: Some(message.to_string()),
-                    timer: Timer::from_seconds(2.5, TimerMode::Once),
-                });
-                return;
-            }
-            let msg = format!("Prepared {}", item_display_name(output));
-            world.trigger(CareFeedbackEvent { message: msg });
-            return;
-        }
-    } else if let Some(output) = chore.output_item {
-        if let Err(message) = try_give_item(&mut satchel, output) {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            return;
-        }
-        world.trigger(CareFeedbackEvent {
-            message: format!("Got {}", item_display_name(output)),
-        });
-        return;
-    }
-
-    world.trigger(CareFeedbackEvent {
-        message: format!("Finished {}", chore.prompt),
-    });
-}
-
 pub fn open_care_menu(
     menu_id: CareMenuId,
     care_menu: &mut CareMenuState,
@@ -497,16 +508,6 @@ pub fn open_care_menu(
 ) {
     *care_menu = CareMenuState::new(Some(menu_id), care_menu_options(menu_id).iter().copied());
     next_menu.set(Menu::CareItemPicker);
-}
-
-fn open_care_menu_in_world(world: &mut World, menu_id: CareMenuId) {
-    {
-        let mut care_menu = world.resource_mut::<CareMenuState>();
-        *care_menu = CareMenuState::new(Some(menu_id), care_menu_options(menu_id).iter().copied());
-    }
-    world
-        .resource_mut::<NextState<Menu>>()
-        .set(Menu::CareItemPicker);
 }
 
 pub fn care_menu_move_cursor(care_menu: &mut CareMenuState, delta: i32) {
@@ -559,51 +560,9 @@ pub fn confirm_care_menu(
     next_menu.set(Menu::None);
 }
 
-pub fn confirm_care_menu_in_world(world: &mut World) {
-    let selected_item = {
-        let care_menu = world.resource::<CareMenuState>();
-        selected_care_menu_item(care_menu)
-    };
-    let item = match selected_item {
-        Ok(item) => item,
-        Err(message) => {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-            cancel_care_menu_in_world(world);
-            return;
-        }
-    };
-    let result = {
-        let mut satchel = world.resource_mut::<PlayerSatchel>();
-        try_give_item(&mut satchel, item)
-    };
-    match result {
-        Ok(()) => {
-            world.trigger(CareFeedbackEvent {
-                message: format!("Took {}", item_display_name(item)),
-            });
-        }
-        Err(message) => {
-            world.commands().insert_resource(LastPickupMessage {
-                text: Some(message.to_string()),
-                timer: Timer::from_seconds(2.5, TimerMode::Once),
-            });
-        }
-    }
-    *world.resource_mut::<CareMenuState>() = CareMenuState::default();
-    world.resource_mut::<NextState<Menu>>().set(Menu::None);
-}
-
 pub fn cancel_care_menu(care_menu: &mut CareMenuState, next_menu: &mut NextState<Menu>) {
     *care_menu = CareMenuState::default();
     next_menu.set(Menu::None);
-}
-
-pub fn cancel_care_menu_in_world(world: &mut World) {
-    *world.resource_mut::<CareMenuState>() = CareMenuState::default();
-    world.resource_mut::<NextState<Menu>>().set(Menu::None);
 }
 
 fn apply_animal_fed(
