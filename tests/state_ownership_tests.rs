@@ -45,6 +45,83 @@ fn app_plugin_is_the_only_production_app_state_owner() {
     );
 }
 
+#[test]
+fn production_gameplay_avoids_exclusive_world_dispatch_patterns() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let banned = [
+        "_in_world",
+        "PendingGameCommands",
+        "apply_pending_game_commands",
+        "apply_game_command",
+        "run_system_once",
+        "run_system_cached",
+        "register_system",
+        "SystemId",
+    ];
+    let scan_roots = [workspace.join("crates"), workspace.join("src")];
+    let allowlist_paths = ["crates/alveus-asset-tracking/", "FromWorld::from_world"];
+
+    for root in &scan_roots {
+        collect_banned_patterns(root, &workspace, &banned, &allowlist_paths);
+    }
+}
+
+fn collect_banned_patterns(
+    directory: &Path,
+    workspace: &Path,
+    banned: &[&str],
+    allowlist_paths: &[&str],
+) {
+    for entry in fs::read_dir(directory).expect("read source directory") {
+        let path = entry.expect("source entry").path();
+        if path.is_dir() {
+            collect_banned_patterns(&path, workspace, banned, allowlist_paths);
+            continue;
+        }
+        if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(workspace)
+            .expect("workspace source path")
+            .to_string_lossy();
+        if allowlist_paths
+            .iter()
+            .any(|allowed| relative.contains(allowed))
+        {
+            continue;
+        }
+        if relative.starts_with("crates/alveus-command/")
+            || relative.starts_with("crates/alveus-interaction/")
+            || relative.starts_with("crates/alveus-screens/")
+            || relative.starts_with("crates/alveus-stats/")
+            || relative.starts_with("crates/alveus-world/src/room.rs")
+            || relative.starts_with("crates/alveus-hud/")
+        {
+            let source = fs::read_to_string(&path).expect("read Rust source");
+            for pattern in banned {
+                assert!(
+                    !source.contains(pattern),
+                    "{relative} must not contain banned pattern `{pattern}`"
+                );
+            }
+            if source.contains("world: &mut World") || source.contains("&mut World)") {
+                let lines: Vec<_> = source
+                    .lines()
+                    .filter(|line| {
+                        (line.contains("world: &mut World") || line.contains("&mut World)"))
+                            && !line.trim_start().starts_with("//")
+                    })
+                    .collect();
+                assert!(
+                    lines.is_empty(),
+                    "{relative} must not use &mut World in gameplay paths: {lines:?}"
+                );
+            }
+        }
+    }
+}
+
 fn collect_state_initializers(workspace: &Path, directory: &Path, found: &mut Vec<String>) {
     for entry in fs::read_dir(directory).expect("read source directory") {
         let path = entry.expect("source entry").path();

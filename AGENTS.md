@@ -415,15 +415,19 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 
 ## 7. Architecture conventions to uphold
 
-- **Extract-and-route, no duplication.** Keyboard readers and the BRP dispatcher
-  must call the *same* shared action functions (e.g. `perform_interact_in_world`,
-  `try_enter_room`, `advance_simulated_hours_world`). Keyboard handlers should be
-  thin and just `trigger(GameCommand::...)`. Never fake key input to reach a verb.
-- **One dispatcher, buffered application.** `CommandPlugin` collects triggered
-  `GameCommand`s into `PendingGameCommands` and applies them once per frame in
-  `First`, `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests`
-  in `RemoteLast`, re-running `StateTransition` so effects land in-frame. Preserve
-  this ordering when touching `crates/alveus-command/src/lib.rs`.
+- **Extract-and-route, no duplication.** Keyboard readers and BRP clients must
+  `trigger(GameCommand::…)`; `CommandPlugin` routes each variant to private or
+  feature-owned request observers (e.g. `InteractionRequest`, `RoomRequest`) that
+  call the same helpers UI code uses (`perform_drop`, `open_care_menu`,
+  `try_enter_room`, `advance_simulated_hours`). Keyboard handlers stay thin.
+  Never fake key input to reach a verb.
+- **Observer routing + state flush.** `route_game_command` validates FatalError,
+  triggers internal request events, and sets `PendingCommandStateFlush`. A flush
+  system in `First`, `PostUpdate`, and (with `remote`) after
+  `RemoteSystems::ProcessRequests` in `RemoteLast` runs `StateTransition` once
+  per nonempty phase via `Commands::run_schedule`. Internal request events are
+  **not** Reflect-registered. Preserve this ordering when touching
+  `crates/alveus-command/src/lib.rs`.
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,
   `#[reflect(Component/Resource/Event)]`, and registration in

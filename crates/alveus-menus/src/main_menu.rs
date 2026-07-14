@@ -182,7 +182,10 @@ mod tests {
             .single(app.world())
             .expect("one main action list");
         assert_eq!(
-            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            app.world()
+                .get::<ListMenuCursor>(list)
+                .expect("cursor")
+                .index,
             0
         );
 
@@ -191,7 +194,10 @@ mod tests {
         app.update();
 
         assert_eq!(
-            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            app.world()
+                .get::<ListMenuCursor>(list)
+                .expect("cursor")
+                .index,
             1
         );
         assert_eq!(

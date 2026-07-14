@@ -82,7 +82,11 @@ impl Plugin for HudPlugin {
         );
         app.add_systems(
             Update,
-            update_room_feedback_hud_system
+            (
+                update_interaction_prompt_hud_system,
+                update_satchel_feedback_hud_system,
+                update_wheelbarrow_hud_system,
+            )
                 .in_set(AppSystems::UiUpdate)
                 .run_if(any_with_component::<StatsHudUi>),
         );
@@ -592,44 +596,55 @@ fn update_hud_system(
     }
 }
 
-fn update_room_feedback_hud_system(world: &mut World) {
-    let screen = *world.resource::<State<Screen>>().get();
-    let menu = *world.resource::<State<Menu>>().get();
-    let satchel = *world.resource::<PlayerSatchel>();
-    let wheelbarrow_count = world.resource::<PoopWheelbarrow>().count();
-    let pulse_active = world.resource::<CareHudPulse>().is_active();
-    let pickup_message = world.resource::<LastPickupMessage>().clone();
-    let active_entity = world.resource::<ActiveInteractionTarget>().interactable;
-
-    let in_cleaning_room = matches!(screen, Screen::InRoom(InRoom::PushPopEnclosure));
-
-    let prompt_message = if menu == Menu::None {
-        active_entity.and_then(|entity| {
-            if let Some(give) = world.get::<GiveItem>(entity) {
+fn update_interaction_prompt_hud_system(
+    menu: Res<State<Menu>>,
+    active: Res<ActiveInteractionTarget>,
+    wheelbarrow: Res<PoopWheelbarrow>,
+    targets: Query<(
+        Option<&GiveItem>,
+        Option<&FeedAnimal>,
+        Option<&EnrichAnimal>,
+        Option<&CleanAnimal>,
+        Option<&MiniChore>,
+        Option<&OpenMenu>,
+        Option<&PoopPile>,
+        Option<&PoopDump>,
+    )>,
+    mut prompt_roots: Query<&mut Node, With<InteractionPromptRoot>>,
+    mut prompt_texts: Query<&mut Text, With<InteractionPromptText>>,
+) {
+    let prompt_message = if *menu.get() == Menu::None {
+        active.interactable.and_then(|entity| {
+            let Ok((give, feed, enrich, clean, chore, open, poop, dump)) = targets.get(entity)
+            else {
+                return None;
+            };
+            if let Some(give) = give {
                 return Some(format!("Press [Space] to {}", give.prompt));
             }
-            if let Some(feed) = world.get::<FeedAnimal>(entity) {
+            if let Some(feed) = feed {
                 return Some(format!("Press [Space] to {}", feed.prompt));
             }
-            if let Some(enrich) = world.get::<EnrichAnimal>(entity) {
+            if let Some(enrich) = enrich {
                 return Some(format!("Press [Space] to {}", enrich.prompt));
             }
-            if let Some(clean) = world.get::<CleanAnimal>(entity) {
+            if let Some(clean) = clean {
                 return Some(format!("Press [Space] to {}", clean.prompt));
             }
-            if let Some(chore) = world.get::<MiniChore>(entity) {
+            if let Some(chore) = chore {
                 return Some(format!("Press [Space] to {}", chore.prompt));
             }
-            if let Some(open) = world.get::<OpenMenu>(entity) {
+            if let Some(open) = open {
                 return Some(format!("Press [Space] to {}", open.prompt));
             }
-            if world.get::<PoopPile>(entity).is_some() {
+            if poop.is_some() {
                 return Some("Press [Space] to Pick up poop".to_string());
             }
-            if let Some(dump) = world.get::<PoopDump>(entity) {
+            if let Some(dump) = dump {
+                let count = wheelbarrow.count();
                 return Some(format!(
                     "Press [Space] to {} ({}/{})",
-                    dump.prompt, wheelbarrow_count, WHEELBARROW_CAPACITY
+                    dump.prompt, count, WHEELBARROW_CAPACITY
                 ));
             }
             None
@@ -644,45 +659,56 @@ fn update_room_feedback_hud_system(world: &mut World) {
         Display::None
     };
 
-    let mut root_q = world.query_filtered::<&mut Node, With<InteractionPromptRoot>>();
-    for mut node in root_q.iter_mut(world) {
+    for mut node in &mut prompt_roots {
         if node.display != prompt_display {
             node.display = prompt_display;
         }
     }
 
     if let Some(message) = &prompt_message {
-        let mut text_q = world.query_filtered::<&mut Text, With<InteractionPromptText>>();
-        for mut txt in text_q.iter_mut(world) {
+        for mut txt in &mut prompt_texts {
             if txt.as_str() != message {
                 txt.0 = message.clone();
             }
         }
     }
+}
 
-    let pulse_color = if pulse_active {
+fn update_satchel_feedback_hud_system(
+    satchel: Res<PlayerSatchel>,
+    pulse: Res<CareHudPulse>,
+    pickup_message: Res<LastPickupMessage>,
+    mut satchel_roots: Query<&mut BackgroundColor, With<SatchelHudRoot>>,
+    mut satchel_bodies: Query<&mut Text, With<SatchelBodyText>>,
+) {
+    let pulse_color = if pulse.is_active() {
         Color::srgba(0.25, 0.55, 0.35, 0.85)
     } else {
         Color::srgba(0.1, 0.1, 0.12, 0.75)
     };
 
-    let mut satchel_root_q = world.query_filtered::<&mut BackgroundColor, With<SatchelHudRoot>>();
-    for mut bg in satchel_root_q.iter_mut(world) {
+    for mut bg in &mut satchel_roots {
         if bg.0 != pulse_color {
             bg.0 = pulse_color;
         }
     }
 
-    // Slots stay visible at all times. Inventory / care feedback uses a
-    // separate trailing line so transient messages never replace either slot.
     let body_label = satchel_body_label(&satchel, &pickup_message);
-    let mut satchel_body_q = world.query_filtered::<&mut Text, With<SatchelBodyText>>();
-    for mut txt in satchel_body_q.iter_mut(world) {
+    for mut txt in &mut satchel_bodies {
         if txt.as_str() != body_label {
             txt.0 = body_label.clone();
         }
     }
+}
 
+fn update_wheelbarrow_hud_system(
+    screen: Res<State<Screen>>,
+    wheelbarrow: Res<PoopWheelbarrow>,
+    mut wheelbarrow_roots: Query<&mut Node, With<WheelbarrowHudRoot>>,
+    mut wheelbarrow_bodies: Query<&mut Text, With<WheelbarrowBodyText>>,
+) {
+    let in_cleaning_room = matches!(screen.get(), Screen::InRoom(InRoom::PushPopEnclosure));
+    let wheelbarrow_count = wheelbarrow.count();
     let show_wheelbarrow = in_cleaning_room || wheelbarrow_count > 0;
     let wheelbarrow_display = if show_wheelbarrow {
         Display::Flex
@@ -690,8 +716,7 @@ fn update_room_feedback_hud_system(world: &mut World) {
         Display::None
     };
 
-    let mut wheelbarrow_root_q = world.query_filtered::<&mut Node, With<WheelbarrowHudRoot>>();
-    for mut node in wheelbarrow_root_q.iter_mut(world) {
+    for mut node in &mut wheelbarrow_roots {
         if node.display != wheelbarrow_display {
             node.display = wheelbarrow_display;
         }
@@ -701,8 +726,7 @@ fn update_room_feedback_hud_system(world: &mut World) {
         "Wheelbarrow: {}/{}",
         wheelbarrow_count, WHEELBARROW_CAPACITY
     );
-    let mut wheelbarrow_body_q = world.query_filtered::<&mut Text, With<WheelbarrowBodyText>>();
-    for mut txt in wheelbarrow_body_q.iter_mut(world) {
+    for mut txt in &mut wheelbarrow_bodies {
         if txt.as_str() != wheelbarrow_label {
             txt.0 = wheelbarrow_label.clone();
         }

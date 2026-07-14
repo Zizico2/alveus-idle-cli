@@ -1,11 +1,12 @@
 use alveus_app::Screen;
+use alveus_command::CommandPlugin;
+use alveus_command::GameCommand;
 use alveus_stats::{
     AnimalEnclosure, AnimalId, AnimalName, AnimalStat, AnimalStats, EnclosureId, EnclosureName,
     EnclosureStat, EnclosureStats, ImproveStatEvent, SanctuaryUpkeep, SavePath, StatTarget,
-    StatsPlugin, WorsenStatEvent, tick_decay_system,
+    StatsPlugin, WorsenStatEvent,
 };
 use alveus_types::Stat;
-use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
 
@@ -255,13 +256,11 @@ fn test_decay_rate() {
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>();
     app.insert_resource(SavePath(save_path.to_string()));
-    app.add_plugins(StatsPlugin);
+    app.add_plugins((StatsPlugin, CommandPlugin));
 
-    // Transition to Gameplay to spawn entities
     app.insert_resource(NextState::Pending(Screen::Gameplay));
     app.update();
 
-    // Verify initial Polly entity stats
     let polly_entity = app
         .world_mut()
         .query_filtered::<Entity, With<AnimalId>>()
@@ -277,15 +276,10 @@ fn test_decay_rate() {
     assert_eq!(initial_stats.hunger, Stat(1000));
     assert_eq!(initial_stats.happiness, Stat(1000));
 
-    // Set custom Time resource with delta of 2 hours
-    let mut time = Time::<()>::default();
-    time.advance_by(std::time::Duration::from_secs(7200)); // sets delta to 7200 seconds (2 hours)
-    app.insert_resource(time);
+    app.world_mut()
+        .trigger(GameCommand::AdvanceTime { hours: 2.0 });
+    app.update();
 
-    // Run the tick_decay_system once directly on the world
-    let _ = app.world_mut().run_system_once(tick_decay_system);
-
-    // Get updated stats
     let updated_stats = app.world().get::<AnimalStats>(polly_entity).unwrap();
     // Polly's hunger decay rate is 0.04 per hour (40 units per hour out of 1000).
     // In 2 hours, hunger should decay by 80 units.
