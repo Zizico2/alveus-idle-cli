@@ -32,6 +32,8 @@ fn capture_care_feedback(
 }
 
 fn brp_request(app: &mut App, method: &str, params: Option<serde_json::Value>) -> BrpResult {
+    // Single app.update() applies BRP-triggered GameCommands and runs
+    // StateTransition in the same frame (First / PostUpdate / RemoteLast).
     let (result_sender, result_receiver) = async_channel::bounded(1);
     {
         let sender = app.world().resource::<BrpSender>();
@@ -150,6 +152,7 @@ fn brp_skip_splash_command_changes_screen() {
     app.update();
 
     trigger_game_command(&mut app, serde_json::json!("SkipSplash"));
+    // State change is visible after one update (same-frame dispatch contract).
     assert_eq!(
         *app.world().resource::<State<Screen>>().get(),
         Screen::Title
