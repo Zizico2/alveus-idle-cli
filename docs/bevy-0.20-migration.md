@@ -59,3 +59,15 @@ ECS text queries, and captures settings, credits, gameplay, and pause under
 `screenshots/bevy20_*.png`. Each capture asserts composed UI pixels. The driver
 always terminates its server. It requires a wgpu adapter; ordinary CI stays
 GPU-independent. Unit and in-process BRP tests cover the settings scene flow.
+
+## Local validation
+
+- `cargo build --locked --features headless`: passed with no warnings.
+- `cargo check --locked --workspace --all-targets --all-features --profile ci`: passed.
+- `cargo fmt --all -- --check`: passed.
+- Default workspace/all-target tests: **158 passed**.
+- Headless workspace/all-target tests: **180 passed**, including BRP scene reopen coverage.
+- Workspace/all-target/all-feature Clippy, private-item documentation, Bevy lint,
+  and the wasm32 dev check: passed with `-Dwarnings`.
+- `scripts/headless_bevy20_smoke.py`: passed all ECS and pixel assertions.
+  Captures were visually inspected; no server remained running afterward.

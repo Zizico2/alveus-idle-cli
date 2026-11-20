@@ -12,10 +12,13 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
+import tomllib
 import urllib.request
 
+sys.dont_write_bytecode = True
 import headless_ui_screenshot_smoke as smoke
 
 REPO = Path(__file__).resolve().parents[1]
@@ -31,6 +34,41 @@ def text_labels():
     return labels
 
 
+def capture_standalone(path):
+    # Standalone title menus have buttons/text but no gameplay HUD panel.
+    path.unlink(missing_ok=True)
+    smoke.trigger({"Screenshot": {"path": str(path)}})
+    time.sleep(0.5)
+    smoke.wait_for_file(str(path))
+    width, height, rows = smoke.read_png_rgb(str(path))
+    blue = bright = 0
+    for row in rows:
+        for offset in range(0, len(row), 3):
+            r, g, b = row[offset:offset + 3]
+            blue += smoke._is_menu_blue(r, g, b)
+            bright += r > 180 and g > 180 and b > 150
+    assert blue / (width * height) >= smoke.MIN_MENU_BLUE_FRAC, "missing menu buttons"
+    assert bright >= 100, "missing menu text"
+    print(f"Standalone UI captured: {path.name} ({blue} button pixels, {bright} text pixels)")
+
+
+def capture_gameplay(path):
+    # GPU pipelines can finish after the ECS reports Gameplay. Require world
+    # pixels outside the HUD as well as the composed UI checks.
+    for _ in range(20):
+        smoke.capture(str(path))
+        width, height, rows = smoke.read_png_rgb(str(path))
+        colored = 0
+        for row in rows:
+            for offset in range(0, (width * 2 // 3) * 3, 3):
+                pixel = row[offset:offset + 3]
+                colored += max(pixel) - min(pixel) > 40 and max(pixel) > 60
+        if colored > width * height * 0.01:
+            return
+        time.sleep(0.25)
+    raise AssertionError("World geometry did not render outside the HUD")
+
+
 def main():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -42,7 +80,8 @@ def main():
         command += ["--config", str(config)]
     command += ["--profile", "ci", "--features", "headless", "--", "--headless",
                 "--realtime", "--port", str(port), "--no-stdio"]
-    environment = dict(os.environ, BEVY_ASSET_ROOT=str(REPO))
+    toolchain = tomllib.loads((REPO / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
+    environment = dict(os.environ, BEVY_ASSET_ROOT=str(REPO), RUSTUP_TOOLCHAIN=toolchain)
     output = REPO / "screenshots"
     output.mkdir(exist_ok=True)
     log_path = output / "bevy20_smoke.log"
@@ -78,14 +117,14 @@ def main():
             smoke.trigger("OpenSettings")
             time.sleep(0.3)
             assert "75%" in [text.strip() for text in text_labels()], "Ready initializes on reopening"
-            smoke.capture(str(output / "bevy20_settings.png"), expect_menu=True)
+            capture_standalone(output / "bevy20_settings.png")
 
             smoke.trigger("Back")
             time.sleep(0.2)
             smoke.trigger("OpenCredits")
             time.sleep(0.4)
             assert "Created by" in text_labels()
-            smoke.capture(str(output / "bevy20_credits.png"), expect_menu=True)
+            capture_standalone(output / "bevy20_credits.png")
 
             smoke.trigger("Back")
             time.sleep(0.2)
@@ -94,7 +133,7 @@ def main():
             tile = smoke.player_tile()
             assert tile is not None
             print(f"Gameplay ready at authoritative player tile {tile}")
-            smoke.capture(str(output / "bevy20_gameplay.png"))
+            capture_gameplay(output / "bevy20_gameplay.png")
             smoke.trigger("PauseToggle")
             time.sleep(0.3)
             smoke.capture(str(output / "bevy20_pause.png"), expect_menu=True)
