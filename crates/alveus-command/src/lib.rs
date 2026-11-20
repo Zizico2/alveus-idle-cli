@@ -29,10 +29,10 @@ use alveus_world::room::{RoomCommandHandlersPlugin, RoomRequest};
 /// human player has, one tile step at a time.
 ///
 /// Triggering is fire-and-forget. Commands are deferred into
-/// [`DeferredGameCommands`] and routed in `First`, `PostUpdate`, and (with
+/// `DeferredGameCommands` and routed in `First`, `PostUpdate`, and (with
 /// `remote`) after BRP request processing in `RemoteLast` — the same phases as
 /// the former exclusive buffer — so PreUpdate input does not mutate state before
-/// `Update`. After each nonempty route batch, [`PendingCommandStateFlush`] queues
+/// `Update`. After each nonempty route batch, `PendingCommandStateFlush` queues
 /// [`StateTransition`] once. Observe the resulting state with the built-in BRP
 /// read methods (`world.query`, `world.get_resources`) rather than assuming a
 /// synchronous response.
@@ -48,7 +48,7 @@ pub enum GameCommand {
     /// Start (or change) the player walking one direction. The player keeps
     /// walking tile-by-tile until [`GameCommand::MoveStop`] is sent or movement
     /// is blocked by an obstacle. One in-flight tile step takes
-    /// [`alveus_configs::PLAYER_MOVE_DURATION_SECS`] of sim
+    /// `alveus_configs::PLAYER_MOVE_DURATION_SECS` of sim
     /// time, so in real-time mode hold the intent briefly between stop commands
     /// to advance a single tile predictably. Overlay menus make this a no-op
     /// (list menus use [`GameCommand::NavigateListMenu`] instead). Requires an
@@ -59,7 +59,7 @@ pub enum GameCommand {
     /// Move the cursor on the active list menu one step (`Up` / `Down`).
     /// Applies while [`Menu::Main`], [`Menu::Pause`], or [`Menu::CareItemPicker`]
     /// is open; other menus are a no-op. Care uses the model cursor on
-    /// [`CareMenuState`]; Main/Pause update [`ListMenuCursor`] and project
+    /// [`alveus_interaction::CareMenuState`]; Main/Pause update [`ListMenuCursor`] and project
     /// [`InputFocus`] onto the matching row.
     NavigateListMenu(ListMenuDirection),
     /// Interact with whatever is currently in front of / under the player

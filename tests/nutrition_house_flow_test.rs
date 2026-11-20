@@ -131,8 +131,7 @@ fn prep_then_polly_feed_clean_enrich() {
         app.world()
             .resource::<PlayerSatchel>()
             .slots
-            .iter()
-            .any(|s| *s == Some(ItemId::PreparedVeggieDiet))
+            .contains(&Some(ItemId::PreparedVeggieDiet))
     );
 
     // Drop prepared diet so satchel has room for grains / mirror.
