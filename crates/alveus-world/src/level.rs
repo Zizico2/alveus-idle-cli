@@ -45,9 +45,9 @@ pub fn tiled_plugin(export_to: Option<PathBuf>) -> TiledPlugin {
 
 /// Write `tiled_types.json` from the app's type registry without adding
 /// [`TiledPlugin`] (which requires a render sub-app when `render` is enabled).
-pub fn export_tiled_types(app: &App, path: impl AsRef<Path>) {
+pub fn export_tiled_types(app: &App, path: impl AsRef<Path>) -> std::io::Result<()> {
     let reg = app.world().resource::<AppTypeRegistry>();
-    export_types(reg, path, &tiled_types_filter());
+    export_types(reg, path, &tiled_types_filter())
 }
 
 pub(super) fn plugin(app: &mut App) {

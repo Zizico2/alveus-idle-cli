@@ -646,14 +646,21 @@ mod tests {
 
         let polly_start = npc_tile(&app, polly_npc);
         let push_start = npc_tile(&app, push_npc);
-        advance(&mut app, 50);
-
-        let polly_after = npc_tile(&app, polly_npc);
-        let push_after = npc_tile(&app, push_npc);
-        assert_ne!(polly_after, polly_start);
-        assert_ne!(push_after, push_start);
-        assert_eq!(saved_tile(&app, AnimalId::Polly), polly_after);
-        assert_eq!(saved_tile(&app, AnimalId::PushPop), push_after);
+        let mut polly_moved = false;
+        let mut push_moved = false;
+        for _ in 0..50 {
+            app.update();
+            let polly_after = npc_tile(&app, polly_npc);
+            let push_after = npc_tile(&app, push_npc);
+            polly_moved |= polly_after != polly_start;
+            push_moved |= push_after != push_start;
+            assert_eq!(saved_tile(&app, AnimalId::Polly), polly_after);
+            assert_eq!(saved_tile(&app, AnimalId::PushPop), push_after);
+        }
+        // A random walk can return home. Observe movement over the whole run,
+        // rather than treating its final displacement as proof it moved.
+        assert!(polly_moved, "Polly must move independently");
+        assert!(push_moved, "Push Pop must move independently");
 
         let npc_count = app
             .world_mut()

@@ -91,9 +91,9 @@ pub(crate) fn spawn_overlay_menu<T>(
                 BorderColor::all(Color::srgba(0.35, 0.9, 0.68, 0.75)),
             ))
             .with_children(|card| {
-                card.spawn(widget::header(title));
+                card.spawn_empty().apply_scene(widget::header(title));
                 if let Some(summary) = summary {
-                    card.spawn(widget::label(summary));
+                    card.spawn_empty().apply_scene(widget::label(summary));
                 }
                 spawned_list = Some(spawn_list_menu(card, state, list_spec, label));
                 if let Some(controls) = controls {

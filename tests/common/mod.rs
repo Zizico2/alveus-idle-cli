@@ -105,6 +105,7 @@ fn finish_headless_tiled_app(dir: Dir) -> App {
         },
     ));
     app.init_asset::<Image>();
+    app.init_asset::<Shader>();
     app.register_asset_loader(ImageLoader::new(CompressedImageFormats::empty()));
 
     // `bevy_ecs_tilemap` with the `render` feature expects a `RenderApp` sub-app

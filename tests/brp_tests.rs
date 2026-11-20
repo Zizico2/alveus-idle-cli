@@ -162,6 +162,65 @@ fn brp_skip_splash_command_changes_screen() {
 }
 
 #[test]
+fn brp_settings_scene_is_ready_after_open_and_reopen() {
+    use bevy::{reflect::TypePath, scene::ScenePlugin};
+
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        StatesPlugin,
+        AssetPlugin::default(),
+        ScenePlugin,
+        alveus_app::plugin,
+        alveus_asset_tracking::plugin,
+        alveus_command::CommandPlugin,
+        bevy::remote::RemotePlugin::default(),
+    ));
+    app.init_asset::<AudioSource>();
+    app.init_resource::<GlobalVolume>();
+    app.init_resource::<PlayerSatchel>();
+    app.init_resource::<CareMenuState>();
+    app.add_plugins(alveus_menus::plugin);
+    register_types(&mut app);
+    app.register_type::<Text>();
+    app.update();
+
+    fn assert_volume_label(app: &mut App, expected: &str) {
+        let response = brp_request(
+            app,
+            "world.query",
+            Some(serde_json::json!({
+                "data": { "components": [Text::type_path()] }
+            })),
+        )
+        .expect("query BSN text through standard BRP");
+        assert!(
+            response.as_array().unwrap().iter().any(|row| {
+                let text = &row["components"][Text::type_path()];
+                text.as_str()
+                    .or_else(|| text["0"].as_str())
+                    .is_some_and(|text| text.trim() == expected)
+            }),
+            "expected volume label {expected}: {response}"
+        );
+    }
+
+    trigger_game_command(&mut app, serde_json::json!("SkipSplash"));
+    trigger_game_command(&mut app, serde_json::json!("OpenSettings"));
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::Settings);
+    assert_volume_label(&mut app, "100%");
+    trigger_game_command(
+        &mut app,
+        serde_json::json!({"AdjustVolume": {"delta": -0.25}}),
+    );
+    assert_volume_label(&mut app, "75%");
+    trigger_game_command(&mut app, serde_json::json!("Back"));
+    assert_eq!(*app.world().resource::<State<Menu>>().get(), Menu::Main);
+    trigger_game_command(&mut app, serde_json::json!("OpenSettings"));
+    assert_volume_label(&mut app, "75%");
+}
+
+#[test]
 fn brp_care_menu_moves_cursor_and_confirms_selection() {
     let save_path = "brp_test_care_menu.ron";
     let mut app = care_brp_app(save_path);

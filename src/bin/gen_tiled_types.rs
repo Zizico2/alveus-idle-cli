@@ -10,7 +10,7 @@
 
 use bevy::prelude::*;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let path = std::env::current_dir()
         .expect("current dir")
         .join("assets")
@@ -20,7 +20,8 @@ fn main() {
 
     let mut app = App::new();
     alveus_reflect::register_types(&mut app);
-    alveus_world::level::export_tiled_types(&app, &path);
+    alveus_world::level::export_tiled_types(&app, &path)?;
 
     println!("Wrote {}", path.display());
+    Ok(())
 }

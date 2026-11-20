@@ -64,24 +64,23 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 fn spawn_loading_screen(mut commands: Commands) {
-    commands.spawn((
-        widget::ui_root("Loading Screen"),
-        DespawnOnExit(Screen::Loading),
-        children![(
-            Name::new("Loading Status"),
-            Text::new("Loading..."),
-            TextFont::from_font_size(24.0),
-            TextColor(ui_palette::LABEL_TEXT),
+    commands.spawn_scene(bsn! {
+        @widget::ui_root("Loading Screen")
+        DespawnOnExit::<Screen>(Screen::Loading)
+        Children [
+            Name::new("Loading Status")
+            Text::new("Loading...")
+            TextFont { font_size: px(24.0) }
+            TextColor(ui_palette::LABEL_TEXT)
             Node {
                 max_width: Val::Px(640.0),
-                ..default()
-            },
+            }
             TextLayout {
                 justify: Justify::Center,
                 linebreak: LineBreak::WordOrCharacter,
-            },
-        )],
-    ));
+            }
+        ]
+    });
 }
 
 fn insert_loading_watchdog(mut commands: Commands) {
@@ -189,36 +188,31 @@ fn loading_timeout_watchdog(
 }
 
 fn spawn_fatal_error_screen(mut commands: Commands) {
-    commands.spawn((
-        widget::ui_root("Fatal Error Screen"),
-        DespawnOnExit(Screen::FatalError),
-        children![
-            (
-                Name::new("Fatal Error Title"),
-                Text::new("GAME CANNOT START"),
-                TextFont::from_font_size(32.0),
-                TextColor(Color::srgb(0.95, 0.35, 0.35)),
-            ),
-            (
-                Name::new("Fatal Error Detail"),
-                Text::new("A required game asset could not be loaded."),
-                TextFont::from_font_size(20.0),
-                TextColor(ui_palette::LABEL_TEXT),
-                Node {
-                    max_width: Val::Px(640.0),
-                    ..default()
-                },
-                TextLayout {
-                    justify: Justify::Center,
-                    linebreak: LineBreak::WordOrCharacter,
-                },
-            ),
-            (
-                Name::new("Fatal Error Restart Instruction"),
-                Text::new("Restart the game after fixing the installation or asset files."),
-                TextFont::from_font_size(16.0),
-                TextColor(ui_palette::LABEL_TEXT),
-            ),
-        ],
-    ));
+    commands.spawn_scene(bsn! {
+        @widget::ui_root("Fatal Error Screen")
+        DespawnOnExit::<Screen>(Screen::FatalError)
+        Children [
+            Name::new("Fatal Error Title")
+            Text::new("GAME CANNOT START")
+            TextFont { font_size: px(32.0) }
+            TextColor(Color::srgb(0.95, 0.35, 0.35))
+            --
+            Name::new("Fatal Error Detail")
+            Text::new("A required game asset could not be loaded.")
+            TextFont { font_size: px(20.0) }
+            TextColor(ui_palette::LABEL_TEXT)
+            Node {
+                max_width: Val::Px(640.0),
+            }
+            TextLayout {
+                justify: Justify::Center,
+                linebreak: LineBreak::WordOrCharacter,
+            }
+            --
+            Name::new("Fatal Error Restart Instruction")
+            Text::new("Restart the game after fixing the installation or asset files.")
+            TextFont { font_size: px(16.0) }
+            TextColor(ui_palette::LABEL_TEXT)
+        ]
+    });
 }

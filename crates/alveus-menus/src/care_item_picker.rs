@@ -117,7 +117,7 @@ fn sync_care_selection(
 }
 
 fn hover_care_row(
-    over: On<Pointer<Over>>,
+    over: On<PointerOver>,
     entries: Query<&ListMenuEntry>,
     mut care_menu: ResMut<CareMenuState>,
 ) {
@@ -127,7 +127,7 @@ fn hover_care_row(
 }
 
 fn click_care_row(
-    mut click: On<Pointer<Click>>,
+    mut click: On<PointerClick>,
     entries: Query<&ListMenuEntry>,
     mut care_menu: ResMut<CareMenuState>,
     mut commands: Commands,
@@ -154,6 +154,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(StatesPlugin);
         app.add_plugins(MinimalPlugins);
+        app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
         app.add_plugins(alveus_app::plugin);
         app.insert_resource(care_menu);
         app.init_resource::<PlayerSatchel>();

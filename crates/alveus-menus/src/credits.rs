@@ -1,7 +1,7 @@
 //! The credits menu.
 
+use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use bevy::{ecs::spawn::SpawnIter, prelude::*};
 
 use alveus_app::Menu;
 use alveus_asset_tracking::LoadResource;
@@ -17,21 +17,25 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 fn spawn_credits_menu(mut commands: Commands) {
-    commands.spawn((
-        widget::ui_root("Credits Menu"),
-        GlobalZIndex(2),
-        DespawnOnExit(Menu::Credits),
-        children![
-            widget::header("Created by"),
-            created_by(),
-            widget::header("Assets"),
-            assets(),
-            widget::button_autofocus("Back", go_back_on_click),
-        ],
-    ));
+    commands.spawn_scene(bsn! {
+        @widget::ui_root("Credits Menu")
+        GlobalZIndex(2)
+        DespawnOnExit::<Menu>(Menu::Credits)
+        Children [
+            @widget::header("Created by")
+            --
+            @created_by()
+            --
+            @widget::header("Assets")
+            --
+            @assets()
+            --
+            @widget::button_autofocus("Back", go_back_on_click)
+        ]
+    });
 }
 
-fn created_by() -> impl Bundle {
+fn created_by() -> impl Scene {
     grid(vec![
         ["Bernardo António Borda d'Água", "Design & programming"],
         [
@@ -41,7 +45,7 @@ fn created_by() -> impl Bundle {
     ])
 }
 
-fn assets() -> impl Bundle {
+fn assets() -> impl Scene {
     grid(vec![
         ["Button SFX", "CC0 by Jaszunio15"],
         ["Music", "CC BY 3.0 by Kevin MacLeod"],
@@ -52,32 +56,34 @@ fn assets() -> impl Bundle {
     ])
 }
 
-fn grid(content: Vec<[&'static str; 2]>) -> impl Bundle {
-    (
-        Name::new("Grid"),
+fn grid(content: Vec<[&'static str; 2]>) -> impl Scene {
+    let cells = content
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .map(|(i, text)| {
+            bsn! {
+                @widget::label(text)
+                Node {
+                    justify_self: {if i.is_multiple_of(2) {
+                        JustifySelf::End
+                    } else {
+                        JustifySelf::Start
+                    }},
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+    bsn! {
+        Name::new("Grid")
         Node {
             display: Display::Grid,
             row_gap: px(10),
             column_gap: px(30),
-            grid_template_columns: RepeatedGridTrack::px(2, 400.0),
-            ..default()
-        },
-        Children::spawn(SpawnIter(content.into_iter().flatten().enumerate().map(
-            |(i, text)| {
-                (
-                    widget::label(text),
-                    Node {
-                        justify_self: if i.is_multiple_of(2) {
-                            JustifySelf::End
-                        } else {
-                            JustifySelf::Start
-                        },
-                        ..default()
-                    },
-                )
-            },
-        ))),
-    )
+            grid_template_columns: RepeatedGridTrack::px::<Vec<RepeatedGridTrack>> (2, 400.0),
+        }
+        Children [ {cells} ]
+    }
 }
 
 fn go_back_on_click(_: On<Activate>, mut commands: Commands) {
@@ -103,7 +109,7 @@ impl FromWorld for CreditsAssets {
 fn start_credits_music(mut commands: Commands, credits_music: Res<CreditsAssets>) {
     commands.spawn((
         Name::new("Credits Music"),
-        DespawnOnExit(Menu::Credits),
+        DespawnOnExit::<Menu>(Menu::Credits),
         music(credits_music.music.clone()),
     ));
 }

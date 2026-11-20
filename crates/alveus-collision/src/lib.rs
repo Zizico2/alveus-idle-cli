@@ -592,7 +592,7 @@ struct TrackedDynamicObstacle {
 }
 
 fn register_dynamic_obstacle_spawn(
-    add: On<Add, PersistedDynamicObstacle>,
+    add: On<Add<PersistedDynamicObstacle>>,
     mut commands: Commands,
     query: Query<
         (&DynamicObstacle, &CurrentTilePosition, &InEnclosure),

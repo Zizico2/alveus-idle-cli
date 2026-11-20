@@ -4,3 +4,4 @@
 .cargo/config.toml
 assets/maps/overview/alveus-idle.tiled-session
 save.ron
+/screenshots/bevy20_*

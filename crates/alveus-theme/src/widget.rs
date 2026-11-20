@@ -1,9 +1,9 @@
-//! Helper functions for creating common widgets.
+//! Composable BSN scenes for common widgets.
 
 use std::borrow::Cow;
 
 use bevy::{
-    ecs::{hierarchy::ChildSpawnerCommands, spawn::SpawnWith, system::IntoObserverSystem},
+    ecs::system::IntoObserverSystem,
     input_focus::{AutoFocus, tab_navigation::TabIndex},
     prelude::*,
     ui::auto_directional_navigation::AutoDirectionalNavigation,
@@ -12,10 +12,11 @@ use bevy::{
 
 use crate::{interaction::InteractionPalette, palette::*};
 
-/// A root UI node that fills the window and centers its content.
-pub fn ui_root(name: impl Into<Cow<'static, str>>) -> impl Bundle {
-    (
-        Name::new(name),
+/// A root UI scene that fills the window and centers its content.
+pub fn ui_root(name: impl Into<Cow<'static, str>>) -> impl Scene {
+    let name = Name::new(name);
+    bsn! {
+        name
         Node {
             position_type: PositionType::Absolute,
             width: percent(100),
@@ -23,224 +24,186 @@ pub fn ui_root(name: impl Into<Cow<'static, str>>) -> impl Bundle {
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
             flex_direction: FlexDirection::Column,
-            row_gap: px(20),
-            ..default()
-        },
-        // Don't block picking events for other UI roots.
-        Pickable::IGNORE,
-    )
+            row_gap: rem(1),
+        }
+        Pickable::IGNORE
+    }
 }
 
 /// A simple header label. Bigger than [`label`].
-pub fn header(text: impl Into<String>) -> impl Bundle {
-    (
-        Name::new("Header"),
-        Text(text.into()),
-        TextFont::from_font_size(40.0),
-        TextColor(HEADER_TEXT),
-    )
+pub fn header(text: impl Into<String>) -> impl Scene {
+    let text = text.into();
+    bsn! {
+        Name::new("Header")
+        Text(text)
+        TextFont { font_size: rem(2) }
+        TextColor(HEADER_TEXT)
+    }
 }
 
 /// A simple text label.
-pub fn label(text: impl Into<String>) -> impl Bundle {
-    (
-        Name::new("Label"),
-        Text(text.into()),
-        TextFont::from_font_size(24.0),
-        TextColor(LABEL_TEXT),
-    )
+pub fn label(text: impl Into<String>) -> impl Scene {
+    let text = text.into();
+    bsn! {
+        Name::new("Label")
+        Text(text)
+        TextFont { font_size: rem(1.2) }
+        TextColor(LABEL_TEXT)
+    }
 }
 
-/// A large rounded button with text and an action defined as an [`Observer`].
-pub fn button<E, B, M, I>(text: impl Into<String>, action: I) -> impl Bundle
+/// A large rounded button with an entity observer attached by the scene.
+pub fn button<E, M, I>(text: impl Into<String>, action: I) -> impl Scene
 where
     E: EntityEvent,
-    B: Bundle,
-    I: IntoObserverSystem<E, B, M>,
+    M: 'static,
+    I: IntoObserverSystem<E, M> + Clone + Send + Sync + 'static,
 {
-    button_base(
-        text,
-        action,
-        false,
-        Node {
-            width: px(380),
-            height: px(80),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border: UiRect::all(px(3)),
-            border_radius: BorderRadius::MAX,
-            ..default()
-        },
-    )
+    bsn! {
+        @button_scene(text.into(), false)
+        on(action)
+    }
 }
 
 /// A large button that receives focus when its menu is spawned.
-pub fn button_autofocus<E, B, M, I>(text: impl Into<String>, action: I) -> impl Bundle
+pub fn button_autofocus<E, M, I>(text: impl Into<String>, action: I) -> impl Scene
 where
     E: EntityEvent,
-    B: Bundle,
-    I: IntoObserverSystem<E, B, M>,
+    M: 'static,
+    I: IntoObserverSystem<E, M> + Clone + Send + Sync + 'static,
 {
-    button_base(
-        text,
-        action,
-        true,
-        Node {
-            width: px(380),
-            height: px(80),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border: UiRect::all(px(3)),
-            border_radius: BorderRadius::MAX,
-            ..default()
-        },
-    )
+    bsn! {
+        @button_scene(text.into(), true)
+        on(action)
+    }
 }
 
-/// A small square button with text and an action defined as an [`Observer`].
-pub fn button_small<E, B, M, I>(text: impl Into<String>, action: I) -> impl Bundle
+/// A small square button, composed by patching only its layout fields.
+pub fn button_small<E, M, I>(text: impl Into<String>, action: I) -> impl Scene
 where
     E: EntityEvent,
-    B: Bundle,
-    I: IntoObserverSystem<E, B, M>,
+    M: 'static,
+    I: IntoObserverSystem<E, M> + Clone + Send + Sync + 'static,
 {
-    button_base(
-        text,
-        action,
-        false,
+    bsn! {
+        @button_scene(text.into(), false)
         Node {
-            width: px(30),
-            height: px(30),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
+            width: rem(1.5),
+            height: rem(1.5),
             border: UiRect::all(px(2)),
-            ..default()
-        },
-    )
+            border_radius: BorderRadius::ZERO,
+        }
+        on(action)
+    }
 }
 
 /// Spawn a standard large button whose meaning is supplied by an ECS bundle.
-/// App-level `Activate` observers can inspect that bundle to route the action.
+/// App-level `Activate` observers inspect that bundle to route the action.
 pub fn spawn_button(
     parent: &mut ChildSpawnerCommands,
     text: impl Into<String>,
     auto_focus: bool,
     extra: impl Bundle,
 ) -> Entity {
-    let mut button = parent.spawn((
-        Name::new("Button Inner"),
-        UiButton,
-        ThemedButton,
-        TabIndex(0),
-        AutoDirectionalNavigation::default(),
-        BackgroundColor(BUTTON_BACKGROUND),
-        BorderColor::all(Color::NONE),
+    parent
+        .spawn_empty()
+        .apply_scene(button_scene(text.into(), auto_focus))
+        .insert(extra)
+        .id()
+}
+
+/// Shared scene for both command-backed list rows and observer-backed buttons.
+fn button_scene(text: String, auto_focus: bool) -> impl Scene {
+    let focus = auto_focus.then_some(bsn! { AutoFocus });
+    bsn! {
+        Name::new("Button Inner")
+        UiButton
+        ThemedButton
+        TabIndex(0)
+        AutoDirectionalNavigation::default()
+        BackgroundColor(BUTTON_BACKGROUND)
+        BorderColor::all(Color::NONE)
         InteractionPalette {
             none: BUTTON_BACKGROUND,
             hovered: BUTTON_HOVERED_BACKGROUND,
             pressed: BUTTON_PRESSED_BACKGROUND,
-        },
+        }
         Node {
-            width: px(380),
-            height: px(80),
+            width: rem(19),
+            height: rem(4),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
             border: UiRect::all(px(3)),
             border_radius: BorderRadius::MAX,
-            ..default()
-        },
-        extra,
-        children![(
-            Name::new("Button Text"),
-            Text(text.into()),
-            TextFont::from_font_size(40.0),
-            TextColor(BUTTON_TEXT),
-            Pickable::IGNORE,
-        )],
-    ));
-    if auto_focus {
-        button.insert(AutoFocus);
+        }
+        @focus
+        Children [
+            Name::new("Button Text")
+            Text(text)
+            TextFont { font_size: rem(2) }
+            TextColor(BUTTON_TEXT)
+            Pickable::IGNORE
+        ]
     }
-    button.id()
-}
-
-/// A simple button with text and an action defined as an [`Observer`]. The button's layout is provided by `button_bundle`.
-fn button_base<E, B, M, I>(
-    text: impl Into<String>,
-    action: I,
-    auto_focus: bool,
-    button_bundle: impl Bundle,
-) -> impl Bundle
-where
-    E: EntityEvent,
-    B: Bundle,
-    I: IntoObserverSystem<E, B, M>,
-{
-    let text = text.into();
-    let action = IntoObserverSystem::into_system(action);
-    (
-        Name::new("Button"),
-        Node::default(),
-        Children::spawn(SpawnWith(move |parent: &mut ChildSpawner| {
-            let mut button = parent.spawn((
-                Name::new("Button Inner"),
-                UiButton,
-                ThemedButton,
-                TabIndex(0),
-                AutoDirectionalNavigation::default(),
-                BackgroundColor(BUTTON_BACKGROUND),
-                BorderColor::all(Color::NONE),
-                InteractionPalette {
-                    none: BUTTON_BACKGROUND,
-                    hovered: BUTTON_HOVERED_BACKGROUND,
-                    pressed: BUTTON_PRESSED_BACKGROUND,
-                },
-                children![(
-                    Name::new("Button Text"),
-                    Text(text),
-                    TextFont::from_font_size(40.0),
-                    TextColor(BUTTON_TEXT),
-                    // Don't bubble picking events from the text up to the button.
-                    Pickable::IGNORE,
-                )],
-            ));
-            button.insert(button_bundle).observe(action);
-            if auto_focus {
-                button.insert(AutoFocus);
-            }
-        })),
-    )
 }
 
 /// Marker for the standard Bevy button entities styled by this crate.
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Debug, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct ThemedButton;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::{
-        input_focus::{AutoFocus, tab_navigation::TabIndex},
-        ui::auto_directional_navigation::AutoDirectionalNavigation,
-        ui_widgets::{Activate, Button},
-    };
+    use bevy::{scene::ScenePlugin, ui_widgets::Activate};
 
-    fn ignore_activation(_: On<Activate>) {}
+    #[derive(Resource, Default)]
+    struct Activations(usize);
+
+    fn record_activation(_: On<Activate>, mut count: ResMut<Activations>) {
+        count.0 += 1;
+    }
+
+    fn scene_app() -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), ScenePlugin));
+        app.init_resource::<Activations>();
+        app
+    }
 
     #[test]
-    fn themed_buttons_use_standard_focusable_widgets() {
-        let mut world = World::new();
-        world.spawn(button_autofocus("Continue", ignore_activation));
-        world.flush();
+    fn themed_scene_preserves_focus_children_and_activation() {
+        let mut app = scene_app();
+        let world = app.world_mut();
+        let button = world
+            .spawn_scene(button_autofocus("Continue", record_activation))
+            .expect("button scene")
+            .id();
+        assert!(world.get::<UiButton>(button).is_some());
+        assert!(world.get::<ThemedButton>(button).is_some());
+        assert!(world.get::<AutoFocus>(button).is_some());
+        assert!(world.get::<AutoDirectionalNavigation>(button).is_some());
+        assert_eq!(world.get::<TabIndex>(button).unwrap().0, 0);
+        let child = world.get::<Children>(button).unwrap()[0];
+        assert_eq!(world.get::<Text>(child).unwrap().as_str(), "Continue");
+        world.trigger(Activate { entity: button });
+        assert_eq!(world.resource::<Activations>().0, 1);
+    }
 
-        let mut query = world.query_filtered::<(Entity, &TabIndex), (
-            With<Button>,
-            With<ThemedButton>,
-            With<AutoFocus>,
-            With<AutoDirectionalNavigation>,
-        )>();
-        let (_, tab_index) = query.single(&world).expect("one focusable themed button");
-        assert_eq!(tab_index.0, 0);
+    #[test]
+    fn small_scene_patches_layout_without_losing_button_style() {
+        let mut app = scene_app();
+        let world = app.world_mut();
+        let button = world
+            .spawn_scene(button_small("+", record_activation))
+            .expect("small button scene")
+            .id();
+        let node = world.get::<Node>(button).unwrap();
+        assert_eq!(node.width, rem(1.5));
+        assert_eq!(node.height, rem(1.5));
+        assert_eq!(node.align_items, AlignItems::Center);
+        assert!(world.get::<InteractionPalette>(button).is_some());
+        assert!(world.get::<AutoFocus>(button).is_none());
+        assert_eq!(world.get::<Children>(button).unwrap().len(), 1);
     }
 }
