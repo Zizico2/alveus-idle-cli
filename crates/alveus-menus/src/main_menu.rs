@@ -29,6 +29,7 @@ enum MainMenuAction {
     Play,
     Settings,
     Credits,
+    #[cfg(not(target_family = "wasm"))]
     Exit,
 }
 
@@ -38,19 +39,24 @@ impl MainMenuAction {
             Self::Play => "Play",
             Self::Settings => "Settings",
             Self::Credits => "Credits",
+            #[cfg(not(target_family = "wasm"))]
             Self::Exit => "Exit",
         }
     }
 }
 
 fn spawn_main_menu(mut commands: Commands) {
-    let mut actions = vec![
+    let actions = vec![
         MainMenuAction::Play,
         MainMenuAction::Settings,
         MainMenuAction::Credits,
     ];
     #[cfg(not(target_family = "wasm"))]
-    actions.push(MainMenuAction::Exit);
+    let actions = {
+        let mut actions = actions;
+        actions.push(MainMenuAction::Exit);
+        actions
+    };
     let state = ListMenuState::new(actions);
     let spawned = spawn_standalone_menu(
         &mut commands,
@@ -73,7 +79,7 @@ fn activate_main_menu_action(
     entries: Query<&ListMenuEntry>,
     lists: Query<&ListMenuState<MainMenuAction>>,
     mut commands: Commands,
-    #[allow(unused_mut)] mut app_exit: MessageWriter<AppExit>,
+    #[cfg(not(target_family = "wasm"))] mut app_exit: MessageWriter<AppExit>,
 ) {
     let Ok(entry) = entries.get(activate.entity) else {
         return;
@@ -88,8 +94,8 @@ fn activate_main_menu_action(
         MainMenuAction::Play => commands.trigger(GameCommand::Play),
         MainMenuAction::Settings => commands.trigger(GameCommand::OpenSettings),
         MainMenuAction::Credits => commands.trigger(GameCommand::OpenCredits),
+        #[cfg(not(target_family = "wasm"))]
         MainMenuAction::Exit => {
-            #[cfg(not(target_family = "wasm"))]
             app_exit.write(AppExit::Success);
         }
     }
@@ -182,7 +188,10 @@ mod tests {
             .single(app.world())
             .expect("one main action list");
         assert_eq!(
-            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            app.world()
+                .get::<ListMenuCursor>(list)
+                .expect("cursor")
+                .index,
             0
         );
 
@@ -191,7 +200,10 @@ mod tests {
         app.update();
 
         assert_eq!(
-            app.world().get::<ListMenuCursor>(list).expect("cursor").index,
+            app.world()
+                .get::<ListMenuCursor>(list)
+                .expect("cursor")
+                .index,
             1
         );
         assert_eq!(

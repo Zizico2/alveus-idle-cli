@@ -3,7 +3,8 @@
 use std::time::{Duration, Instant};
 
 use alveus_app::Screen;
-use alveus_screens::{LoadingTiming, begin_play_in_world};
+use alveus_command::GameCommand;
+use alveus_screens::LoadingTiming;
 use bevy::prelude::*;
 
 mod common;
@@ -18,7 +19,7 @@ fn required_root_map_failure_enters_fatal_error_without_gameplay() {
     let mut app = common::loading_diagnostic_app(&[("maps/overview/map.tmx", CORRUPT_TMX)]);
     app.insert_resource(LoadingTiming { timeout_secs: 30.0 });
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
 
     wait_for_fatal_error(&mut app);
 }
@@ -28,7 +29,7 @@ fn required_recursive_dependency_failure_enters_fatal_error_without_gameplay() {
     let mut app = common::loading_diagnostic_app(&[("maps/overview/sand_tile.png", CORRUPT_PNG)]);
     app.insert_resource(LoadingTiming { timeout_secs: 30.0 });
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
 
     wait_for_fatal_error(&mut app);
 }
@@ -39,7 +40,7 @@ fn pending_assets_timeout_enters_fatal_error() {
     app.insert_resource(common::StallLoadingForTimeoutTest);
     app.insert_resource(LoadingTiming { timeout_secs: 0.05 });
 
-    begin_play_in_world(app.world_mut());
+    app.world_mut().trigger(GameCommand::Play);
 
     wait_for_fatal_error(&mut app);
 }

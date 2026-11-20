@@ -415,15 +415,23 @@ Flags: `--headless`, `--step` / `--realtime`, `--port N`,
 
 ## 7. Architecture conventions to uphold
 
-- **Extract-and-route, no duplication.** Keyboard readers and the BRP dispatcher
-  must call the *same* shared action functions (e.g. `perform_interact_in_world`,
-  `try_enter_room`, `advance_simulated_hours_world`). Keyboard handlers should be
-  thin and just `trigger(GameCommand::...)`. Never fake key input to reach a verb.
-- **One dispatcher, buffered application.** `CommandPlugin` collects triggered
-  `GameCommand`s into `PendingGameCommands` and applies them once per frame in
-  `First`, `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests`
-  in `RemoteLast`, re-running `StateTransition` so effects land in-frame. Preserve
-  this ordering when touching `crates/alveus-command/src/lib.rs`.
+- **Extract-and-route, no duplication.** Keyboard, UI, and BRP clients must all
+  `trigger(GameCommand::…)`; they stay on that canonical verb boundary and must
+  not call gameplay helpers directly. `CommandPlugin` routes each variant to
+  private or feature-owned request observers (e.g. `InteractionRequest`,
+  `RoomRequest`). Owning observers may reuse ordinary helpers internally
+  (`perform_drop`, `open_care_menu`, `try_enter_room`, `advance_simulated_hours`).
+  Never fake key input to reach a verb.
+- **Observer routing + deferred phase flush.** `enqueue_game_command` only buffers
+  into `DeferredGameCommands`. `route_deferred_game_commands` runs in `First`,
+  `PostUpdate`, and (with `remote`) after `RemoteSystems::ProcessRequests` in
+  `RemoteLast`, validating FatalError and triggering internal request events.
+  That preserves the PreUpdate-input contract: local verbs do not mutate
+  gameplay/`NextState` before `Update`. After each nonempty route batch,
+  `PendingCommandStateFlush` queues `StateTransition` once via
+  `Commands::run_schedule`. Internal request events are **not**
+  Reflect-registered. Preserve this ordering when touching
+  `crates/alveus-command/src/lib.rs`.
 - **Reflect everything observable/triggerable.** New components/resources/events
   that an agent must query or trigger need `#[derive(Reflect)]`,
   `#[reflect(Component/Resource/Event)]`, and registration in

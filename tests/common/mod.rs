@@ -253,6 +253,7 @@ pub fn loading_diagnostic_app(map_replacements: &[(&str, &[u8])]) -> App {
     app.add_plugins(StatesPlugin);
     app.add_plugins(alveus_app::plugin);
     app.add_plugins(alveus_asset_tracking::plugin);
+    app.add_plugins(CommandPlugin);
     app.init_resource::<CollisionMasks>();
     app.init_resource::<LoadingTiming>();
     app.init_resource::<LevelAssets>()
