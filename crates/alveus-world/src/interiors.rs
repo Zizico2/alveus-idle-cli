@@ -9,8 +9,8 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 fn interior_tile_entity(event: &On<TiledEvent<TileCreated>>) -> Option<(Entity, TilePosition)> {
-    let pos = event.get_tile_pos()?;
-    let entity = event.get_tile_entity().unwrap_or(event.entity);
+    let pos = event.tile_pos()?;
+    let entity = event.tile_entity().unwrap_or(event.entity);
     Some((entity, TilePosition { x: pos.x, y: pos.y }))
 }
 

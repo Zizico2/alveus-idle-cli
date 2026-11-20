@@ -40,12 +40,13 @@ pub(crate) fn spawn_standalone_menu<T>(
 ) -> SpawnedStandaloneMenu {
     let name = name.into();
     let root = commands
-        .spawn((widget::ui_root(name), StandaloneMenuRoot, GlobalZIndex(2)))
+        .spawn_scene(bsn! { @widget::ui_root(name) GlobalZIndex(2) })
+        .insert(StandaloneMenuRoot)
         .id();
     let mut spawned_list = None;
     commands.entity(root).with_children(|menu| {
         if let Some(title) = standalone_spec.title {
-            menu.spawn(widget::header(title));
+            menu.spawn_empty().apply_scene(widget::header(title));
         }
         spawned_list = Some(spawn_list_menu(menu, state, list_spec, label));
     });

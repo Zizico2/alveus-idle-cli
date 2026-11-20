@@ -48,8 +48,8 @@ The **Nutrition House** is the sanctuary's food preparation hub. Inside this roo
 
 ## 🛠️ Tech Stack & Dependencies
 
-* **[Bevy (v0.18)](https://bevyengine.org/):** A refreshingly simple data-driven game engine in Rust.
-* **[bevy_ecs_tiled (v0.11.2)](https://github.com/vleue/bevy_ecs_tiled):** ECS-friendly integration for Tiled map files, exposing Tiled object properties directly as Bevy components.
+* **[Bevy (v0.20.1)](https://bevy.org/):** A refreshingly simple data-driven game engine in Rust. Shared widgets and static screens compose with BSN scenes; settings initialize after the scene's `Ready` event.
+* **[bevy_ecs_tiled (v0.15.1)](https://github.com/adrien-bon/bevy_ecs_tiled):** ECS-friendly integration for Tiled map files, exposing Tiled object properties directly as Bevy components.
 * **[bevy_tweening (v0.15)](https://github.com/HeavyDutyApps/bevy_tweening):** Used for smooth UI animations, such as the entering/exiting toast notifications.
 
 ---

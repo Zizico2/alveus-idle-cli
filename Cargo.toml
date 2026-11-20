@@ -57,18 +57,18 @@ alveus-reflect = { path = "crates/alveus-reflect" }
 alveus-headless = { path = "crates/alveus-headless" }
 
 # External crates
-bevy = { version = "0.19", default-features = true }
-bevy_enhanced_input = "0.26"
-bevy_ecs = { version = "0.19", default-features = false, features = ["bevy_reflect"] }
-bevy_reflect = "0.19"
-bevy_ecs_tiled = { version = "0.13", default-features = false, features = ["user_properties", "png"] }
-bevy_tweening = "0.16.0"
+bevy = { version = "0.20.1", default-features = true }
+bevy_enhanced_input = "0.27.2"
+bevy_ecs = { version = "0.20.1", default-features = false, features = ["bevy_reflect"] }
+bevy_reflect = "0.20.1"
+bevy_ecs_tiled = { version = "0.15.1", default-features = false, features = ["user_properties", "png"] }
+bevy_tweening = "0.17.0"
 itertools = "0.14"
 rand = "0.10.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.150"
 ron = "0.12.1"
-moonshine-save = "0.7"
+moonshine-save = "0.8"
 async-channel = "2"
 phf = { version = "0.11", default-features = false }
 phf_shared = "0.11"

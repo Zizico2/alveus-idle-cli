@@ -96,6 +96,7 @@ mod tests {
     fn pause_menu_composes_overlay_shell_and_action_list() {
         let mut app = App::new();
         app.add_plugins((StatesPlugin, MinimalPlugins, alveus_app::plugin));
+        app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
         app.add_plugins(super::plugin);
         app.world_mut()
             .resource_mut::<NextState<Menu>>()

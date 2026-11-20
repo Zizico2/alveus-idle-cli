@@ -190,174 +190,307 @@ fn guarded_action() -> ActionSettings {
 }
 
 fn spawn_input_contexts(mut commands: Commands) {
-    commands.spawn((
-        Name::new("Gameplay Input Context"),
-        GameplayInput,
-        ContextActivity::<GameplayInput>::INACTIVE,
-        actions!(GameplayInput[
-            (
-                Action::<WorldMove>::new(),
-                guarded_action(),
-                DeadZone::default(),
-                Bindings::spawn((
-                    Cardinal::wasd_keys(),
-                    Cardinal::arrows(),
-                    Cardinal::dpad(),
-                    Axial::left_stick(),
-                )),
-            ),
-            (
-                Action::<Interact>::new(),
-                guarded_action(),
-                bindings![KeyCode::Space, GamepadButton::South],
-            ),
-            (
-                Action::<DropItem>::new(),
-                guarded_action(),
-                bindings![KeyCode::KeyK, GamepadButton::West],
-            ),
-            (
-                Action::<EnterBuilding>::new(),
-                guarded_action(),
-                bindings![KeyCode::Enter, GamepadButton::North],
-            ),
-            (
-                Action::<ExitRoom>::new(),
-                guarded_action(),
-                bindings![KeyCode::Backspace, GamepadButton::East],
-            ),
-            (
-                Action::<Pause>::new(),
-                guarded_action(),
-                bindings![KeyCode::Escape, KeyCode::KeyP, GamepadButton::Start],
-            ),
-        ]),
-    ));
+    let settings = guarded_action();
+    commands
+        .spawn((
+            Name::new("Gameplay Input Context"),
+            GameplayInput,
+            ContextActivity::<GameplayInput>::INACTIVE,
+        ))
+        .apply_scene(bsn! {
+            Actions<GameplayInput> [
+                Action::<WorldMove>::new()
+                settings
+                DeadZone::default()
+                Bindings [
+                    {preset::cardinal::wasd_keys()}
+                    --
+                    {preset::cardinal::arrows()}
+                    --
+                    {preset::cardinal::dpad()}
+                    --
+                    {preset::axial::left_stick()}
+                ]
+                --
+                Action::<Interact>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Space)
+                    --
+                    Binding(GamepadButton::South)
+                ]
+                --
+                Action::<DropItem>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyK)
+                    --
+                    Binding(GamepadButton::West)
+                ]
+                --
+                Action::<EnterBuilding>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Enter)
+                    --
+                    Binding(GamepadButton::North)
+                ]
+                --
+                Action::<ExitRoom>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Backspace)
+                    --
+                    Binding(GamepadButton::East)
+                ]
+                --
+                Action::<Pause>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Escape)
+                    --
+                    Binding(KeyCode::KeyP)
+                    --
+                    Binding(GamepadButton::Start)
+                ]
+            ]
+        });
 
-    commands.spawn((
-        Name::new("Care Picker Input Context"),
-        CarePickerInput,
-        ContextActivity::<CarePickerInput>::INACTIVE,
-        actions!(CarePickerInput[
-            (
-                Action::<CareNavigate>::new(),
-                guarded_action(),
-                DeadZone::default(),
-                Bindings::spawn((
-                    Bidirectional::new(KeyCode::KeyW, KeyCode::KeyS),
-                    Bidirectional::new(KeyCode::ArrowUp, KeyCode::ArrowDown),
-                    Bidirectional::new(GamepadButton::DPadUp, GamepadButton::DPadDown),
-                    Spawn(Binding::from(GamepadAxis::LeftStickY)),
-                )),
-            ),
-            (
-                Action::<CareConfirm>::new(),
-                guarded_action(),
-                bindings![KeyCode::Enter, KeyCode::Space, GamepadButton::South],
-            ),
-            (
-                Action::<CareBack>::new(),
-                guarded_action(),
-                bindings![
-                    KeyCode::Escape,
-                    KeyCode::KeyP,
-                    GamepadButton::East,
-                    GamepadButton::Start,
-                ],
-            ),
-        ]),
-    ));
+    commands
+        .spawn((
+            Name::new("Care Picker Input Context"),
+            CarePickerInput,
+            ContextActivity::<CarePickerInput>::INACTIVE,
+        ))
+        .apply_scene(bsn! {
+            Actions<CarePickerInput> [
+                Action::<CareNavigate>::new()
+                settings
+                DeadZone::default()
+                Bindings [
+                    {preset::bidirectional::new(KeyCode::KeyW, KeyCode::KeyS)}
+                    --
+                    {preset::bidirectional::new(KeyCode::ArrowUp, KeyCode::ArrowDown)}
+                    --
+                    {preset::bidirectional::new(GamepadButton::DPadUp, GamepadButton::DPadDown)}
+                    --
+                    Binding(GamepadAxis::LeftStickY)
+                ]
+                --
+                Action::<CareConfirm>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Enter)
+                    --
+                    Binding(KeyCode::Space)
+                    --
+                    Binding(GamepadButton::South)
+                ]
+                --
+                Action::<CareBack>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Escape)
+                    --
+                    Binding(KeyCode::KeyP)
+                    --
+                    Binding(GamepadButton::East)
+                    --
+                    Binding(GamepadButton::Start)
+                ]
+            ]
+        });
 
-    commands.spawn((
-        Name::new("Menu Input Context"),
-        MenuInput,
-        ContextActivity::<MenuInput>::INACTIVE,
-        actions!(MenuInput[
-            (
-                Action::<MenuNavigate>::new(),
-                guarded_action(),
-                DeadZone::default(),
-                Bindings::spawn((
-                    Cardinal::wasd_keys(),
-                    Cardinal::arrows(),
-                    Cardinal::dpad(),
-                    Axial::left_stick(),
-                )),
-            ),
-            (
-                Action::<MenuConfirm>::new(),
-                guarded_action(),
-                bindings![GamepadButton::South],
-            ),
-            (
-                Action::<MenuBack>::new(),
-                guarded_action(),
-                bindings![
-                    KeyCode::Escape,
-                    KeyCode::KeyP,
-                    GamepadButton::East,
-                    GamepadButton::Start,
-                ],
-            ),
-        ]),
-    ));
+    commands
+        .spawn((
+            Name::new("Menu Input Context"),
+            MenuInput,
+            ContextActivity::<MenuInput>::INACTIVE,
+        ))
+        .apply_scene(bsn! {
+            Actions<MenuInput> [
+                Action::<MenuNavigate>::new()
+                settings
+                DeadZone::default()
+                Bindings [
+                    {preset::cardinal::wasd_keys()}
+                    --
+                    {preset::cardinal::arrows()}
+                    --
+                    {preset::cardinal::dpad()}
+                    --
+                    {preset::axial::left_stick()}
+                ]
+                --
+                Action::<MenuConfirm>::new()
+                settings
+                Bindings [
+                    Binding(GamepadButton::South)
+                ]
+                --
+                Action::<MenuBack>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Escape)
+                    --
+                    Binding(KeyCode::KeyP)
+                    --
+                    Binding(GamepadButton::East)
+                    --
+                    Binding(GamepadButton::Start)
+                ]
+            ]
+        });
 
-    commands.spawn((
-        Name::new("Splash Input Context"),
-        SplashInput,
-        ContextActivity::<SplashInput>::INACTIVE,
-        actions!(
-            SplashInput[(
-                Action::<SkipSplash>::new(),
-                guarded_action(),
-                bindings![
-                    KeyCode::Escape,
-                    KeyCode::Enter,
-                    KeyCode::Space,
-                    GamepadButton::South,
-                    GamepadButton::Start,
-                ],
-            )]
-        ),
-    ));
+    commands
+        .spawn((
+            Name::new("Splash Input Context"),
+            SplashInput,
+            ContextActivity::<SplashInput>::INACTIVE,
+        ))
+        .apply_scene(bsn! {
+            Actions<SplashInput> [
+                Action::<SkipSplash>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Escape)
+                    --
+                    Binding(KeyCode::Enter)
+                    --
+                    Binding(KeyCode::Space)
+                    --
+                    Binding(GamepadButton::South)
+                    --
+                    Binding(GamepadButton::Start)
+                ]
+            ]
+        });
 
-    commands.spawn((
-        Name::new("Debug Input Context"),
-        DebugInput,
-        ContextActivity::<DebugInput>::INACTIVE,
-        actions!(DebugInput[
-            (Action::<PollyHunger>::new(), guarded_action(), bindings![KeyCode::Digit1]),
-            (Action::<PollyCleanliness>::new(), guarded_action(), bindings![KeyCode::Digit2]),
-            (Action::<PollyHappiness>::new(), guarded_action(), bindings![KeyCode::Digit3]),
-            (Action::<StompyHunger>::new(), guarded_action(), bindings![KeyCode::Digit4]),
-            (Action::<StompyCleanliness>::new(), guarded_action(), bindings![KeyCode::Digit5]),
-            (Action::<StompyHappiness>::new(), guarded_action(), bindings![KeyCode::Digit6]),
-            (Action::<GeorgieHunger>::new(), guarded_action(), bindings![KeyCode::Digit7]),
-            (Action::<GeorgieCleanliness>::new(), guarded_action(), bindings![KeyCode::Digit8]),
-            (Action::<GeorgieHappiness>::new(), guarded_action(), bindings![KeyCode::Digit9]),
-            (Action::<SirenHunger>::new(), guarded_action(), bindings![KeyCode::Digit0]),
-            (Action::<SirenCleanliness>::new(), guarded_action(), bindings![KeyCode::KeyI]),
-            (Action::<SirenHappiness>::new(), guarded_action(), bindings![KeyCode::KeyO]),
-            (Action::<PushPopHunger>::new(), guarded_action(), bindings![KeyCode::KeyU]),
-            (Action::<PushPopCleanliness>::new(), guarded_action(), bindings![KeyCode::KeyJ]),
-            (Action::<PushPopHappiness>::new(), guarded_action(), bindings![KeyCode::KeyY]),
-            (
-                Action::<WorsenAllStats>::new(),
-                guarded_action(),
-                bindings![KeyCode::Minus, KeyCode::NumpadSubtract, KeyCode::KeyM],
-            ),
-            (
-                Action::<AdvanceDebugTime>::new(),
-                guarded_action(),
-                bindings![KeyCode::Equal, KeyCode::NumpadAdd, KeyCode::KeyL],
-            ),
-            (
-                Action::<ToggleDebugUi>::new(),
-                guarded_action(),
-                bindings![KeyCode::F12],
-            ),
-        ]),
-    ));
+    commands
+        .spawn((
+            Name::new("Debug Input Context"),
+            DebugInput,
+            ContextActivity::<DebugInput>::INACTIVE,
+        ))
+        .apply_scene(bsn! {
+            Actions<DebugInput> [
+                Action::<PollyHunger>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit1)
+                ]
+                --
+                Action::<PollyCleanliness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit2)
+                ]
+                --
+                Action::<PollyHappiness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit3)
+                ]
+                --
+                Action::<StompyHunger>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit4)
+                ]
+                --
+                Action::<StompyCleanliness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit5)
+                ]
+                --
+                Action::<StompyHappiness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit6)
+                ]
+                --
+                Action::<GeorgieHunger>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit7)
+                ]
+                --
+                Action::<GeorgieCleanliness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit8)
+                ]
+                --
+                Action::<GeorgieHappiness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit9)
+                ]
+                --
+                Action::<SirenHunger>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Digit0)
+                ]
+                --
+                Action::<SirenCleanliness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyI)
+                ]
+                --
+                Action::<SirenHappiness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyO)
+                ]
+                --
+                Action::<PushPopHunger>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyU)
+                ]
+                --
+                Action::<PushPopCleanliness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyJ)
+                ]
+                --
+                Action::<PushPopHappiness>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::KeyY)
+                ]
+                --
+                Action::<WorsenAllStats>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Minus)
+                    --
+                    Binding(KeyCode::NumpadSubtract)
+                    --
+                    Binding(KeyCode::KeyM)
+                ]
+                --
+                Action::<AdvanceDebugTime>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::Equal)
+                    --
+                    Binding(KeyCode::NumpadAdd)
+                    --
+                    Binding(KeyCode::KeyL)
+                ]
+                --
+                Action::<ToggleDebugUi>::new()
+                settings
+                Bindings [
+                    Binding(KeyCode::F12)
+                ]
+            ]
+        });
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -693,6 +826,8 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
+            AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
             BevyInputPlugin,
             InputFocusPlugin,
             StatesPlugin,

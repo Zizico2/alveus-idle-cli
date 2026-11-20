@@ -133,17 +133,17 @@ mod tests {
         }
     }
 
-    struct FirstConsumer;
+    struct FirstConsumerPlugin;
 
-    impl Plugin for FirstConsumer {
+    impl Plugin for FirstConsumerPlugin {
         fn build(&self, app: &mut App) {
             ensure_plugin(app, SharedPlugin);
         }
     }
 
-    struct SecondConsumer;
+    struct SecondConsumerPlugin;
 
-    impl Plugin for SecondConsumer {
+    impl Plugin for SecondConsumerPlugin {
         fn build(&self, app: &mut App) {
             ensure_plugin(app, SharedPlugin);
         }
@@ -153,7 +153,7 @@ mod tests {
     fn ensure_plugin_registers_a_shared_dependency_once() {
         let mut app = App::new();
 
-        app.add_plugins((FirstConsumer, SecondConsumer));
+        app.add_plugins((FirstConsumerPlugin, SecondConsumerPlugin));
 
         assert_eq!(app.world().resource::<PluginBuildCount>().0, 1);
     }

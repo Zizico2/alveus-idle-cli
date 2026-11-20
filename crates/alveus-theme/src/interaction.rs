@@ -1,6 +1,5 @@
 use bevy::{
     input_focus::{FocusCause, InputFocus, InputFocusVisible},
-    picking::events::Press,
     prelude::*,
     ui_widgets::Activate,
 };
@@ -21,7 +20,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 fn focus_button_on_press(
-    press: On<Pointer<Press>>,
+    press: On<PointerPress>,
     buttons: Query<(), With<crate::widget::ThemedButton>>,
     mut focus: ResMut<InputFocus>,
     mut focus_visible: ResMut<InputFocusVisible>,
@@ -51,9 +50,8 @@ fn apply_button_focus_indicator(
 }
 
 /// Palette for widget interactions. Add this to an entity that supports
-/// [`Interaction`]s, such as a button, to change its [`BackgroundColor`] based
-/// on the current interaction state.
-#[derive(Component, Debug, Reflect)]
+/// pointer events, such as a button, to change its [`BackgroundColor`].
+#[derive(Component, Debug, Clone, Default, Reflect)]
 #[reflect(Component)]
 pub struct InteractionPalette {
     pub none: Color,
@@ -62,7 +60,7 @@ pub struct InteractionPalette {
 }
 
 fn apply_interaction_palette_on_click(
-    click: On<Pointer<Click>>,
+    click: On<PointerClick>,
     mut palette_query: Query<(&InteractionPalette, &mut BackgroundColor)>,
 ) {
     let Ok((palette, mut bg)) = palette_query.get_mut(click.event_target()) else {
@@ -73,7 +71,7 @@ fn apply_interaction_palette_on_click(
 }
 
 fn apply_interaction_palette_on_over(
-    over: On<Pointer<Over>>,
+    over: On<PointerOver>,
     mut palette_query: Query<(&InteractionPalette, &mut BackgroundColor)>,
 ) {
     let Ok((palette, mut bg)) = palette_query.get_mut(over.event_target()) else {
@@ -84,7 +82,7 @@ fn apply_interaction_palette_on_over(
 }
 
 fn apply_interaction_palette_on_out(
-    out: On<Pointer<Out>>,
+    out: On<PointerOut>,
     mut palette_query: Query<(&InteractionPalette, &mut BackgroundColor)>,
 ) {
     let Ok((palette, mut bg)) = palette_query.get_mut(out.event_target()) else {
@@ -122,7 +120,7 @@ fn play_sound_effect_on_click(
 }
 
 fn play_sound_effect_on_over(
-    _: On<Pointer<Over>>,
+    _: On<PointerOver>,
     interaction_assets: If<Res<InteractionAssets>>,
     mut commands: Commands,
 ) {

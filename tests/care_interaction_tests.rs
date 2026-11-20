@@ -38,6 +38,7 @@ fn care_test_app(save_path: &str) -> App {
     let mut app = App::new();
     app.add_plugins(StatesPlugin);
     app.add_plugins(MinimalPlugins);
+    app.add_plugins((AssetPlugin::default(), bevy::scene::ScenePlugin));
     app.add_plugins((
         bevy::input::InputPlugin,
         bevy::input_focus::InputFocusPlugin,
